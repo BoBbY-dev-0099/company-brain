@@ -2,14 +2,13 @@
 
 DashScope international compatible-mode notes:
 - Endpoint accepts OpenAI-format chat completions; we use openai.AsyncOpenAI.
-- Structured output: only `response_format={"type": "json_object"}` is supported.
-  Strict json_schema is not. Pydantic validates instead; we retry once on failure.
-- Caching: Qwen has automatic Context Cache on stable >1024-token system prefixes.
-  No `cache_control` marker is needed (and it would be ignored).
-- Thinking: Qwen 3 hybrid models default thinking ON. Disable via
-  `extra_body={"enable_thinking": False}` on every call.
-- Embeddings: text-embedding-v3 returns 1024-dim by default; pass `dimensions`
-  to request a different size.
+- Structured output: `response_format` with `json_schema` + `strict: true` on
+  compile calls; falls back to `json_object` if the API rejects the schema.
+- Context cache: frozen compiler prefix is >1024 tokens. We mark the system
+  message with explicit `cache_control: ephemeral` (125% create / 10% hit).
+  Implicit prefix cache also applies on supported models when explicit is off.
+- Thinking: disable via `extra_body={"enable_thinking": False}` on every call.
+- Embeddings: text-embedding-v3 returns 1024-dim by default.
 """
 
 from __future__ import annotations
@@ -40,8 +39,9 @@ from backend.core.schema import (
 logger = logging.getLogger(__name__)
 
 
-SKILL_JSON_SCHEMA = {
+SKILL_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "skill_id": {"type": "string"},
         "name": {"type": "string"},
@@ -49,15 +49,18 @@ SKILL_JSON_SCHEMA = {
         "summary": {"type": "string"},
         "pattern": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "keywords": {"type": "array", "items": {"type": "string"}},
                 "entity_types": {"type": "array", "items": {"type": "string"}},
                 "context_signals": {"type": "array", "items": {"type": "string"}},
                 "domains": {"type": "array", "items": {"type": "string"}},
             },
+            "required": ["keywords", "entity_types", "context_signals", "domains"],
         },
         "knowledge": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "what_happened": {"type": "string"},
                 "failure_mode": {"type": "string"},
@@ -65,20 +68,57 @@ SKILL_JSON_SCHEMA = {
                 "conditions": {"type": "array", "items": {"type": "string"}},
                 "anti_conditions": {"type": "array", "items": {"type": "string"}},
             },
+            "required": [
+                "what_happened",
+                "failure_mode",
+                "what_worked",
+                "conditions",
+                "anti_conditions",
+            ],
         },
         "executable": {
             "type": "object",
+            "additionalProperties": False,
             "properties": {
                 "intercept_message": {"type": "string"},
                 "recommended_action": {"type": "string"},
                 "avoid_actions": {"type": "array", "items": {"type": "string"}},
                 "escalate_if": {"type": "array", "items": {"type": "string"}},
             },
+            "required": ["intercept_message", "recommended_action", "avoid_actions", "escalate_if"],
         },
         "decay_rate": {"type": "string", "enum": ["slow", "medium", "fast", "never"]},
     },
-    "required": ["name"],
+    "required": ["skill_id", "name", "domain", "summary", "pattern", "knowledge", "executable", "decay_rate"],
 }
+
+
+def _compiler_system_message(system_prefix: str) -> dict[str, Any]:
+    """Build the system message, optionally with explicit Qwen context cache."""
+    if settings.QWEN_ENABLE_EXPLICIT_CACHE:
+        return {
+            "role": "system",
+            "content": [
+                {
+                    "type": "text",
+                    "text": system_prefix,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+        }
+    return {"role": "system", "content": system_prefix}
+
+
+def _strict_response_format() -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "company_brain_skill",
+            "description": "A typed executable skill compiled from an organizational event",
+            "schema": SKILL_JSON_SCHEMA,
+            "strict": True,
+        },
+    }
 
 def _client() -> AsyncOpenAI:
     if not settings.QWEN_API_KEY:
@@ -184,24 +224,39 @@ def _user_prompt_for_event(event: RawEvent) -> str:
 
 async def _call_qwen_json(system_prefix: str, user_prompt: str) -> dict[str, Any]:
     client = _client()
-    resp = await client.chat.completions.create(
-        model=settings.QWEN_COMPILER_MODEL,
-        messages=[
-            {"role": "system", "content": system_prefix},
-            {"role": "user", "content": user_prompt},
-        ],
-        response_format={
-        "type": "json_schema",
-        "json_schema": {
-            "name": "company_brain_skill",
-            "description": "A typed executable skill compiled from an organizational event",
-            "schema": SKILL_JSON_SCHEMA,
-            "strict": True,
-        },
-    },
-        temperature=0.2,
-        extra_body={"enable_thinking": False},
-    )
+    messages = [
+        _compiler_system_message(system_prefix),
+        {"role": "user", "content": user_prompt},
+    ]
+    extra_body = {"enable_thinking": False}
+    kwargs: dict[str, Any] = {
+        "model": settings.QWEN_COMPILER_MODEL,
+        "messages": messages,
+        "temperature": 0.2,
+        "extra_body": extra_body,
+    }
+
+    try:
+        resp = await client.chat.completions.create(
+            **kwargs,
+            response_format=_strict_response_format(),
+        )
+    except Exception as strict_exc:
+        logger.warning("strict json_schema compile failed, falling back to json_object: %s", strict_exc)
+        resp = await client.chat.completions.create(
+            **kwargs,
+            response_format={"type": "json_object"},
+        )
+
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        logger.debug(
+            "compile usage prompt=%s completion=%s cached=%s",
+            getattr(usage, "prompt_tokens", None),
+            getattr(usage, "completion_tokens", None),
+            getattr(usage, "prompt_tokens_details", None),
+        )
+
     raw = resp.choices[0].message.content or ""
     return json.loads(_strip_fences(raw))
 

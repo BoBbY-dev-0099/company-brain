@@ -267,6 +267,34 @@ async def get_recent_intercepts(org_id: str = "default", limit: int = 50) -> lis
     return out
 
 
+async def get_intercept_stats(org_id: str = "default") -> dict[str, Any]:
+    """Aggregate intercept counts by result for efficiency / governance metrics."""
+    db = get_db()
+    pipeline = [
+        {"$match": {"org_id": org_id}},
+        {"$group": {"_id": "$result", "count": {"$sum": 1}}},
+    ]
+    by_result: dict[str, int] = {}
+    async for row in db.intercept_log.aggregate(pipeline):
+        key = row.get("_id") or "unknown"
+        by_result[str(key)] = int(row.get("count", 0))
+
+    total = sum(by_result.values())
+    governance_hits = sum(
+        by_result.get(k, 0)
+        for k in ("block", "warn", "auto_execute", "suspended")
+    )
+    # Rough estimate: each governance hit avoids one full agent LLM turn (~2k tokens).
+    est_tokens_saved = governance_hits * 2000
+
+    return {
+        "total_intercepts": total,
+        "by_result": by_result,
+        "governance_hits": governance_hits,
+        "est_llm_tokens_saved": est_tokens_saved,
+    }
+
+
 async def register_agent(agent_id: str, agent_type: str, org_id: str = "default") -> None:
     db = get_db()
     now = utc_now()

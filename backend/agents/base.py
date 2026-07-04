@@ -181,6 +181,7 @@ class MCPToolLoopAgent:
                 messages=messages,
                 tools=_tool_schemas(),
                 tool_choice="auto",
+                parallel_tool_calls=True,
                 temperature=0.3,
                 extra_body={"enable_thinking": False},
             )

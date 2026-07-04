@@ -420,16 +420,20 @@ async def stream(request: Request, token: Optional[str] = None, jwt: Optional[st
 
 @app.get("/settings/metrics")
 async def get_metrics(request: Request) -> dict[str, Any]:
-    _get_org_id(request)
-    total_skills = await store.get_skill_count()
-    active_skills = await store.get_skill_count(active_only=True)
-    recent_events = await store.get_recent_events(limit=10)
+    org_id = _get_org_id(request)
+    total_skills = await store.get_skill_count(org_id=org_id)
+    active_skills = await store.get_skill_count(org_id=org_id, active_only=True)
+    recent_events = await store.get_recent_events(org_id=org_id, limit=10)
+    intercept_stats = await store.get_intercept_stats(org_id=org_id)
     last_event = recent_events[0] if recent_events else None
     return {
         "metrics": {
             "total_skills": total_skills,
             "active_skills": active_skills,
-            "total_decisions": len(recent_events),
+            "total_decisions": intercept_stats["total_intercepts"],
+            "governance_hits": intercept_stats["governance_hits"],
+            "est_llm_tokens_saved": intercept_stats["est_llm_tokens_saved"],
+            "intercept_by_result": intercept_stats["by_result"],
             "decisions_today": len(recent_events),
             "avg_confidence": sum(r.get("confidence", 0) for r in recent_events) / max(len(recent_events), 1),
             "avg_intercept_time": 0.0,

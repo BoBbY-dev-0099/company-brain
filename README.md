@@ -166,17 +166,21 @@ without that SSE events are batched and the UI looks frozen.
 
 ## Notes on Qwen
 
-- **Caching**: Qwen 3 has automatic Context Cache on stable >1024-token
-  system prefixes. No `cache_control` marker is needed (the OpenAI-compat
-  layer ignores Anthropic-style markers anyway). The compiler's frozen
-  prefix in `backend/core/brain_cache.py` is sized to stay above the
-  threshold even with zero existing skills.
-- **Thinking mode**: every Chat Completions call sends
+- **Context cache (explicit):** The compiler marks its frozen >1024-token system
+  prefix with `cache_control: ephemeral` on every compile call. First compile
+  in an org caches the prefix at 125% input rate; subsequent compiles hit at
+  10%. Toggle via `QWEN_ENABLE_EXPLICIT_CACHE=false` in `.env`.
+- **Structured output (strict):** Skill compilation uses
+  `response_format={"type":"json_schema","strict":true}` against a full
+  `CompanyBrainSkill` JSON schema, with automatic fallback to `json_object`.
+- **Parallel tool calls:** Demo agents pass `parallel_tool_calls=True` so Qwen
+  can invoke `recall_skills` and `check_intercept` in one completion when useful.
+- **Thinking mode:** every Chat Completions call sends
   `extra_body={"enable_thinking": False}` to keep latency predictable.
-- **Structured output**: DashScope compatible-mode supports
-  `response_format={"type":"json_object"}` only. Pydantic validates the
-  output and the compiler retries once on malformed JSON.
 - **Agents** use Chat Completions with function-calling (the MCP tools are
   registered as OpenAI-style tools and dispatched in-process). The
   separately-mounted FastMCP server at `/mcp/sse` exposes the same tools
   to external MCP clients.
+- **Efficiency metric:** `GET /settings/metrics` returns `governance_hits` and
+  `est_llm_tokens_saved` — intercepts that blocked/warned/suspended before an
+  agent LLM turn (~2k tokens per hit, back-of-envelope).

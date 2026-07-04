@@ -46,3 +46,12 @@ def test_frozen_prefix_caps_at_20_skills():
     # The 21st-and-beyond skill names should not appear.
     assert "Skill s-020" not in prefix
     assert "Skill s-019" in prefix
+
+
+def test_compiler_system_message_uses_explicit_cache():
+    from backend.core.compiler import _compiler_system_message
+
+    msg = _compiler_system_message("frozen prefix text")
+    assert msg["role"] == "system"
+    assert isinstance(msg["content"], list)
+    assert msg["content"][0]["cache_control"] == {"type": "ephemeral"}

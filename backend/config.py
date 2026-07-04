@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     QWEN_COMPILER_MODEL: str = "qwen-plus"
     QWEN_AGENT_MODEL: str = "qwen-plus"
     QWEN_EMBEDDING_MODEL: str = "text-embedding-v3"
+    # Explicit context cache on the compiler's frozen system prefix (>1024 tokens).
+    QWEN_ENABLE_EXPLICIT_CACHE: bool = True
 
     MONGODB_URI: str = "mongodb://localhost:27017/companybrain?replicaSet=rs0&directConnection=true"
     MONGODB_DB_NAME: str = "companybrain"
