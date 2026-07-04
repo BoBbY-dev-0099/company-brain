@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useState } from "react"
 import { useAuth } from "@clerk/clerk-react"
-import { Brain as BrainIcon, CheckCircle, PauseCircle, ShieldAlert } from "lucide-react"
+import {
+  Brain as BrainIcon,
+  CheckCircle,
+  PauseCircle,
+  ShieldAlert,
+  ShieldCheck,
+  Copy,
+  RefreshCw,
+} from "lucide-react"
 import { apiGet, apiPost } from "../lib/api"
 import { useSSE } from "../hooks/useSSE"
+import InterceptList, { type Intercept } from "../components/InterceptList"
 
 interface Skill {
   skill_id: string
@@ -38,6 +47,11 @@ export default function Brain() {
   const [demoStatus, setDemoStatus] = useState<string>("")
   const [demoBusy, setDemoBusy] = useState(false)
   const [sseUrl, setSseUrl] = useState<string | null>(null)
+  const [decisions, setDecisions] = useState<Intercept[]>([])
+  const [decisionsLoading, setDecisionsLoading] = useState(false)
+  const [attestation, setAttestation] = useState<any>(null)
+  const [attestationLoading, setAttestationLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const { getToken } = useAuth()
 
@@ -103,6 +117,42 @@ export default function Brain() {
   }, [getToken])
   useSSE(sseUrl, handleSSE)
 
+  const loadDecisions = useCallback(async () => {
+    setDecisionsLoading(true)
+    try {
+      const data = await apiGet("/brain/intercepts?limit=30")
+      setDecisions(data.intercepts || [])
+    } catch {
+      setDecisions([])
+    } finally {
+      setDecisionsLoading(false)
+    }
+  }, [])
+
+  const loadAttestation = useCallback(async () => {
+    setAttestationLoading(true)
+    try {
+      const data = await apiGet("/mcp/attestation")
+      setAttestation(data)
+    } catch {
+      setAttestation(null)
+    } finally {
+      setAttestationLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === "decisions") loadDecisions()
+    if (activeTab === "attestation") loadAttestation()
+  }, [activeTab, loadDecisions, loadAttestation])
+
+  const copyAttestation = async () => {
+    if (!attestation) return
+    await navigator.clipboard.writeText(JSON.stringify(attestation, null, 2))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const triggerSagDemo = useCallback(async (chunkSize: number) => {
     setDemoBusy(true)
     setDemoStatus(`Sending decision with export_chunk_size_mb=${chunkSize}...`)
@@ -114,12 +164,13 @@ export default function Brain() {
         metadata: { export_chunk_size_mb: chunkSize },
       })
       setDemoStatus(`Result: ${resp.result} | ${resp.applicability_status || "active"}`)
+      if (activeTab === "decisions") loadDecisions()
     } catch (e: any) {
       setDemoStatus(`Error: ${e.message}`)
     } finally {
       setDemoBusy(false)
     }
-  }, [])
+  }, [activeTab, loadDecisions])
 
   return (
     <div className="space-y-4">
@@ -267,24 +318,139 @@ export default function Brain() {
       )}
 
       {activeTab === "decisions" && (
-        <div className="bg-[#111114] border border-[#1f1f22] rounded p-4">
-          <h2 className="font-medium flex items-center gap-2 mb-3">
-            <CheckCircle className="w-4 h-4 text-[#22c55e]" />
-            Decision History
-          </h2>
-          <p className="text-sm text-[#7c7c8a]">Decision history integration coming soon.</p>
+        <div className="bg-[#111114] border border-[#1f1f22] rounded p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-[#22c55e]" />
+              Decision History
+            </h2>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[#7c7c8a]">{decisions.length} logged</span>
+              <button
+                onClick={loadDecisions}
+                disabled={decisionsLoading}
+                className="text-xs text-[#22c55e] flex items-center gap-1 hover:underline disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${decisionsLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-[#7c7c8a]">
+            Pre-flight governance checks logged by the brain. SAG suspensions appear with evidence.
+          </p>
+          <InterceptList
+            intercepts={decisions}
+            loading={decisionsLoading}
+            compact
+            emptyMessage="No decisions yet. Use the SAG simulate buttons above or run an agent."
+          />
         </div>
       )}
 
       {activeTab === "attestation" && (
-        <div className="bg-[#111114] border border-[#1f1f22] rounded p-4">
-          <h2 className="font-medium flex items-center gap-2 mb-3">
-            <ShieldAlert className="w-4 h-4 text-[#22c55e]" />
-            TEE Attestation
-          </h2>
-          <p className="text-sm text-[#7c7c8a]">Trusted execution environment attestation coming soon.</p>
+        <div className="bg-[#111114] border border-[#1f1f22] rounded p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-medium flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-[#22c55e]" />
+              TEE Attestation
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={loadAttestation}
+                disabled={attestationLoading}
+                className="text-xs text-[#22c55e] flex items-center gap-1 hover:underline disabled:opacity-50 mr-3"
+              >
+                <RefreshCw className={`w-3 h-3 ${attestationLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+              {attestation && (
+                <button
+                  onClick={copyAttestation}
+                  className="text-xs text-[#7c7c8a] flex items-center gap-1 hover:text-[#e4e4e7]"
+                >
+                  <Copy className="w-3 h-3" />
+                  {copied ? "Copied" : "Copy JSON"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {attestationLoading && !attestation && (
+            <p className="text-sm text-[#7c7c8a]">Loading attestation envelope…</p>
+          )}
+
+          {attestation && (
+            <>
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 rounded border text-sm ${
+                    attestation.attestation_verified
+                      ? "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#22c55e]"
+                      : "border-[#ef4444]/40 bg-[#ef4444]/10 text-[#ef4444]"
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  {attestation.attestation_verified ? "Attestation verified" : "Not verified"}
+                </div>
+                {attestation.tee_capable && (
+                  <span className="text-xs font-mono text-[#7c7c8a]">TEE capable</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                <InfoRow label="Platform" value={attestation.platform} />
+                <InfoRow label="Issued at" value={attestation.issued_at ? new Date(attestation.issued_at).toLocaleString() : "—"} />
+                <InfoRow label="MCP endpoint" value={attestation.mcp_endpoint} mono />
+                <InfoRow label="Measurement" value={attestation.measurement?.slice(0, 16) + "…"} mono />
+              </div>
+
+              <div>
+                <div className="text-xs text-[#7c7c8a] uppercase tracking-wider mb-2">
+                  Exposed MCP tools
+                </div>
+                <div className="space-y-2">
+                  {(attestation.tools || []).map((t: any) => (
+                    <div
+                      key={t.name}
+                      className="flex items-start gap-3 bg-[#050505] border border-[#1f1f22] rounded p-3"
+                    >
+                      <span className="font-mono text-[#22c55e] text-sm shrink-0">{t.name}</span>
+                      <span className="text-xs text-[#a1a1aa]">{t.purpose}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-[#7c7c8a] uppercase tracking-wider mb-1">Narrative</div>
+                <p className="text-sm text-[#a1a1aa] leading-relaxed">{attestation.narrative}</p>
+              </div>
+
+              <pre className="text-[10px] font-mono bg-[#050505] border border-[#1f1f22] rounded p-3 overflow-x-auto text-[#7c7c8a] max-h-48">
+                {JSON.stringify(attestation, null, 2)}
+              </pre>
+            </>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function InfoRow({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div className="bg-[#050505] rounded p-3">
+      <div className="text-xs text-[#7c7c8a]">{label}</div>
+      <div className={`mt-0.5 ${mono ? "font-mono text-xs break-all" : ""}`}>{value}</div>
     </div>
   )
 }

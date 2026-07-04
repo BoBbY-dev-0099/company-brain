@@ -125,10 +125,33 @@ async def compile_experience(
 
 def attestation() -> dict[str, Any]:
     """Mock attestation for the demo. Real TDX path is for enterprise."""
+    import hashlib
+    from datetime import datetime, timezone
+
+    tools_manifest = [
+        {
+            "name": "recall_skills",
+            "purpose": "Surface fleet memory before planning",
+        },
+        {
+            "name": "check_intercept",
+            "purpose": "Pre-flight governance with optional SAG metadata",
+        },
+        {
+            "name": "compile_experience",
+            "purpose": "Write resolved experience back to the brain",
+        },
+    ]
+    measurement = hashlib.sha256(b"company-brain-mock-enclave-v1").hexdigest()
     return {
         "tee_capable": True,
         "platform": "Intel TDX (Alibaba Cloud g8i / gn8v-tee)",
         "attestation_verified": True,
+        "measurement": measurement,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
+        "mcp_endpoint": "/mcp/sse",
+        "attestation_endpoint": "/mcp/attestation",
+        "tools": tools_manifest,
         "narrative": (
             "Demo runs on standard cloud; TDX path available for enterprise. "
             "This endpoint returns a mock attestation envelope to demonstrate "

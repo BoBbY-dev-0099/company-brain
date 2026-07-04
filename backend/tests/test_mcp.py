@@ -99,6 +99,9 @@ def test_attestation_payload_shape():
     assert out["tee_capable"] is True
     assert "Intel TDX" in out["platform"]
     assert "narrative" in out
+    assert "tools" in out
+    assert len(out["tools"]) == 3
+    assert "measurement" in out
 
 
 @pytest.mark.asyncio

@@ -129,18 +129,31 @@ curl -N localhost:8000/stream
 
 | Method | Path                          | Purpose                                                             |
 | ------ | ----------------------------- | ------------------------------------------------------------------- |
-| GET    | `/health`                     | service + db status, skill count, qwen-configured flag              |
+| GET | `/health`                     | service + db status, skill count, qwen-configured flag              |
 | POST   | `/events`                     | compile a raw event into a skill, persist, propagate                |
-| POST   | `/decisions/check`            | hybrid keyword + cosine intercept check                             |
+| GET    | `/brain/events`               | list recent compiled events (org-scoped)                            |
+| POST   | `/decisions/check`            | hybrid keyword + cosine intercept check + SAG                       |
 | GET    | `/brain/skills`               | list active skills (filter by `?domain=`)                           |
 | GET    | `/brain/skills/{skill_id}`    | full skill detail                                                   |
+| GET    | `/brain/intercepts`           | intercept audit log                                                 |
+| GET    | `/settings/metrics`           | governance hits, est. tokens saved, intercept breakdown             |
 | POST   | `/settings/seed-demo-data`    | idempotent org-scoped seed of the demo skill set (Clerk JWT or API key) |
 | POST   | `/agents/{kind}/run`          | run support / engineering / product agent (Chat Completions + MCP)  |
 | GET    | `/sessions/{user_id}`         | sessions for a user (cross-session demo)                            |
 | GET    | `/sessions/by-id/{id}`        | one session                                                         |
 | GET    | `/stream`                     | SSE event stream (skill_compiled, decision_intercepted, …)          |
 | GET    | `/mcp/sse`                    | MCP server (recall_skills, check_intercept, compile_experience)     |
-| GET    | `/mcp/attestation`            | mock TDX attestation envelope                                       |
+| GET    | `/mcp/attestation`            | mock TDX attestation envelope (tools, measurement, narrative)       |
+
+## Operator UI
+
+| Page | Path | Purpose |
+|------|------|---------|
+| Brain | `/app/brain` | Skills, SAG demo, decision history, TEE attestation |
+| Agents | `/app/agents` | Run demo agents with metadata |
+| Events | `/app/events` | Event timeline + compile form |
+| Settings | `/app/settings` | Health, metrics, demo seed |
+| Intercepts | `/app/intercepts` | Audit log |
 
 ## Tests
 

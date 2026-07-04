@@ -271,6 +271,13 @@ async def list_intercepts(request: Request, limit: int = 50) -> dict[str, Any]:
     return {"count": len(intercepts), "intercepts": intercepts}
 
 
+@app.get("/brain/events")
+async def list_events(request: Request, limit: int = 50) -> dict[str, Any]:
+    org_id = _get_org_id(request)
+    events = await store.get_recent_events(org_id=org_id, limit=limit)
+    return {"count": len(events), "events": events}
+
+
 # ---------- agents ----------
 
 @app.post("/agents/support/run", response_model=AgentRunResponse)
@@ -552,6 +559,7 @@ async def root() -> dict[str, Any]:
         "endpoints": [
             "/health", "/events", "/decisions/check",
             "/brain/skills", "/brain/skills/{skill_id}",
+            "/brain/intercepts", "/brain/events",
             "/agents/{support|engineering|product}/run",
             "/sessions/{user_id}", "/stream",
             "/mcp/sse", "/mcp/attestation",
