@@ -37,12 +37,19 @@ async def check_intercept(
     agent_id: str,
     decision_text: str,
     domain: Optional[str] = None,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> dict:
     """Pre-flight: ask the brain whether a decision should be blocked, warned, or auto-executed.
 
-    Always call before taking a non-trivial action.
+    Always call before taking a non-trivial action. Pass ``metadata`` with live
+    system state (config values, deploy flags) so skill preconditions are checked.
     """
-    return await tools.check_intercept(agent_id=agent_id, decision_text=decision_text, domain=domain)
+    return await tools.check_intercept(
+        agent_id=agent_id,
+        decision_text=decision_text,
+        domain=domain,
+        metadata=metadata,
+    )
 
 
 @mcp_server.tool()

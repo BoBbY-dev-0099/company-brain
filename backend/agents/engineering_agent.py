@@ -45,7 +45,11 @@ def get_agent() -> EngineeringAgent:
     return _singleton
 
 
-async def _pre_flight(user_message: str, agent_id: str) -> tuple[str, bool, str | None]:
+async def _pre_flight(
+    user_message: str,
+    agent_id: str,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[str, bool, str | None]:
     """Run check_intercept against the brain BEFORE the LLM call.
 
     Returns (augmented_message, intercepted, matched_skill_id).
@@ -56,6 +60,7 @@ async def _pre_flight(user_message: str, agent_id: str) -> tuple[str, bool, str 
         agent_id=agent_id,
         decision_text=user_message,
         domain="engineering",
+        metadata=metadata or {},
     )
     resp = await check_decision(req)
 
@@ -69,15 +74,25 @@ async def _pre_flight(user_message: str, agent_id: str) -> tuple[str, bool, str 
         confidence=resp.confidence,
     )
 
-    augmented = (
-        f"PRE-FLIGHT INTERCEPT from Company Brain:\n"
-        f"  result: {resp.result.value}\n"
-        f"  matched skill: {resp.matched_skill.skill_id} ({resp.matched_skill.name})\n"
-        f"  confidence: {resp.confidence:.2f}\n"
-        f"  intercept_message: {resp.intercept_message}\n"
-        f"  recommended_action: {resp.recommended_action}\n\n"
-        f"Original PR description:\n{user_message}"
-    )
+    if resp.result == InterceptResult.suspended:
+        augmented = (
+            f"PRE-FLIGHT SAG SUSPENSION from Company Brain:\n"
+            f"  result: suspended\n"
+            f"  matched skill: {resp.matched_skill.skill_id} ({resp.matched_skill.name})\n"
+            f"  suspension_reason: {resp.suspension_reason}\n"
+            f"  evidence: {resp.suspension_evidence}\n\n"
+            f"Original PR description:\n{user_message}"
+        )
+    else:
+        augmented = (
+            f"PRE-FLIGHT INTERCEPT from Company Brain:\n"
+            f"  result: {resp.result.value}\n"
+            f"  matched skill: {resp.matched_skill.skill_id} ({resp.matched_skill.name})\n"
+            f"  confidence: {resp.confidence:.2f}\n"
+            f"  intercept_message: {resp.intercept_message}\n"
+            f"  recommended_action: {resp.recommended_action}\n\n"
+            f"Original PR description:\n{user_message}"
+        )
     return augmented, True, resp.matched_skill.skill_id
 
 
@@ -85,7 +100,11 @@ async def run(user_message: str, metadata: dict[str, Any] | None = None) -> Agen
     agent = get_agent()
     pr_id = (metadata or {}).get("pr_id") or f"pr-{uuid.uuid4().hex[:8]}"
 
-    augmented, pre_intercepted, pre_skill = await _pre_flight(user_message, agent.agent_id)
+    augmented, pre_intercepted, pre_skill = await _pre_flight(
+        user_message,
+        agent.agent_id,
+        metadata=metadata,
+    )
 
     await propagator.broadcast_agent_action(
         agent_id=agent.agent_id,

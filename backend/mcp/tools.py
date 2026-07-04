@@ -49,13 +49,19 @@ async def check_intercept(
     agent_id: str,
     decision_text: str,
     domain: str | None = None,
+    metadata: dict[str, Any] | None = None,
     org_id: str = "default",
 ) -> dict[str, Any]:
-    """Pre-flight check: would this decision be intercepted by the brain?"""
+    """Pre-flight check: would this decision be intercepted by the brain?
+
+    Pass ``metadata`` with live system state (e.g. config values) so the
+    Semantic Applicability Gate can evaluate skill preconditions.
+    """
     req = DecisionCheckRequest(
         agent_id=agent_id,
         decision_text=decision_text,
         domain=domain,
+        metadata=metadata or {},
         org_id=org_id,
     )
     resp: DecisionCheckResponse = await interceptor.check_decision(req)
@@ -78,6 +84,9 @@ async def check_intercept(
         "recommended_action": resp.recommended_action,
         "auto_execute": resp.auto_execute,
         "rationale": resp.rationale,
+        "applicability_status": resp.applicability_status,
+        "suspension_reason": resp.suspension_reason,
+        "suspension_evidence": resp.suspension_evidence,
     }
 
 

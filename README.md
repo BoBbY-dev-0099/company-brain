@@ -31,13 +31,12 @@ block or auto-execute a decision. Each skill can declare `applies_if` and
 The interceptor evaluates these conditions after the relevance gate and before
 reinforcement.
 
-**Current scope:** SAG evaluates `live_context` supplied via the `metadata`
-field on `POST /decisions/check`. The MCP `check_intercept` tool and the
-engineering agent's pre-flight check do not yet populate `metadata`, so SAG
-currently gates REST-invoked decisions but not the full agentic MCP loop.
-Wiring live system state (config values, deploy flags) into the MCP tool call
-is the natural next extension — the schema and evaluator already support it;
-only the call site needs the data source connected.
+**Current scope:** SAG evaluates live context supplied via the `metadata`
+field on `POST /decisions/check` and on the MCP `check_intercept` tool.
+Pass config values, deploy flags, or other runtime state as metadata keys
+so each skill's `applies_if` / `invalidated_if` preconditions are checked
+before block, warn, or auto-execute. The engineering agent's pre-flight
+check forwards request metadata into the same path.
 
 ### Known limitations
 

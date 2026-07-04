@@ -82,6 +82,15 @@ def _tool_schemas() -> list[dict[str, Any]]:
                             "type": "string",
                             "description": "Optional: scope the check to a domain (engineering, support, product).",
                         },
+                        "metadata": {
+                            "type": "object",
+                            "description": (
+                                "Live system state for the Semantic Applicability Gate — "
+                                "e.g. {\"export_chunk_size_mb\": 8}. Keys are matched against "
+                                "each skill's applies_if / invalidated_if preconditions."
+                            ),
+                            "additionalProperties": True,
+                        },
                     },
                     "required": ["agent_id", "decision_text"],
                 },
@@ -228,7 +237,12 @@ class MCPToolLoopAgent:
                         if sid and sid not in skills_used:
                             skills_used.append(sid)
                 elif fn_name == "check_intercept":
-                    if tool_result.get("result") in ("block", "warn", "auto_execute"):
+                    if tool_result.get("result") in (
+                        "block",
+                        "warn",
+                        "auto_execute",
+                        "suspended",
+                    ):
                         intercepted = True
                         intercept_skill = tool_result.get("matched_skill_id") or intercept_skill
 
