@@ -1,0 +1,22 @@
+[Unit]
+Description=Company Brain — Operating Memory Primitive (Qwen Hackathon)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/company-brain
+EnvironmentFile=/opt/company-brain/.env
+ExecStart=/opt/company-brain/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+KillSignal=SIGINT
+TimeoutStopSec=15
+LimitNOFILE=65536
+User=companybrain
+Group=companybrain
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,54 @@
+# --- Secrets ---
+.env
+.env.local
+*.pem
+*.key
+e2e_key*.txt
+e2e_org*_key.txt
+org2_key.txt
+*_key.txt
+
+# --- Python ---
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# --- Node / frontend ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/tsconfig.tsbuildinfo
+npm-debug.log*
+
+# --- Editor / agent tooling (not part of the shipped project) ---
+.cursor/
+.kimchi/
+.vscode/
+.idea/
+
+# --- Obsidian vault (kept locally for project visualization, not pushed) ---
+Company Brain/
+
+# --- Internal working docs (verification reports / drafts, not part of the shipped code) ---
+E2E_VERIFICATION_REPORT.md
+E2E_VERIFICATION_REPORT_RERUN.md
+SUBMISSION_WRITEUP.md
+
+# --- Ad hoc local test fixtures / logs ---
+decision.json
+decision_unrelated.json
+event.json
+event_empty.json
+event_rerun.json
+*.log
+nul
+
+# --- OS ---
+.DS_Store
+Thumbs.db
