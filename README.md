@@ -5,7 +5,8 @@ Operating Memory Primitive for agent fleets — Qwen Cloud Global AI Hackathon 2
 > **Most agents remember. Company Brain knows when to stop trusting what it remembers.**
 
 **Judges / 30s demo:** open the UI → **Brain** → ① Config = 8MB (**suspended**) → ② Config = 25MB (**auto_execute**).  
-Open UI uses org `integrations-demo` (no login).
+Open UI uses org `integrations-demo` (no login).  
+**Live ECS:** http://8.218.174.77 · Writeup: [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md)
 
 ## Submission pack (for judges)
 
