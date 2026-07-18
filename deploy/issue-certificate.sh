@@ -53,7 +53,20 @@ set_env_value CORS_ALLOWED_ORIGINS "https://${DOMAIN}"
 
 "${COMPOSE[@]}" --profile full up -d --force-recreate api nginx
 "${COMPOSE[@]}" --profile full exec -T nginx nginx -t
-curl --fail --silent --show-error --resolve "${DOMAIN}:443:127.0.0.1" \
-    "https://${DOMAIN}/api/health" >/dev/null
+
+# The API is recreated immediately before nginx. Give it a short readiness
+# window so certificate issuance does not report a false failure on a healthy
+# deployment that is still starting its application process.
+for attempt in $(seq 1 15); do
+    if curl --fail --silent --show-error --resolve "${DOMAIN}:443:127.0.0.1" \
+        "https://${DOMAIN}/api/health" >/dev/null; then
+        break
+    fi
+    if [ "$attempt" -eq 15 ]; then
+        echo "HTTPS health check did not become ready after certificate issuance." >&2
+        exit 1
+    fi
+    sleep 2
+done
 
 echo "TLS enabled: https://${DOMAIN}/app/inbox"
