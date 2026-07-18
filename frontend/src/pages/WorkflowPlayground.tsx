@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Check, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react"
+import { ArrowRight, Bot, Check, CircleDot, FileInput, Github, Headphones, LoaderCircle, Radio, RotateCcw, ServerCog, ShieldCheck, UserRound } from "lucide-react"
 import { createDemoSession, createWorkflowRun, getWorkflowTemplates, postWorkflowOutcome, type WorkflowEvidenceInput } from "../lib/api"
 import type { WorkflowRun, WorkflowTemplate } from "../types/schema"
 import { AuditProof, DecisionTrace, PageFrame, asRun, briefFor, inferenceText, verdictLabel, verdictTone } from "./Simulation"
@@ -124,7 +124,8 @@ export default function WorkflowPlayground() {
   }
 
   return <PageFrame>
-    <div className="max-w-4xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2f5eeb]">Guided workflow playground</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#17212b]">Add Company Brain to a decision.</h1><p className="mt-3 max-w-2xl text-base leading-7 text-[#586575]">Use safe sample evidence and live context. This is a private, temporary sandbox—not a live connector or credential form.</p></div>
+    <div className="max-w-4xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2f5eeb]">Workflow connection lab</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#17212b]">Connect Company Brain to a workflow.</h1><p className="mt-3 max-w-3xl text-base leading-7 text-[#586575]">Choose a safe synthetic company workflow, run its event through Company Brain, and inspect the real evidence → Qwen memory → SAG → human decision path.</p></div>
+    {!loading && selected && <ConnectionMap template={selected} evidenceCount={evidence.length} />}
     {error && <div className="mt-7 rounded-2xl border border-[#bc3f34]/30 bg-[#fce9e6] p-4 text-sm text-[#96332b]">{error}</div>}
     <section className="mt-8 rounded-3xl border border-[#d8d0c2] bg-[#fffcf7] p-5 shadow-[0_18px_55px_rgba(52,45,35,0.07)] md:p-7">
       {loading || !selected ? <div className="h-72 animate-pulse rounded-2xl bg-[#f3eee4]" /> : <>
@@ -141,4 +142,56 @@ export default function WorkflowPlayground() {
 
 function SectionHeading({ label, title, subtitle }: { label: string; title: string; subtitle: string }) {
   return <div><span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#e7edff] text-[10px] font-bold text-[#2148c7]">{label}</span><h2 className="mt-3 text-lg font-semibold text-[#17212b]">{title}</h2><p className="mt-1 text-sm leading-6 text-[#627083]">{subtitle}</p></div>
+}
+
+function connectionProfile(template: WorkflowTemplate): { title: string; event: string; systems: Array<{ label: string; icon: "github" | "support" | "reliability" | "server" }> } {
+  switch (templateId(template)) {
+    case "release-safety":
+      return { title: "GitHub release pipeline", event: "A merged configuration change is about to reach deployment.", systems: [{ label: "GitHub", icon: "github" }, { label: "Runtime telemetry", icon: "server" }] }
+    case "money-safety":
+      return { title: "Support refund desk", event: "A customer is eligible for an automatic refund.", systems: [{ label: "Support portal", icon: "support" }, { label: "Billing policy + CRM", icon: "server" }] }
+    case "rollout-safety":
+      return { title: "Feature rollout control", event: "A feature flag expansion is scheduled.", systems: [{ label: "Observability + incidents", icon: "reliability" }, { label: "Feature flags", icon: "server" }] }
+    default:
+      return { title: template.title ?? "Company workflow", event: template.description ?? "A company event needs a governed decision.", systems: [{ label: "Company system", icon: "server" }] }
+  }
+}
+
+function SystemMark({ type }: { type: "github" | "support" | "reliability" | "server" }) {
+  const Icon = type === "github" ? Github : type === "support" ? Headphones : type === "reliability" ? Radio : ServerCog
+  return <Icon className="h-4 w-4" />
+}
+
+function ConnectionMap({ template, evidenceCount }: { template: WorkflowTemplate; evidenceCount: number }) {
+  const profile = connectionProfile(template)
+  return <section className="mt-7 rounded-3xl border border-[#cbd6e8] bg-[#f6f8fe] p-5 shadow-[0_18px_55px_rgba(47,94,235,0.07)] md:p-7">
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="inline-flex items-center gap-2 rounded-full border border-[#bcd0ee] bg-[#edf3ff] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.15em] text-[#2f5eeb]"><CircleDot className="h-3 w-3" /> Synthetic adapter</div><h2 className="mt-3 text-xl font-semibold text-[#17212b]">Attach the workflow, then run an event.</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#596778]">This uses safe sample systems. The resulting Company Brain call, Qwen compilation, and SAG decision are real sandbox responses.</p></div><span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#c6d6ed] bg-white px-3 py-1.5 text-xs font-semibold text-[#39506a]"><FileInput className="h-3.5 w-3.5" />{evidenceCount} source event{evidenceCount === 1 ? "" : "s"}</span></div>
+    <div className="mt-6 rounded-2xl border border-[#d9e2f0] bg-white/70 p-4">
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#58709a]">Selected workflow</p>
+      <h3 className="mt-1 font-semibold text-[#17212b]">{profile.title}</h3>
+      <p className="mt-1 text-sm text-[#617085]">{profile.event}</p>
+      <div className="mt-5 grid items-stretch gap-2 text-center sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:gap-3">
+        <ConnectionNode icon={<SystemMark type={profile.systems[0]?.icon ?? "server"} />} title={profile.systems.map((system) => system.label).join(" + ")} detail="Synthetic company systems" />
+        <ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#718096] sm:block" />
+        <ConnectionNode icon={<ShieldCheck className="h-4 w-4" />} title="Company Brain" detail="Evidence · Qwen · SAG" active />
+        <ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#718096] sm:block" />
+        <ConnectionNode icon={<UserRound className="h-4 w-4" />} title={template.owner_role ?? "Human owner"} detail="Receives recommendation" />
+      </div>
+    </div>
+    <div className="mt-5 grid gap-2 sm:grid-cols-4">
+      <ConnectionStage number="01" title="Source event" detail="Synthetic company system sends evidence." />
+      <ConnectionStage number="02" title="Governed memory" detail="Qwen compiles cited context." />
+      <ConnectionStage number="03" title="Safety gate" detail="SAG checks current live values." />
+      <ConnectionStage number="04" title="Human handoff" detail="Owner receives an auditable brief." />
+    </div>
+    <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-[#607080]"><Bot className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2f5eeb]" />Company Brain is the governed checkpoint inside the workflow; it does not execute a deployment, refund, or rollout.</p>
+  </section>
+}
+
+function ConnectionNode({ icon, title, detail, active = false }: { icon: React.ReactNode; title: string; detail: string; active?: boolean }) {
+  return <div className={"flex min-h-20 flex-col items-center justify-center rounded-xl border px-3 py-3 " + (active ? "border-[#a9c2f0] bg-[#eaf0ff] text-[#2148c7]" : "border-[#dbe1e9] bg-white text-[#435264]")}><span>{icon}</span><p className="mt-2 text-xs font-semibold text-[#263544]">{title}</p><p className="mt-1 text-[10px] leading-4 text-[#718096]">{detail}</p></div>
+}
+
+function ConnectionStage({ number, title, detail }: { number: string; title: string; detail: string }) {
+  return <div className="rounded-xl border border-[#d9e2f0] bg-white/70 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#60708a]">{number}</p><p className="mt-3 text-xs font-semibold text-[#263544]">{title}</p><p className="mt-1 text-[11px] leading-4 text-[#64748b]">{detail}</p></div>
 }
