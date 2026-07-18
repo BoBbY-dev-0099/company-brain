@@ -100,7 +100,8 @@ def test_attestation_payload_shape():
     assert "Intel TDX" in out["platform"]
     assert "narrative" in out
     assert "tools" in out
-    assert len(out["tools"]) == 3
+    assert len(out["tools"]) == 4
+    assert out["mcp_endpoint"] == "/mcp/"
     assert "measurement" in out
 
 

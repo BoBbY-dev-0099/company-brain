@@ -9,6 +9,7 @@ import Events from "./pages/Events"
 import Settings from "./pages/Settings"
 import ApiKeys from "./pages/ApiKeys"
 import Operations from "./pages/Operations"
+import Connect from "./pages/Connect"
 import AppShell from "./components/layout/AppShell"
 
 const router = createBrowserRouter([
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="inbox" replace /> },
       { path: "inbox", element: <Operations /> },
+      { path: "connect", element: <Connect /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "brain", element: <Brain /> },
       { path: "intercepts", element: <Intercepts /> },

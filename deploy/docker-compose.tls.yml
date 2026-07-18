@@ -1,0 +1,24 @@
+# Production-only Docker Compose overlay. Keep the base compose command for
+# local HTTP validation; deploy/deploy.sh adds this file for ECS TLS rollout.
+services:
+  nginx:
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-brain.veriflowai.me}
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+
+  certbot:
+    image: certbot/certbot:v2.11.0
+    container_name: companybrain-certbot
+    profiles: ["tls"]
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+
+volumes:
+  letsencrypt:
+  certbot_www:

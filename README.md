@@ -22,6 +22,7 @@ The open UI writes to the disposable `sandbox` org; the versioned `judge-demo-v1
 | Judging alignment | [`docs/JUDGING_ALIGNMENT.md`](docs/JUDGING_ALIGNMENT.md) |
 | Submission checklist | [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) |
 | Deployment proof packet | [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) |
+| Company connection contract | [`CONNECT.md`](CONNECT.md) |
 | License | [`LICENSE`](LICENSE) (MIT) |
 | Integrations examples | [`integrations/`](integrations/) |
 
@@ -38,11 +39,11 @@ Company Brain sits between agent fleets / the operator UI and Qwen Cloud: FastAP
 flowchart LR
     subgraph INPUTS["1 · Inputs"]
         UI["Operator browser<br/>React + Vite<br/>Operations Inbox · Brain · Agents"]
-        EXT["External agent / REST client<br/>MCP over SSE"]
+        EXT["External agent / REST client<br/>authenticated MCP over Streamable HTTP"]
     end
 
     subgraph CONTROL["2 · FastAPI control plane"]
-        API["REST routes + FastMCP gateway<br/>/api/* · /mcp/sse"]
+        API["REST routes + FastMCP gateway<br/>/api/* · /mcp/"]
         AGENTS["Qwen tool-loop agents<br/>Engineering · Support · Product"]
         COMPILER["Experience compiler<br/>raw event → versioned skill"]
     end
@@ -64,7 +65,7 @@ flowchart LR
     QWEN["Qwen Cloud DashScope<br/>qwen-plus + text-embedding-v3"]
 
     UI -->|"REST /api"| API
-    EXT -->|"MCP over SSE"| API
+    EXT -->|"MCP Streamable HTTP + scoped API key"| API
     API --> RECALL
     API --> COMPILER
     API --> AGENTS
@@ -128,10 +129,11 @@ sources/freshness, memory provenance, SAG trace, verdict, owner, and next
 action.
 
 The three submission templates are **Release Safety**, **Money Safety**, and
-**Rollout Safety**. GitHub merged-PR intake is genuinely connected to Release
-Safety; the other two are visibly labelled fixtures replayed through the same
-contract. See [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) for the demo flow
-and boundaries.
+**Rollout Safety**. Release Safety implements a signed GitHub merged-PR intake
+when its webhook secret, token, and repository allowlist are configured. The
+other two are visibly labelled fixtures replayed through the same contract.
+See [`CONNECT.md`](CONNECT.md) for the real connection boundaries and
+[`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) for the demo flow.
 
 ## Who this is for
 
@@ -142,11 +144,12 @@ not an application.
 
 ## Production-shaped workflows
 
-External systems do not live inside the brain. Thin connectors under
-[`integrations/`](integrations/) feed realistic payloads (GitHub PR,
-billing refund, feature-flag rollout, Zendesk resolve, product session)
-into `POST /decisions/check`, `POST /events`, and agent routes — the same
-contracts a real fleet would use.
+External systems do not live inside the brain. Company Brain is the governed
+memory checkpoint they call before consequential actions. The signed GitHub
+merged-PR path is the only configured-source claim in this submission; the
+other examples under [`integrations/`](integrations/) are explicitly labelled
+adapter fixtures. The connection catalog at `GET /integration-catalog` (or
+`/api/integration-catalog` behind nginx) reports the runtime truth.
 
 ```bash
 # After backend is up and seeded (API key for the org):
@@ -243,7 +246,7 @@ authenticate with `X-Brain-Api-Key`.
 | LLM      | Qwen 3 (`qwen-plus`) via DashScope international compatible-mode     |
 | Embeddings | Qwen `text-embedding-v3` (1024-dim)                                |
 | Database | MongoDB 7 single-node replica set (Motor async driver)               |
-| Backend  | FastAPI + sse-starlette + FastMCP (mounted at `/mcp/sse`)            |
+| Backend  | FastAPI + sse-starlette + FastMCP (authenticated Streamable HTTP at `/mcp/`) |
 | Frontend | React 18 + Vite + Tailwind + Framer Motion                           |
 | Cloud    | Alibaba Cloud ECS + nginx + systemd                                  |
 
@@ -323,6 +326,7 @@ steps in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
 | GET | `/workflow-runs/{id}`         | one auditable DecisionBrief and outcome history                      |
 | POST | `/workflow-runs/{id}/outcome` | record a human outcome; gate any reinforcement                      |
 | GET | `/workflow-sources`           | canonical fixture and sandbox source-backed evidence                 |
+| GET | `/integration-catalog`        | server-derived connected/preview/fixture contract catalog            |
 | POST   | `/events`                     | compile a raw event into a skill, persist, propagate                |
 | GET    | `/brain/events`               | list recent compiled events (org-scoped)                            |
 | POST   | `/decisions/check`            | hybrid keyword + cosine intercept check + SAG                       |
@@ -336,7 +340,8 @@ steps in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
 | GET    | `/sessions/{user_id}`         | sessions for a user (cross-session demo)                            |
 | GET    | `/sessions/by-id/{id}`        | one session                                                         |
 | GET    | `/stream`                     | SSE event stream (skill_compiled, decision_intercepted, …)          |
-| GET    | `/mcp/sse`                    | MCP server (recall_skills, check_intercept, compile_experience)     |
+| POST   | `/mcp/`                       | authenticated MCP Streamable HTTP: recall, check, workflow evaluation, compile |
+| GET    | `/mcp/sse`                    | retired legacy SSE path (410 in production)                         |
 | GET    | `/mcp/attestation`            | mock TDX attestation envelope (tools, measurement, narrative)       |
 
 ## Operator UI
@@ -344,6 +349,7 @@ steps in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
 | Page | Path | Purpose |
 |------|------|---------|
 | Operations | `/app/inbox` | Primary judge route: evidence, memory, SAG decision, human action |
+| Connect | `/app/connect` | Truthful source, workflow, and agent connection boundaries |
 | Brain | `/app/brain` | Skills, SAG demo, decision history, TEE attestation |
 | Agents | `/app/agents` | Run demo agents with metadata |
 | Events | `/app/events` | Event timeline + compile form |
@@ -359,14 +365,21 @@ RUN_MONGO_TESTS=1 pytest -x          # full suite incl. store integration
 
 ## Deploy (Alibaba Cloud ECS)
 
-**Recommended (Docker Compose):**
+**Recommended (Docker Compose + TLS):**
 
 ```bash
-# On the ECS instance (Ubuntu / Alibaba Cloud Linux):
+# Before TLS: add A brain.veriflowai.me -> the ECS public IP and open inbound
+# TCP 80/443 in the ECS security group. This retains HTTP on the IP while DNS
+# propagates.
 sudo bash deploy/deploy.sh
-# then edit /opt/company-brain/.env → set QWEN_API_KEY (or DASHSCOPE_API_KEY)
-sudo docker compose --profile full up -d --build
-curl http://127.0.0.1/api/health
+
+# After DNS resolves to this host, issue the certificate and enable the public
+# authenticated MCP configuration.
+ISSUE_TLS_CERTIFICATE=true LETSENCRYPT_EMAIL=you@example.com sudo bash deploy/deploy.sh
+sudo cp deploy/companybrain-certbot-renew.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now companybrain-certbot-renew.timer
+
+curl -fsS https://brain.veriflowai.me/api/health
 ```
 
 Do not claim a live URL until the checked-out commit has been verified on
@@ -378,6 +391,9 @@ decisions use the **RSA-PSS audit fallback**; hardware TDX quotes require a
 
 **Bare-metal systemd alternative:**
 
+Issue the `brain.veriflowai.me` certificate with Certbot first; the supplied
+site configuration expects its certificate files to exist.
+
 ```bash
 sudo cp deploy/companybrain.service /etc/systemd/system/
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/companybrain
@@ -387,8 +403,9 @@ sudo systemctl enable --now companybrain
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-The nginx config disables proxy buffering on `/stream` and `/mcp/sse` —
-without that SSE events are batched and the UI looks frozen.
+The nginx configuration forwards `X-Brain-Api-Key` to `/mcp/`, terminates TLS,
+and disables buffering for `/stream`. Port 80 serves the ACME challenge and
+redirects to HTTPS once the certificate exists; legacy `/mcp/sse` returns 410.
 
 ### Integrity APIs
 
@@ -398,7 +415,7 @@ without that SSE events are batched and the UI looks frozen.
 | `GET /benchmark/sag` | p50/p95/p99 SAG latency vs LLM baseline |
 | `POST /attestation/quote` | TDX quote (503 → RSA fallback on non-TDX hosts) |
 | `POST /audit/sign` · `GET /audit/public-key` | RSA decision audit |
-| `POST /integrations/github/pr` | Real GitHub merged-PR → skill compile |
+| `POST /integrations/github/pr` | Signed GitHub merged-PR intake when configured |
 
 ## Notes on Qwen
 
@@ -414,9 +431,10 @@ without that SSE events are batched and the UI looks frozen.
 - **Thinking mode:** every Chat Completions call sends
   `extra_body={"enable_thinking": False}` to keep latency predictable.
 - **Agents** use Chat Completions with function-calling (the MCP tools are
-  registered as OpenAI-style tools and dispatched in-process). The
-  separately-mounted FastMCP server at `/mcp/sse` exposes the same tools
-  to external MCP clients.
+  registered as OpenAI-style tools and dispatched in-process). External MCP
+  clients use authenticated Streamable HTTP at `/mcp/`; the server resolves
+  organization identity from `X-Brain-Api-Key` and does not expose a tool for
+  external action execution or human-outcome recording.
 - **Efficiency metric:** `GET /settings/metrics` returns `governance_hits` and
   `est_llm_tokens_saved` — intercepts that blocked/warned/suspended before an
   agent LLM turn (~2k tokens per hit, back-of-envelope).

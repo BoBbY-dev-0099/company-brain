@@ -2,6 +2,7 @@ import axios from "axios"
 import type {
   DemoReadiness,
   EvidenceRecord,
+  IntegrationCatalog,
   WorkflowOutcome,
   WorkflowRun,
   WorkflowSource,
@@ -70,4 +71,10 @@ export function getWorkflowSources() {
 
 export function getDemoReadiness() {
   return apiGet<DemoReadiness>("/demo/readiness")
+}
+
+// Connection claims are server-owned. The UI renders this catalog verbatim
+// instead of inferring whether a source or agent connector is actually live.
+export function getIntegrationCatalog() {
+  return apiGet<IntegrationCatalog>("/integration-catalog")
 }

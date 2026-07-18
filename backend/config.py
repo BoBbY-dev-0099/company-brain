@@ -22,7 +22,24 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://localhost:27017/companybrain?replicaSet=rs0&directConnection=true"
     MONGODB_DB_NAME: str = "companybrain"
 
-    MCP_SERVER_URL: str = "http://localhost:8000/mcp/sse"
+    # Public deployment identity. Leave this empty in local development so
+    # callers do not mistake a local server for the public judge deployment.
+    # A verified ECS deployment sets this to https://brain.veriflowai.me.
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "")
+
+    # Remote MCP is intentionally opt-in. The production connector uses
+    # Streamable HTTP at /mcp/ with an X-Brain-Api-Key on every request.
+    MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://localhost:8000/mcp/")
+    MCP_TRANSPORT: str = os.getenv("MCP_TRANSPORT", "streamable-http")
+    MCP_REMOTE_ENABLED: bool = os.getenv("MCP_REMOTE_ENABLED", "false").lower() == "true"
+    MCP_REQUIRE_API_KEY: bool = os.getenv("MCP_REQUIRE_API_KEY", "true").lower() == "true"
+    # Legacy SSE had no request-scoped API-key enforcement. It is disabled by
+    # default and must never be advertised as the production connector.
+    MCP_LEGACY_SSE_ENABLED: bool = os.getenv("MCP_LEGACY_SSE_ENABLED", "false").lower() == "true"
+    MCP_ALLOWED_ORIGINS: str = os.getenv("MCP_ALLOWED_ORIGINS", "")
+    # Browser API access is same-origin in the deployed app.  Extra origins
+    # must be explicitly configured rather than using a wildcard in production.
+    CORS_ALLOWED_ORIGINS: str = os.getenv("CORS_ALLOWED_ORIGINS", "")
 
     BRAIN_API_KEY: str = os.getenv("BRAIN_API_KEY", "")
 

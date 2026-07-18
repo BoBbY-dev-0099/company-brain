@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import {
   AlertTriangle,
   Bot,
+  ChevronDown,
   ChevronRight,
   CircleDot,
   Clock3,
   Database,
   ExternalLink,
-  FileSearch,
+  Fingerprint,
   LoaderCircle,
   RefreshCw,
-  ShieldCheck,
   ShieldAlert,
+  ShieldCheck,
+  Sparkles,
   UserRound,
   X,
 } from "lucide-react"
@@ -36,8 +38,6 @@ import type {
 
 type RunsByTemplate = Record<string, WorkflowRun>
 
-const PIPELINE = ["Evidence", "What changed", "Memory", "Decision", "Human action", "Outcome"]
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -51,9 +51,7 @@ function valueAsArray<T>(payload: unknown, key: string): T[] {
 
 function asWorkflowRun(payload: unknown): WorkflowRun | null {
   const candidate = isRecord(payload) && isRecord(payload.run) ? payload.run : payload
-  if (!isRecord(candidate) || typeof candidate.template_id !== "string") {
-    return null
-  }
+  if (!isRecord(candidate) || typeof candidate.template_id !== "string") return null
   const runId = typeof candidate.id === "string" ? candidate.id : candidate.run_id
   if (typeof runId !== "string") return null
   return { ...candidate, id: runId } as unknown as WorkflowRun
@@ -80,9 +78,14 @@ function getBrief(run: WorkflowRun | null): DecisionBrief | null {
   return run?.decision_brief ?? run?.brief ?? null
 }
 
-function recommendedAction(run: WorkflowRun | null): string | undefined {
+function templateText(template: WorkflowTemplate, key: string): string | undefined {
+  const value = template[key]
+  return typeof value === "string" && value.trim() ? value : undefined
+}
+
+function recommendedAction(run: WorkflowRun | null, template?: WorkflowTemplate): string | undefined {
   const brief = getBrief(run)
-  return run?.recommended_next_action ?? brief?.recommended_next_action ?? brief?.recommended_action
+  return run?.recommended_next_action ?? brief?.recommended_next_action ?? brief?.recommended_action ?? (template ? templateText(template, "recommended_action") : undefined)
 }
 
 function decisionOwner(run: WorkflowRun | null, template: WorkflowTemplate): string | undefined {
@@ -107,56 +110,35 @@ function missingEvidenceText(value: string | MissingEvidence): string {
   return typeof value === "string" ? value : `${value.field}: ${value.reason}`
 }
 
-function demoFixtureTitle(template: WorkflowTemplate): string | undefined {
-  const fixture = template.demo_fixture
-  return isRecord(fixture) && typeof fixture.title === "string" ? fixture.title : undefined
-}
-
 function formatTime(value: string | number | undefined): string {
   if (value == null) return "Not recorded"
   const date = new Date(value)
   return Number.isNaN(date.valueOf()) ? String(value) : date.toLocaleString()
 }
 
+function humanize(value: string | undefined): string {
+  if (!value) return "Not reported"
+  return value.replaceAll("_", " ")
+}
+
 function isFixture(template: WorkflowTemplate, run: WorkflowRun | null): boolean {
   const templateFixture = template.fixture ?? template.demo_fixture
-  const fixtureMode = typeof templateFixture === "object" ? templateFixture.mode : undefined
+  const fixtureMode = isRecord(templateFixture) ? templateFixture.mode : undefined
   return templateFixture === true || Boolean(template.demo_fixture) || run?.fixture === true || run?.is_demo_fixture === true || run?.mode === "demo_fixture" || fixtureMode === "demo_fixture"
+}
+
+function isCanonicalPreview(run: WorkflowRun | null): boolean {
+  if (!run?.is_demo_fixture) return false
+  const orgId = run.org_id
+  return typeof orgId === "string" && orgId === "judge-demo-v1"
 }
 
 function verdictClass(value: string | undefined): string {
   const normalized = value?.toLowerCase() ?? ""
-  if (/(suspend|block)/.test(normalized)) {
-    return "border-[#ef4444]/40 bg-[#ef4444]/10 text-[#fca5a5]"
-  }
-  if (/(review|hold|warn|escalat)/.test(normalized)) {
-    return "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fbbf24]"
-  }
-  if (/(clear|allow|approved|auto_execute|active)/.test(normalized)) {
-    return "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#4ade80]"
-  }
+  if (/(suspend|block)/.test(normalized)) return "border-[#ef4444]/40 bg-[#ef4444]/10 text-[#fca5a5]"
+  if (/(review|hold|warn|escalat)/.test(normalized)) return "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fbbf24]"
+  if (/(clear|allow|approved|auto_execute|active|proceed)/.test(normalized)) return "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#86efac]"
   return "border-[#2a2a30] bg-[#17171a] text-[#a1a1aa]"
-}
-
-function detailStageStatus(run: WorkflowRun | null, stage: string): boolean {
-  const brief = getBrief(run)
-  if (!run) return false
-  switch (stage) {
-    case "Evidence":
-      return Boolean(brief?.evidence?.length)
-    case "What changed":
-      return Boolean(brief?.what_changed || brief?.inference)
-    case "Memory":
-      return Boolean(brief?.memory_refs?.length)
-    case "Decision":
-      return Boolean(brief?.verdict || run.status)
-    case "Human action":
-      return Boolean(brief?.recommended_action || brief?.owner)
-    case "Outcome":
-      return Boolean(run.outcomes?.length)
-    default:
-      return false
-  }
 }
 
 function formatEvidenceSource(evidence: EvidenceRecord): string {
@@ -178,7 +160,7 @@ function workflowSourceLabel(source: WorkflowSource): string {
 function workflowSourceStatus(source: WorkflowSource): string {
   if (source.status) return source.status
   const parts = [source.availability, source.freshness].filter((value): value is string => typeof value === "string" && value.length > 0)
-  return parts.length > 0 ? parts.join(" · ") : "Status not reported"
+  return parts.length > 0 ? parts.join(" / ") : "Status not reported"
 }
 
 function workflowSourceMode(source: WorkflowSource): string | undefined {
@@ -194,133 +176,288 @@ function readinessValue(value: boolean | null | undefined, positive: string, neg
   return value ? positive : negative
 }
 
-function WorkflowCard({
+function changedStatements(run: WorkflowRun | null): string[] {
+  const brief = getBrief(run)
+  return asStringList(brief?.what_changed).concat(asStringList(brief?.inference))
+}
+
+function blockerText(run: WorkflowRun | null, template: WorkflowTemplate): string {
+  const brief = getBrief(run)
+  const changed = changedStatements(run)[0]
+  if (changed) return changed
+  const fact = brief?.facts?.[0]
+  if (fact) return factText(fact)
+  return template.description ?? "The server has not returned an evidence-backed blocker yet."
+}
+
+function freshnessText(run: WorkflowRun | null): string {
+  const freshness = (getBrief(run)?.evidence ?? [])
+    .map((item) => item.freshness)
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+  const distinct = [...new Set(freshness)]
+  return distinct.length > 0 ? `Evidence freshness: ${distinct.map(humanize).join(" / ")}` : "Evidence freshness not reported"
+}
+
+function sagExplanation(verdict: string | undefined): string {
+  const normalized = verdict?.toLowerCase() ?? ""
+  if (/(suspend|block)/.test(normalized)) {
+    return "The live condition no longer meets the safety rule stored with this memory, so the old path is suspended."
+  }
+  if (/(review|hold|warn|escalat)/.test(normalized)) {
+    return "The safety rule cannot support an action until the required evidence is available and current."
+  }
+  if (/(proceed|clear|allow|approved|active)/.test(normalized)) {
+    return "The live conditions satisfy the deterministic safety rule, but a human still owns the final action."
+  }
+  return "The backend did not return a recognizable safety verdict."
+}
+
+function jsonText(value: unknown): string {
+  if (typeof value === "string") return value
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return "Unable to render the server trace."
+  }
+}
+
+function Freshness({ run }: { run: WorkflowRun | null }) {
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-[#7c7c8a]">
+      <Clock3 className="h-3.5 w-3.5" />
+      {freshnessText(run)}
+    </p>
+  )
+}
+
+function VerdictBadge({ value }: { value: string | undefined }) {
+  return value ? (
+    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${verdictClass(value)}`}>{humanize(value)}</span>
+  ) : (
+    <span className="rounded-full border border-[#2a2a30] bg-[#17171a] px-2.5 py-1 text-xs text-[#7c7c8a]">Not evaluated</span>
+  )
+}
+
+function FlagshipCard({
   template,
   run,
   busy,
-  onRun,
   onOpen,
+  onRun,
 }: {
   template: WorkflowTemplate
   run: WorkflowRun | null
   busy: boolean
-  onRun: () => void
   onOpen: () => void
+  onRun: () => void
 }) {
-  const brief = getBrief(run)
-  const templateId = getTemplateId(template)
-  const verdict = brief?.verdict ?? run?.status
-  const fact = brief?.facts?.[0]
-  const sources = template.source_types ?? template.supported_source_types ?? []
-  const fixtureTitle = demoFixtureTitle(template)
+  const verdict = getBrief(run)?.verdict ?? run?.status
+  const owner = decisionOwner(run, template) ?? "Owner role not assigned"
+  const action = recommendedAction(run, template) ?? "No backend recommendation has been recorded."
 
   return (
-    <article className="rounded-xl border border-[#1f1f22] bg-[#111114] p-5 space-y-5 shadow-[0_8px_30px_rgba(0,0,0,0.15)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="font-semibold text-lg text-[#f4f4f5] truncate">{getTemplateName(template)}</h2>
-            {isFixture(template, run) && (
-              <span className="rounded border border-[#60a5fa]/40 bg-[#60a5fa]/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#93c5fd]">
-                Demo fixture
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-xs text-[#7c7c8a] line-clamp-2">
-            {template.description ?? templateId}
-          </p>
-          {!run && fixtureTitle && <p className="mt-2 text-xs text-[#93c5fd]">Fixture ready: {fixtureTitle}</p>}
-        </div>
-        {template.version != null && (
-          <span className="shrink-0 font-mono text-[10px] text-[#7c7c8a]">v{template.version}</span>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {sources.map((source) => (
-          <span key={source} className="rounded bg-[#050505] px-2 py-1 text-[10px] font-mono text-[#a1a1aa]">
-            {source}
-          </span>
-        ))}
-        {template.memory_type && (
-          <span className="rounded bg-[#050505] px-2 py-1 text-[10px] font-mono text-[#a1a1aa]">
-            memory: {template.memory_type}
-          </span>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-[#1f1f22] bg-[#09090b] p-3">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[10px] uppercase tracking-[0.14em] text-[#7c7c8a]">Server decision</span>
-          {verdict ? (
-            <span className={`rounded border px-2 py-1 text-xs font-medium ${verdictClass(verdict)}`}>{verdict}</span>
-          ) : (
-            <span className="text-xs text-[#7c7c8a]">Not evaluated</span>
-          )}
-        </div>
-        <p className="mt-2 text-sm text-[#e4e4e7] line-clamp-2">
-          {recommendedAction(run) ?? "No backend recommendation has been recorded for this workflow."}
-        </p>
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-[#7c7c8a]">
-          <UserRound className="h-3.5 w-3.5" />
-          {decisionOwner(run, template) ?? "Owner role not assigned"}
-        </div>
-      </div>
-
-      {fact && (
-        <div className="border-l-2 border-[#22c55e]/60 pl-3 text-xs leading-5 text-[#a1a1aa]">
-          <span className="mr-1 uppercase tracking-wide text-[10px] text-[#7c7c8a]">Evidence</span>
-          {factText(fact)}
-        </div>
-      )}
-
-      <div className="grid grid-cols-3 gap-1 text-center">
-        {PIPELINE.map((stage) => {
-          const complete = detailStageStatus(run, stage)
-          return (
-            <div
-              key={stage}
-              className={`rounded px-1 py-1.5 text-[9px] leading-tight ${
-                complete ? "bg-[#22c55e]/10 text-[#86efac]" : "bg-[#17171a] text-[#686871]"
-              }`}
-            >
-              {stage}
+    <article className="overflow-hidden rounded-2xl border border-[#22c55e]/30 bg-gradient-to-br from-[#14321f] via-[#111114] to-[#111114] shadow-[0_18px_60px_rgba(0,0,0,0.3)]">
+      <div className="grid gap-0 lg:grid-cols-[1.35fr_0.85fr]">
+        <div className="p-5 md:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#86efac]">
+                  Flagship decision
+                </span>
+                {isFixture(template, run) && <span className="text-[10px] font-medium uppercase tracking-wide text-[#93c5fd]">Judge fixture</span>}
+              </div>
+              <h2 className="text-2xl font-semibold tracking-tight text-[#fafafa]">{getTemplateName(template)}</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#b4b4bb]">{template.description}</p>
             </div>
-          )
-        })}
-      </div>
+            <VerdictBadge value={verdict} />
+          </div>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={busy || !templateId}
-          className="inline-flex items-center gap-1.5 rounded bg-[#22c55e] px-3 py-2 text-xs font-semibold text-[#050505] transition-colors hover:bg-[#4ade80] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-          Replay in sandbox
-        </button>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="inline-flex items-center gap-1 text-xs font-medium text-[#a1a1aa] hover:text-[#e4e4e7]"
-        >
-          Why this decision <ChevronRight className="h-3.5 w-3.5" />
-        </button>
+          <div className="mt-6 rounded-xl border border-[#ef4444]/25 bg-[#050505]/55 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#fca5a5]">What stopped</p>
+            <p className="mt-2 text-base leading-6 text-[#f4f4f5]">{blockerText(run, template)}</p>
+          </div>
+
+          <Freshness run={run} />
+
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={onOpen}
+              className="inline-flex items-center gap-2 rounded bg-[#22c55e] px-4 py-2.5 text-sm font-semibold text-[#050505] transition-colors hover:bg-[#4ade80]"
+            >
+              Review decision <ChevronRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onRun}
+              disabled={busy || !getTemplateId(template)}
+              className="inline-flex items-center gap-2 rounded border border-[#2a2a30] bg-[#111114] px-3 py-2.5 text-xs font-semibold text-[#e4e4e7] hover:border-[#60a5fa]/60 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Replay in sandbox
+            </button>
+          </div>
+        </div>
+
+        <div className="border-t border-[#1f1f22] bg-[#09090b]/60 p-5 lg:border-l lg:border-t-0 lg:p-7">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7c7c8a]">Human handoff</p>
+          <div className="mt-4 space-y-5">
+            <div>
+              <div className="flex items-center gap-2 text-xs text-[#7c7c8a]"><UserRound className="h-3.5 w-3.5 text-[#60a5fa]" /> Owner</div>
+              <p className="mt-1 text-sm font-medium text-[#e4e4e7]">{owner}</p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-xs text-[#7c7c8a]"><ShieldCheck className="h-3.5 w-3.5 text-[#22c55e]" /> Recommended next action</div>
+              <p className="mt-1 text-sm leading-6 text-[#d4d4d8]">{action}</p>
+            </div>
+            <p className="border-t border-[#1f1f22] pt-4 text-xs leading-5 text-[#7c7c8a]">No external action is automatic. A human confirmation is required and recorded separately.</p>
+          </div>
+        </div>
       </div>
     </article>
   )
 }
 
-function DetailSection({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
+function CompactCard({
+  template,
+  run,
+  busy,
+  onOpen,
+  onRun,
+}: {
+  template: WorkflowTemplate
+  run: WorkflowRun | null
+  busy: boolean
+  onOpen: () => void
+  onRun: () => void
+}) {
+  const verdict = getBrief(run)?.verdict ?? run?.status
   return (
-    <section className="border-b border-[#1f1f22] py-4 last:border-b-0">
-      <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#e4e4e7]">
-        {icon}
-        {title}
-      </h3>
-      {children}
+    <article className="rounded-xl border border-[#1f1f22] bg-[#111114] p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold text-[#f4f4f5]">{getTemplateName(template)}</h3>
+            {isFixture(template, run) && <span className="text-[10px] font-medium uppercase tracking-wide text-[#93c5fd]">Fixture</span>}
+          </div>
+          <p className="mt-1 text-xs leading-5 text-[#7c7c8a]">{template.description}</p>
+        </div>
+        <VerdictBadge value={verdict} />
+      </div>
+
+      <p className="mt-4 border-l-2 border-[#f59e0b]/60 pl-3 text-sm leading-5 text-[#d4d4d8]">{blockerText(run, template)}</p>
+      <Freshness run={run} />
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#1f1f22] pt-4">
+        <div className="min-w-0 text-xs text-[#a1a1aa]"><span className="text-[#7c7c8a]">Owner: </span>{decisionOwner(run, template) ?? "Not assigned"}</div>
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={onOpen} className="text-xs font-semibold text-[#86efac] hover:underline">Review</button>
+          <button type="button" onClick={onRun} disabled={busy} className="text-xs text-[#a1a1aa] hover:text-[#e4e4e7] disabled:opacity-50">
+            {busy ? "Replaying..." : "Sandbox replay"}
+          </button>
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function StoryStep({ number, title, icon, children }: { number: number; title: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <section className="relative border-l border-[#2a2a30] pb-7 pl-7 last:pb-0">
+      <span className="absolute -left-3 top-0 flex h-6 w-6 items-center justify-center rounded-full border border-[#22c55e]/40 bg-[#111114] text-[10px] font-semibold text-[#86efac]">{number}</span>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-[#f4f4f5]">{icon}{title}</h3>
+      <div className="mt-2">{children}</div>
     </section>
+  )
+}
+
+function EvidenceCards({ evidence }: { evidence: EvidenceRecord[] }) {
+  if (evidence.length === 0) return <p className="text-sm text-[#7c7c8a]">No evidence records were returned.</p>
+  return (
+    <div className="space-y-3">
+      {evidence.map((item, index) => (
+        <div key={item.id ?? item.evidence_id ?? `${item.source_type ?? item.source}-${index}`} className="rounded border border-[#1f1f22] bg-[#111114] p-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-[#e4e4e7]">{formatEvidenceSource(item)}</span>
+            {evidenceMode(item) === "demo_fixture" && <span className="text-[10px] font-medium uppercase tracking-wide text-[#93c5fd]">Fixture</span>}
+            {item.freshness && <span className="text-[#7c7c8a]">{humanize(item.freshness)}</span>}
+          </div>
+          {item.excerpt && <p className="mt-2 text-sm leading-5 text-[#c4c4ca]">{item.excerpt}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[#7c7c8a]">
+            <span>{formatTime(item.occurred_at ?? item.timestamp)}</span>
+            {item.url && <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#86efac] hover:underline">Source <ExternalLink className="h-3 w-3" /></a>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AuditProof({ run, template }: { run: WorkflowRun; template: WorkflowTemplate }) {
+  const brief = getBrief(run)
+  const evidence = brief?.evidence ?? []
+  const inference = asStringList(brief?.inference)
+  const missing = brief?.missing_evidence ?? []
+  const memories = brief?.memory_refs ?? []
+  const outcomes = run.outcomes ?? []
+
+  return (
+    <details className="group rounded-xl border border-[#1f1f22] bg-[#09090b]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#e4e4e7]">
+        <span className="flex items-center gap-2"><Fingerprint className="h-4 w-4 text-[#a78bfa]" /> Audit proof</span>
+        <ChevronDown className="h-4 w-4 text-[#7c7c8a] transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-5 border-t border-[#1f1f22] p-4">
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c7c8a]">Source excerpts and freshness</h4>
+          <EvidenceCards evidence={evidence} />
+        </section>
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c7c8a]">Qwen inference</h4>
+          {inference.length > 0 ? <div className="space-y-2 text-sm leading-5 text-[#c4c4ca]">{inference.map((item, index) => <p key={`${item}-${index}`}>{item}</p>)}</div> : <p className="text-sm text-[#7c7c8a]">No inference was returned.</p>}
+        </section>
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c7c8a]">Memory provenance</h4>
+          {memories.length > 0 ? (
+            <div className="space-y-2">
+              {memories.map((memory, index) => (
+                <div key={memory.id ?? memory.memory_id ?? memory.skill_id ?? index} className="rounded border border-[#1f1f22] bg-[#111114] p-3 text-sm">
+                  <div className="font-medium text-[#e4e4e7]">{memory.name ?? memory.skill_id ?? memory.memory_id ?? "Referenced memory"}</div>
+                  {memory.summary && <p className="mt-1 text-[#a1a1aa]">{memory.summary}</p>}
+                  {isRecord(memory.provenance) && <pre className="mt-2 overflow-auto text-[10px] leading-5 text-[#7c7c8a]">{jsonText(memory.provenance)}</pre>}
+                </div>
+              ))}
+            </div>
+          ) : <p className="text-sm text-[#7c7c8a]">No memory references were returned.</p>}
+        </section>
+        {missing.length > 0 && (
+          <section>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#fbbf24]">Missing evidence</h4>
+            <ul className="space-y-1 text-sm text-[#d4d4d8]">{missing.map((item, index) => <li key={`${missingEvidenceText(item)}-${index}`}>- {missingEvidenceText(item)}</li>)}</ul>
+          </section>
+        )}
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c7c8a]">Deterministic SAG trace</h4>
+          <pre className="max-h-64 overflow-auto rounded bg-[#050505] p-3 text-[11px] leading-5 text-[#a1a1aa]">{jsonText(brief?.sag_trace)}</pre>
+        </section>
+        <section>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#7c7c8a]">Outcome history</h4>
+          {outcomes.length === 0 ? <p className="text-sm text-[#7c7c8a]">No human outcome has been recorded for this run.</p> : (
+            <div className="space-y-2">
+              {outcomes.map((outcome, index) => (
+                <div key={outcome.id ?? index} className="rounded bg-[#111114] p-3 text-sm">
+                  <div className="flex items-center justify-between gap-3"><span className={outcome.approved ? "text-[#86efac]" : "text-[#fbbf24]"}>{outcome.approved ? "Human-approved" : "Kept in review"}</span><span className="text-[10px] text-[#7c7c8a]">{formatTime(outcome.recorded_at ?? outcome.created_at ?? outcome.timestamp)}</span></div>
+                  {typeof outcome.note === "string" ? <p className="mt-1 text-[#c4c4ca]">{outcome.note}</p> : outcome.outcome && <p className="mt-1 text-[#c4c4ca]">{outcome.outcome}</p>}
+                  {outcome.actor && <p className="mt-1 font-mono text-[10px] text-[#7c7c8a]">{outcome.actor}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+        <p className="text-[10px] text-[#686871]">Template: {getTemplateId(template)}. Raw values above are returned by the backend and are not client-side verdicts.</p>
+      </div>
+    </details>
   )
 }
 
@@ -330,8 +467,10 @@ function DetailDrawer({
   outcomeText,
   outcomeBusy,
   outcomeError,
+  replayBusy,
   onOutcomeTextChange,
   onRecordOutcome,
+  onReplay,
   onClose,
 }: {
   template: WorkflowTemplate
@@ -339,184 +478,90 @@ function DetailDrawer({
   outcomeText: string
   outcomeBusy: boolean
   outcomeError: string | null
+  replayBusy: boolean
   onOutcomeTextChange: (value: string) => void
   onRecordOutcome: (approved: boolean) => void
+  onReplay: () => void
   onClose: () => void
 }) {
   const brief = getBrief(run)
-  const evidence = brief?.evidence ?? []
   const facts = brief?.facts ?? []
-  const inferences = asStringList(brief?.inference)
-  const missingEvidence = brief?.missing_evidence ?? []
-  const memoryRefs = brief?.memory_refs ?? []
-  const outcomes = run?.outcomes ?? []
+  const changed = changedStatements(run)
+  const memories = brief?.memory_refs ?? []
   const verdict = brief?.verdict ?? run?.status
+  const canonicalPreview = isCanonicalPreview(run)
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Decision evidence">
-      <button type="button" onClick={onClose} className="absolute inset-0 bg-black/70" aria-label="Close decision drawer" />
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Decision explanation">
+      <button type="button" onClick={onClose} className="absolute inset-0 bg-black/75" aria-label="Close decision explanation" />
       <aside className="relative h-full w-full max-w-2xl overflow-y-auto border-l border-[#2a2a30] bg-[#0b0b0d] p-5 shadow-2xl sm:p-7">
-        <div className="sticky top-0 z-10 -mt-5 -mx-5 mb-5 flex items-start justify-between border-b border-[#1f1f22] bg-[#0b0b0d]/95 px-5 py-5 backdrop-blur sm:-mt-7 sm:-mx-7 sm:px-7 sm:py-6">
+        <div className="sticky top-0 z-10 -mt-5 -mx-5 mb-6 flex items-start justify-between border-b border-[#1f1f22] bg-[#0b0b0d]/95 px-5 py-5 backdrop-blur sm:-mt-7 sm:-mx-7 sm:px-7 sm:py-6">
           <div className="pr-4">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-[#22c55e]">Why this decision?</div>
-            <h2 className="mt-1 text-xl font-semibold">{getTemplateName(template)}</h2>
-            <p className="mt-1 text-xs text-[#7c7c8a]">Server-provided evidence, Qwen inference, and deterministic SAG trace.</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#22c55e]">Decision explanation</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2"><h2 className="text-xl font-semibold text-[#fafafa]">{getTemplateName(template)}</h2><VerdictBadge value={verdict} /></div>
+            <p className="mt-2 text-xs text-[#7c7c8a]">A five-step causal story from evidence to a human-owned next action.</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded p-1 text-[#7c7c8a] hover:bg-[#17171a] hover:text-[#e4e4e7]" aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
+          <button type="button" onClick={onClose} className="rounded p-1 text-[#7c7c8a] hover:bg-[#17171a] hover:text-[#e4e4e7]" aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
 
         {!run ? (
-          <div className="rounded-lg border border-dashed border-[#2a2a30] bg-[#111114] p-5 text-sm text-[#a1a1aa]">
-            This template has no evaluated server run yet. Run its labeled fixture to inspect an auditable DecisionBrief.
-          </div>
+          <div className="rounded-lg border border-dashed border-[#2a2a30] bg-[#111114] p-5 text-sm text-[#a1a1aa]">This workflow has no evaluated server run yet. Start the labeled sandbox replay to create an auditable DecisionBrief.</div>
         ) : (
           <div className="space-y-0">
-            <DetailSection title="Evidence" icon={<FileSearch className="h-4 w-4 text-[#22c55e]" />}>
-              {evidence.length === 0 ? (
-                <p className="text-sm text-[#7c7c8a]">No evidence records were returned.</p>
+            <StoryStep number={1} title="What was stopped?" icon={<ShieldAlert className="h-4 w-4 text-[#fca5a5]" />}>
+              <p className="text-sm leading-6 text-[#d4d4d8]">{blockerText(run, template)}</p>
+              <div className="mt-3 rounded-lg border border-[#1f1f22] bg-[#111114] p-3"><p className="text-[10px] uppercase tracking-wide text-[#7c7c8a]">Backend verdict</p><div className="mt-2"><VerdictBadge value={verdict} /></div></div>
+            </StoryStep>
+
+            <StoryStep number={2} title="What changed?" icon={<AlertTriangle className="h-4 w-4 text-[#fbbf24]" />}>
+              {changed.length > 0 ? <div className="space-y-2 text-sm leading-6 text-[#c4c4ca]">{changed.map((item, index) => <p key={`${item}-${index}`}>{item}</p>)}</div> : <p className="text-sm text-[#7c7c8a]">No server-provided change inference was returned.</p>}
+              {facts.length > 0 && <div className="mt-3 rounded border border-[#22c55e]/20 bg-[#22c55e]/5 p-3"><p className="mb-1 text-[10px] uppercase tracking-wide text-[#86efac]">Facts used</p><ul className="space-y-1 text-sm text-[#c4c4ca]">{facts.map((fact, index) => <li key={`${factText(fact)}-${index}`}>- {factText(fact)}</li>)}</ul></div>}
+            </StoryStep>
+
+            <StoryStep number={3} title="What did Company Brain remember?" icon={<Database className="h-4 w-4 text-[#a78bfa]" />}>
+              {memories.length > 0 ? <div className="space-y-2">{memories.map((memory, index) => <div key={memory.id ?? memory.memory_id ?? memory.skill_id ?? index} className="rounded border border-[#1f1f22] bg-[#111114] p-3 text-sm"><div className="font-medium text-[#e4e4e7]">{memory.name ?? memory.skill_id ?? memory.memory_id ?? "Referenced memory"}</div>{memory.summary && <p className="mt-1 leading-5 text-[#a1a1aa]">{memory.summary}</p>}</div>)}</div> : <p className="text-sm text-[#7c7c8a]">No prior memory references were returned.</p>}
+            </StoryStep>
+
+            <StoryStep number={4} title="Why did the safety check fail?" icon={<ShieldCheck className="h-4 w-4 text-[#fbbf24]" />}>
+              <p className="text-sm leading-6 text-[#d4d4d8]">{sagExplanation(verdict)}</p>
+              <p className="mt-2 text-xs leading-5 text-[#7c7c8a]">SAG is deterministic: it checks the current context against the server-defined rule. The full trace is preserved in Audit proof.</p>
+            </StoryStep>
+
+            <StoryStep number={5} title="Who must act next?" icon={<UserRound className="h-4 w-4 text-[#60a5fa]" />}>
+              <div className="rounded-lg border border-[#1f1f22] bg-[#111114] p-3"><p className="text-[10px] uppercase tracking-wide text-[#7c7c8a]">Owner</p><p className="mt-1 text-sm font-medium text-[#e4e4e7]">{decisionOwner(run, template) ?? "Owner role not assigned"}</p><p className="mt-3 text-[10px] uppercase tracking-wide text-[#7c7c8a]">Recommended action</p><p className="mt-1 text-sm leading-6 text-[#d4d4d8]">{recommendedAction(run, template) ?? "No server recommendation was returned."}</p></div>
+              {canonicalPreview ? (
+                <div className="mt-3 rounded-lg border border-[#60a5fa]/25 bg-[#60a5fa]/5 p-3"><p className="text-sm leading-5 text-[#bfdbfe]">This is the immutable judge fixture. Replay it in the sandbox to compile evidence with Qwen and record a human outcome without changing canonical memory.</p><button type="button" onClick={onReplay} disabled={replayBusy} className="mt-3 inline-flex items-center gap-2 rounded border border-[#60a5fa]/50 px-3 py-2 text-xs font-semibold text-[#bfdbfe] hover:bg-[#60a5fa]/10 disabled:opacity-50">{replayBusy && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}{replayBusy ? "Replaying..." : "Replay in sandbox"}</button></div>
               ) : (
-                <div className="space-y-3">
-                  {evidence.map((item, index) => (
-                    <div key={item.id ?? item.evidence_id ?? `${item.source_type ?? item.source}-${index}`} className="rounded border border-[#1f1f22] bg-[#111114] p-3">
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="font-medium text-[#e4e4e7]">{formatEvidenceSource(item)}</span>
-                        {evidenceMode(item) === "demo_fixture" && (
-                          <span className="rounded border border-[#60a5fa]/40 bg-[#60a5fa]/10 px-1.5 py-0.5 text-[10px] text-[#93c5fd]">Demo fixture</span>
-                        )}
-                        {item.freshness && <span className="text-[#7c7c8a]">{item.freshness}</span>}
-                      </div>
-                      {item.excerpt && <p className="mt-2 text-sm leading-5 text-[#c4c4ca]">{item.excerpt}</p>}
-                      <div className="mt-2 flex items-center gap-3 text-[10px] text-[#7c7c8a]">
-                        <span>{formatTime(item.occurred_at ?? item.timestamp)}</span>
-                        {item.url && (
-                          <a href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#86efac] hover:underline">
-                            Source <ExternalLink className="h-3 w-3" />
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <div className="mt-3"><p className="text-xs leading-5 text-[#7c7c8a]">Recording this outcome does not execute an external company action.</p><textarea value={outcomeText} onChange={(event) => onOutcomeTextChange(event.target.value)} placeholder="Record the human decision or follow-up..." className="mt-3 min-h-20 w-full rounded border border-[#2a2a30] bg-[#111114] px-3 py-2 text-sm text-[#e4e4e7] outline-none placeholder:text-[#5a5a62] focus:border-[#22c55e]/70" />{outcomeError && <p className="mt-2 text-xs text-[#fca5a5]">{outcomeError}</p>}<div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={outcomeBusy} onClick={() => onRecordOutcome(true)} className="rounded bg-[#22c55e] px-3 py-2 text-xs font-semibold text-[#050505] hover:bg-[#4ade80] disabled:opacity-50">{outcomeBusy ? "Recording..." : "Confirm human action"}</button><button type="button" disabled={outcomeBusy} onClick={() => onRecordOutcome(false)} className="rounded border border-[#f59e0b]/50 px-3 py-2 text-xs font-semibold text-[#fbbf24] hover:bg-[#f59e0b]/10 disabled:opacity-50">Keep in review</button></div></div>
               )}
-            </DetailSection>
-
-            <DetailSection title="What changed" icon={<AlertTriangle className="h-4 w-4 text-[#fbbf24]" />}>
-              {inferences.length === 0 ? (
-                <p className="text-sm text-[#7c7c8a]">No server-provided change inference was returned.</p>
-              ) : (
-                <div className="space-y-2 text-sm leading-5 text-[#c4c4ca]">
-                  <p className="text-[10px] uppercase tracking-wide text-[#7c7c8a]">Qwen inference (not a source fact)</p>
-                  {inferences.map((inference, index) => <p key={`${inference}-${index}`}>{inference}</p>)}
-                </div>
-              )}
-              {facts.length > 0 && (
-                <div className="mt-3 rounded border border-[#22c55e]/20 bg-[#22c55e]/5 p-3">
-                  <p className="mb-1 text-[10px] uppercase tracking-wide text-[#86efac]">Facts used</p>
-                  <ul className="space-y-1 text-sm text-[#c4c4ca]">
-                    {facts.map((fact, index) => <li key={`${factText(fact)}-${index}`}>• {factText(fact)}</li>)}
-                  </ul>
-                </div>
-              )}
-              {missingEvidence.length > 0 && (
-                <div className="mt-3 rounded border border-[#f59e0b]/30 bg-[#f59e0b]/5 p-3">
-                  <p className="mb-1 text-[10px] uppercase tracking-wide text-[#fbbf24]">Missing evidence</p>
-                  <ul className="space-y-1 text-sm text-[#d4d4d8]">
-                    {missingEvidence.map((item, index) => <li key={`${missingEvidenceText(item)}-${index}`}>• {missingEvidenceText(item)}</li>)}
-                  </ul>
-                </div>
-              )}
-            </DetailSection>
-
-            <DetailSection title="Memory used" icon={<Database className="h-4 w-4 text-[#a78bfa]" />}>
-              {memoryRefs.length === 0 ? (
-                <p className="text-sm text-[#7c7c8a]">No prior memory references were returned.</p>
-              ) : (
-                <div className="space-y-2">
-                  {memoryRefs.map((memory, index) => (
-                    <div key={memory.id ?? memory.memory_id ?? memory.skill_id ?? index} className="rounded bg-[#111114] p-3 text-sm">
-                      <div className="font-medium text-[#e4e4e7]">{memory.name ?? memory.skill_id ?? memory.memory_id ?? "Referenced memory"}</div>
-                      {memory.summary && <p className="mt-1 text-[#a1a1aa]">{memory.summary}</p>}
-                      {(memory.version != null || memory.source) && (
-                        <p className="mt-1 font-mono text-[10px] text-[#7c7c8a]">
-                          {memory.version != null ? `v${memory.version}` : ""}{memory.version != null && memory.source ? " · " : ""}{memory.source ?? ""}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </DetailSection>
-
-            <DetailSection title="SAG decision" icon={<ShieldAlert className="h-4 w-4 text-[#fbbf24]" />}>
-              <div className="flex flex-wrap items-center gap-2">
-                {verdict ? <span className={`rounded border px-2 py-1 text-sm font-medium ${verdictClass(verdict)}`}>{verdict}</span> : <span className="text-sm text-[#7c7c8a]">No verdict returned</span>}
-                {decisionOwner(run, template) && <span className="text-sm text-[#a1a1aa]">Owner: {decisionOwner(run, template)}</span>}
-              </div>
-              {brief?.sag_trace != null && (
-                <pre className="mt-3 max-h-56 overflow-auto rounded bg-[#050505] p-3 text-[11px] leading-5 text-[#a1a1aa]">
-                  {typeof brief.sag_trace === "string" ? brief.sag_trace : JSON.stringify(brief.sag_trace, null, 2)}
-                </pre>
-              )}
-            </DetailSection>
-
-            <DetailSection title="Human action" icon={<UserRound className="h-4 w-4 text-[#60a5fa]" />}>
-              <p className="text-sm leading-5 text-[#d4d4d8]">{recommendedAction(run) ?? "No server-recommended action was returned."}</p>
-              <p className="mt-2 text-xs text-[#7c7c8a]">Actions remain human-approved; recording an outcome does not execute an external action.</p>
-              <textarea
-                value={outcomeText}
-                onChange={(event) => onOutcomeTextChange(event.target.value)}
-                placeholder="Record the human decision or follow-up…"
-                className="mt-3 min-h-20 w-full rounded border border-[#2a2a30] bg-[#111114] px-3 py-2 text-sm text-[#e4e4e7] outline-none placeholder:text-[#5a5a62] focus:border-[#22c55e]/70"
-              />
-              {outcomeError && <p className="mt-2 text-xs text-[#fca5a5]">{outcomeError}</p>}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button type="button" disabled={outcomeBusy} onClick={() => onRecordOutcome(true)} className="rounded bg-[#22c55e] px-3 py-2 text-xs font-semibold text-[#050505] hover:bg-[#4ade80] disabled:opacity-50">
-                  {outcomeBusy ? "Recording…" : "Confirm human action"}
-                </button>
-                <button type="button" disabled={outcomeBusy} onClick={() => onRecordOutcome(false)} className="rounded border border-[#f59e0b]/50 px-3 py-2 text-xs font-semibold text-[#fbbf24] hover:bg-[#f59e0b]/10 disabled:opacity-50">
-                  Keep in review
-                </button>
-              </div>
-            </DetailSection>
-
-            <DetailSection title="Outcome history" icon={<Clock3 className="h-4 w-4 text-[#7c7c8a]" />}>
-              {outcomes.length === 0 ? (
-                <p className="text-sm text-[#7c7c8a]">No human outcome has been recorded.</p>
-              ) : (
-                <div className="space-y-2">
-                  {outcomes.map((outcome, index) => (
-                    <div key={outcome.id ?? index} className="rounded bg-[#111114] p-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className={outcome.approved ? "text-[#86efac]" : "text-[#fbbf24]"}>{outcome.approved ? "Human-approved" : "Kept in review"}</span>
-                        <span className="text-[10px] text-[#7c7c8a]">{formatTime(outcome.recorded_at ?? outcome.created_at ?? outcome.timestamp)}</span>
-                      </div>
-                      {outcome.outcome && <p className="mt-1 text-[#c4c4ca]">{outcome.outcome}</p>}
-                      {outcome.actor && <p className="mt-1 text-[10px] font-mono text-[#7c7c8a]">{outcome.actor}</p>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </DetailSection>
+            </StoryStep>
           </div>
         )}
+
+        {run && <div className="mt-7"><AuditProof run={run} template={template} /></div>}
       </aside>
     </div>
   )
 }
 
-function LoadingCard() {
+function SystemProof({ readiness, readinessError, sources, sourcesError }: { readiness: DemoReadiness | null; readinessError: string | null; sources: WorkflowSource[]; sourcesError: string | null }) {
+  const fixtureCount = sources.filter((source) => workflowSourceMode(source) === "demo_fixture").length
+  const liveCount = sources.length - fixtureCount
+  const sourceSummary = sources.length === 0 ? "No evidence records reported" : `${fixtureCount} fixture evidence record${fixtureCount === 1 ? "" : "s"} / ${liveCount} live source${liveCount === 1 ? "" : "s"}`
+
   return (
-    <div className="animate-pulse rounded-xl border border-[#1f1f22] bg-[#111114] p-5 space-y-4">
-      <div className="h-5 w-2/3 rounded bg-[#222227]" />
-      <div className="h-3 w-full rounded bg-[#1b1b20]" />
-      <div className="h-24 rounded bg-[#17171a]" />
-      <div className="grid grid-cols-3 gap-1">
-        {PIPELINE.map((item) => <div key={item} className="h-7 rounded bg-[#17171a]" />)}
+    <details className="group rounded-xl border border-[#1f1f22] bg-[#111114]">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4"><div><p className="flex items-center gap-2 text-sm font-semibold text-[#e4e4e7]"><Database className="h-4 w-4 text-[#22c55e]" /> System proof</p><p className="mt-1 text-xs text-[#7c7c8a]">{sourceSummary}. Deployment and source status are reported by the backend.</p></div><ChevronDown className="h-4 w-4 shrink-0 text-[#7c7c8a] transition-transform group-open:rotate-180" /></summary>
+      <div className="space-y-4 border-t border-[#1f1f22] p-4">
+        {readiness ? <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#1f1f22] bg-[#1f1f22] md:grid-cols-5"><ReadinessItem label="Build" value={readiness.build_sha ?? "Not reported"} mono /><ReadinessItem label="Qwen" value={readinessValue(readiness.qwen_configured, "Configured", "Not configured")} /><ReadinessItem label="Embeddings" value={readinessValue(readiness.embedding_healthy, "Healthy", "Unavailable")} /><ReadinessItem label="Scenario" value={readiness.scenario_version ?? "Not reported"} mono /><ReadinessItem label="Canonical memory" value={readiness.canonical_skill_count != null ? `${readiness.canonical_skill_count} skills` : "Not reported"} /></div> : <p className="rounded border border-[#1f1f22] bg-[#09090b] px-3 py-2 text-xs text-[#7c7c8a]">{readinessError ?? "Loading deployment readiness..."}</p>}
+        {sourcesError ? <p className="text-sm text-[#7c7c8a]">{sourcesError}</p> : sources.length === 0 ? <p className="text-sm text-[#7c7c8a]">No source records have been reported.</p> : <div className="flex flex-wrap gap-2">{sources.map((source) => <div key={workflowSourceId(source)} className="rounded border border-[#2a2a30] bg-[#09090b] px-3 py-2 text-xs"><div className="flex items-center gap-2"><span className="font-medium text-[#e4e4e7]">{workflowSourceLabel(source)}</span>{workflowSourceMode(source) === "demo_fixture" && <span className="text-[10px] font-medium uppercase tracking-wide text-[#93c5fd]">Fixture</span>}</div><div className="mt-1 text-[#7c7c8a]">{humanize(workflowSourceStatus(source))}{workflowSourceTimestamp(source) ? ` / ${formatTime(workflowSourceTimestamp(source))}` : ""}</div></div>)}</div>}
       </div>
-    </div>
+    </details>
   )
+}
+
+function LoadingCard({ flagship = false }: { flagship?: boolean }) {
+  return <div className={`animate-pulse rounded-xl border border-[#1f1f22] bg-[#111114] p-5 ${flagship ? "min-h-72" : "min-h-52"}`}><div className="h-5 w-2/3 rounded bg-[#222227]" /><div className="mt-4 h-3 w-full rounded bg-[#1b1b20]" /><div className="mt-4 h-20 rounded bg-[#17171a]" /><div className="mt-4 h-8 w-32 rounded bg-[#1b1b20]" /></div>
 }
 
 export default function Operations() {
@@ -540,11 +585,7 @@ export default function Operations() {
   const refresh = useCallback(async () => {
     setRefreshing(true)
     setActionError(null)
-    const [templateResult, sourceResult, readinessResult] = await Promise.allSettled([
-      getWorkflowTemplates(),
-      getWorkflowSources(),
-      getDemoReadiness(),
-    ])
+    const [templateResult, sourceResult, readinessResult] = await Promise.allSettled([getWorkflowTemplates(), getWorkflowSources(), getDemoReadiness()])
 
     if (templateResult.status === "fulfilled") {
       const nextTemplates = valueAsArray<WorkflowTemplate>(templateResult.value, "templates")
@@ -556,13 +597,13 @@ export default function Operations() {
           if (templateId && run) accumulator[templateId] = run
           return accumulator
         }, {})
-        return { ...previous, ...embedded }
+        return { ...embedded, ...previous }
       })
-      setSelectedTemplateId((current) => current ?? getTemplateId(nextTemplates[0] ?? {}))
+      setSelectedTemplateId((current) => current ?? getTemplateId(nextTemplates.find((template) => getTemplateId(template) === "release-safety") ?? nextTemplates[0] ?? {}))
       setTemplatesError(null)
     } else {
       setTemplates([])
-      setTemplatesError("The Operations API is unavailable. No client-side verdict has been inferred.")
+      setTemplatesError("The Decision Queue API is unavailable. No client-side verdict has been inferred.")
     }
 
     if (sourceResult.status === "fulfilled") {
@@ -586,15 +627,23 @@ export default function Operations() {
     setRefreshing(false)
   }, [])
 
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
+  useEffect(() => { void refresh() }, [refresh])
 
-  const selectedTemplate = useMemo(
-    () => templates.find((template) => getTemplateId(template) === selectedTemplateId) ?? null,
-    [selectedTemplateId, templates],
-  )
+  const orderedTemplates = useMemo(() => [...templates].sort((left, right) => {
+    if (getTemplateId(left) === "release-safety") return -1
+    if (getTemplateId(right) === "release-safety") return 1
+    return getTemplateName(left).localeCompare(getTemplateName(right))
+  }), [templates])
+  const flagship = orderedTemplates[0] ?? null
+  const supportingTemplates = orderedTemplates.slice(1)
+  const selectedTemplate = useMemo(() => templates.find((template) => getTemplateId(template) === selectedTemplateId) ?? null, [selectedTemplateId, templates])
   const selectedRun = selectedTemplate ? runs[getTemplateId(selectedTemplate)] ?? getEmbeddedRun(selectedTemplate) : null
+  const humanDecisionCount = orderedTemplates.filter((template) => getBrief(runs[getTemplateId(template)] ?? getEmbeddedRun(template))?.human_approval_required !== false).length
+  const queueHeading = loading
+    ? "Loading Decision Queue..."
+    : templatesError
+      ? "Decision Queue awaits a server response"
+      : `${humanDecisionCount} decision${humanDecisionCount === 1 ? "" : "s"} need a human`
 
   const openDrawer = (templateId: string) => {
     setSelectedTemplateId(templateId)
@@ -623,34 +672,21 @@ export default function Operations() {
 
   const recordOutcome = async (approved: boolean) => {
     if (!selectedRun) return
-    const outcome = outcomeText.trim()
-    if (!outcome) {
+    const note = outcomeText.trim()
+    if (!note) {
       setOutcomeError("Add a short human decision before recording an outcome.")
       return
     }
     setOutcomeError(null)
     setOutcomeBusy(true)
     try {
-      const response = await postWorkflowOutcome(selectedRun.id, {
-        approved,
-        outcome: approved ? "confirmed_effective" : "needs_review",
-        note: outcome,
-        actor: "judge",
-      })
+      const response = await postWorkflowOutcome(selectedRun.id, { approved, outcome: approved ? "confirmed_effective" : "needs_review", note, actor: "judge" })
       const returnedRun = asWorkflowRun(response)
       if (returnedRun) {
         setRuns((current) => ({ ...current, [returnedRun.template_id]: returnedRun }))
       } else {
         const returnedOutcome = asWorkflowOutcome(response)
-        if (returnedOutcome) {
-          setRuns((current) => ({
-            ...current,
-            [selectedRun.template_id]: {
-              ...selectedRun,
-              outcomes: [...(selectedRun.outcomes ?? []), returnedOutcome],
-            },
-          }))
-        }
+        if (returnedOutcome) setRuns((current) => ({ ...current, [selectedRun.template_id]: { ...selectedRun, outcomes: [...(selectedRun.outcomes ?? []), returnedOutcome] } }))
       }
       setOutcomeText("")
     } catch (error) {
@@ -661,150 +697,27 @@ export default function Operations() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
-      <section className="rounded-xl border border-[#22c55e]/25 bg-gradient-to-br from-[#22c55e]/10 via-[#111114] to-[#111114] p-5 md:p-7">
-        <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
-          <div className="max-w-3xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#86efac]">
-              <CircleDot className="h-3 w-3" /> Server-owned workflows
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#fafafa]">Operational Risk Inbox</h1>
-            <p className="mt-2 text-sm leading-6 text-[#b4b4bb] md:text-base">
-              Make company memory useful when reality changes: source-backed evidence is compiled into memory, checked against live context, and routed to a human owner before action.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={refreshing}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded border border-[#2a2a30] bg-[#111114] px-3 py-2 text-sm text-[#e4e4e7] hover:border-[#22c55e]/50 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh server state
-          </button>
-        </div>
+    <div className="mx-auto max-w-7xl space-y-5 pb-10">
+      <section className="flex flex-col justify-between gap-4 rounded-2xl border border-[#22c55e]/25 bg-gradient-to-br from-[#22c55e]/10 via-[#111114] to-[#111114] p-5 md:flex-row md:items-end md:p-7">
+        <div className="max-w-3xl"><div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#86efac]"><CircleDot className="h-3 w-3" /> Governed decision queue</div><h1 className="text-3xl font-semibold tracking-tight text-[#fafafa]">{queueHeading}</h1><p className="mt-2 text-sm leading-6 text-[#b4b4bb] md:text-base">Company Brain catches the moment reality changes, explains why the old memory is unsafe, and hands one accountable next action to a person.</p></div>
+        <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex shrink-0 items-center justify-center gap-2 rounded border border-[#2a2a30] bg-[#111114] px-3 py-2 text-sm text-[#e4e4e7] hover:border-[#22c55e]/50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh server state</button>
       </section>
 
-      {readiness ? (
-        <section className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#1f1f22] bg-[#1f1f22] md:grid-cols-5">
-          <ReadinessItem label="Build" value={readiness.build_sha ?? "Not reported"} mono />
-          <ReadinessItem label="Qwen" value={readinessValue(readiness.qwen_configured, "Configured", "Not configured")} />
-          <ReadinessItem label="Embeddings" value={readinessValue(readiness.embedding_healthy, "Healthy", "Unavailable")} />
-          <ReadinessItem label="Scenario" value={readiness.scenario_version ?? "Not reported"} mono />
-          <ReadinessItem label="Canonical memory" value={readiness.canonical_skill_count != null ? `${readiness.canonical_skill_count} skills` : "Not reported"} />
-        </section>
-      ) : (
-        <p className="rounded border border-[#1f1f22] bg-[#111114] px-4 py-3 text-xs text-[#7c7c8a]">
-          {readinessError ?? "Loading deployment readiness…"}
-        </p>
-      )}
+      {actionError && <div className="flex items-start gap-2 rounded border border-[#ef4444]/30 bg-[#ef4444]/5 px-3 py-2 text-sm text-[#fca5a5]"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {actionError}</div>}
 
-      <section className="rounded-xl border border-[#1f1f22] bg-[#111114] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-semibold"><Database className="h-4 w-4 text-[#22c55e]" /> Evidence sources</h2>
-            <p className="mt-1 text-xs text-[#7c7c8a]">Fixture data is visibly labeled; source availability is reported by the server.</p>
-          </div>
-          {sources.length > 0 && <span className="text-xs text-[#7c7c8a]">{sources.length} connected</span>}
-        </div>
-        {sourcesError ? (
-          <p className="mt-3 text-sm text-[#7c7c8a]">{sourcesError}</p>
-        ) : sources.length === 0 ? (
-          <p className="mt-3 text-sm text-[#7c7c8a]">No source records have been reported.</p>
-        ) : (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {sources.map((source) => {
-              const sourceTimestamp = workflowSourceTimestamp(source)
-              return (
-              <div key={workflowSourceId(source)} className="rounded border border-[#2a2a30] bg-[#09090b] px-3 py-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-[#e4e4e7]">{workflowSourceLabel(source)}</span>
-                  {workflowSourceMode(source) === "demo_fixture" && <span className="text-[10px] text-[#93c5fd]">DEMO FIXTURE</span>}
-                </div>
-                <div className="mt-1 text-[#7c7c8a]">{workflowSourceStatus(source)}{sourceTimestamp ? ` · ${formatTime(sourceTimestamp)}` : ""}</div>
-              </div>
-              )
-            })}
-          </div>
-        )}
-      </section>
+      {loading ? <section className="space-y-4"><LoadingCard flagship /><div className="grid grid-cols-1 gap-4 lg:grid-cols-2"><LoadingCard /><LoadingCard /></div></section> : templatesError ? <section className="rounded-xl border border-dashed border-[#2a2a30] bg-[#111114] px-5 py-10 text-center"><ShieldAlert className="mx-auto h-7 w-7 text-[#7c7c8a]" /><h2 className="mt-3 font-medium">Decision Queue unavailable</h2><p className="mx-auto mt-1 max-w-lg text-sm text-[#7c7c8a]">{templatesError}</p><button type="button" onClick={() => void refresh()} className="mt-4 text-sm font-medium text-[#86efac] hover:underline">Retry server connection</button></section> : !flagship ? <section className="rounded-xl border border-dashed border-[#2a2a30] bg-[#111114] px-5 py-10 text-center"><Bot className="mx-auto h-7 w-7 text-[#7c7c8a]" /><h2 className="mt-3 font-medium">No workflow templates reported</h2><p className="mx-auto mt-1 max-w-lg text-sm text-[#7c7c8a]">The API is available, but it has not returned any server-owned workflow templates yet.</p></section> : <>
+        <section><FlagshipCard template={flagship} run={runs[getTemplateId(flagship)] ?? getEmbeddedRun(flagship)} busy={runningTemplateId === getTemplateId(flagship)} onOpen={() => openDrawer(getTemplateId(flagship))} onRun={() => void runFixture(flagship)} /></section>
+        {supportingTemplates.length > 0 && <section><div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-lg font-semibold text-[#f4f4f5]">Same engine, two more business decisions</h2><p className="mt-1 text-sm text-[#7c7c8a]">These are reusable workflow templates, not isolated demo agents.</p></div><span className="text-xs text-[#7c7c8a]">Evidence to memory to live context to human action</span></div><div className="grid grid-cols-1 gap-4 lg:grid-cols-2">{supportingTemplates.map((template) => <CompactCard key={getTemplateId(template)} template={template} run={runs[getTemplateId(template)] ?? getEmbeddedRun(template)} busy={runningTemplateId === getTemplateId(template)} onOpen={() => openDrawer(getTemplateId(template))} onRun={() => void runFixture(template)} />)}</div></section>}
+      </>}
 
-      <section>
-        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">Priority workflows</h2>
-            <p className="mt-1 text-sm text-[#7c7c8a]">Each card is one reusable template, not a separate demo agent.</p>
-          </div>
-          <span className="text-xs text-[#7c7c8a]">Evidence → memory → live context → human action</span>
-        </div>
+      <SystemProof readiness={readiness} readinessError={readinessError} sources={sources} sourcesError={sourcesError} />
+      <section className="rounded-lg border border-[#60a5fa]/25 bg-[#60a5fa]/5 px-4 py-3 text-xs leading-5 text-[#b8c7e5]"><span className="font-semibold text-[#bfdbfe]">Governance boundary: </span>Fixture replays and demo clicks do not train canonical memory. Only a human-confirmed outcome is eligible for later reinforcement.</section>
 
-        {actionError && (
-          <div className="mb-4 flex items-start gap-2 rounded border border-[#ef4444]/30 bg-[#ef4444]/5 px-3 py-2 text-sm text-[#fca5a5]">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {actionError}
-          </div>
-        )}
-
-        {loading ? (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3"><LoadingCard /><LoadingCard /><LoadingCard /></div>
-        ) : templatesError ? (
-          <div className="rounded-xl border border-dashed border-[#2a2a30] bg-[#111114] px-5 py-10 text-center">
-            <ShieldAlert className="mx-auto h-7 w-7 text-[#7c7c8a]" />
-            <h3 className="mt-3 font-medium">Operational inbox unavailable</h3>
-            <p className="mx-auto mt-1 max-w-lg text-sm text-[#7c7c8a]">{templatesError}</p>
-            <button type="button" onClick={() => void refresh()} className="mt-4 text-sm font-medium text-[#86efac] hover:underline">Retry server connection</button>
-          </div>
-        ) : templates.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-[#2a2a30] bg-[#111114] px-5 py-10 text-center">
-            <Bot className="mx-auto h-7 w-7 text-[#7c7c8a]" />
-            <h3 className="mt-3 font-medium">No workflow templates reported</h3>
-            <p className="mx-auto mt-1 max-w-lg text-sm text-[#7c7c8a]">The API is available, but it has not returned any server-owned workflow templates yet.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {templates.map((template) => {
-              const templateId = getTemplateId(template)
-              const run = runs[templateId] ?? getEmbeddedRun(template)
-              return (
-                <WorkflowCard
-                  key={templateId || getTemplateName(template)}
-                  template={template}
-                  run={run}
-                  busy={runningTemplateId === templateId}
-                  onRun={() => void runFixture(template)}
-                  onOpen={() => openDrawer(templateId)}
-                />
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-lg border border-[#60a5fa]/25 bg-[#60a5fa]/5 px-4 py-3 text-xs leading-5 text-[#b8c7e5]">
-        <span className="font-semibold text-[#bfdbfe]">Governance boundary: </span>
-        Runs are auditable decision records. Fixture runs and demo clicks do not train canonical memory; only a human-confirmed outcome is eligible for later reinforcement.
-      </section>
-
-      {drawerOpen && selectedTemplate && (
-        <DetailDrawer
-          template={selectedTemplate}
-          run={selectedRun}
-          outcomeText={outcomeText}
-          outcomeBusy={outcomeBusy}
-          outcomeError={outcomeError}
-          onOutcomeTextChange={setOutcomeText}
-          onRecordOutcome={(approved) => void recordOutcome(approved)}
-          onClose={() => setDrawerOpen(false)}
-        />
-      )}
+      {drawerOpen && selectedTemplate && <DetailDrawer template={selectedTemplate} run={selectedRun} outcomeText={outcomeText} outcomeBusy={outcomeBusy} outcomeError={outcomeError} replayBusy={runningTemplateId === getTemplateId(selectedTemplate)} onOutcomeTextChange={setOutcomeText} onRecordOutcome={(approved) => void recordOutcome(approved)} onReplay={() => void runFixture(selectedTemplate)} onClose={() => setDrawerOpen(false)} />}
     </div>
   )
 }
 
 function ReadinessItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="min-w-0 bg-[#111114] px-3 py-3">
-      <div className="text-[10px] uppercase tracking-wide text-[#7c7c8a]">{label}</div>
-      <div className={`mt-1 truncate text-xs text-[#e4e4e7] ${mono ? "font-mono" : ""}`}>{value}</div>
-    </div>
-  )
+  return <div className="min-w-0 bg-[#111114] px-3 py-3"><div className="text-[10px] uppercase tracking-wide text-[#7c7c8a]">{label}</div><div className={`mt-1 truncate text-xs text-[#e4e4e7] ${mono ? "font-mono" : ""}`}>{value}</div></div>
 }

@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator, Optional
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -37,6 +37,11 @@ from backend.core.schema import (
 from backend.demo import seed_data
 from backend.demo.state import build_demo_readiness
 from backend.mcp import tools as brain_tools
+from backend.mcp.auth import (
+    DEFAULT_MCP_API_KEY_PERMISSIONS,
+    MCPApiKeyAuthMiddleware,
+    validate_api_key_permissions,
+)
 from backend.mcp.server import mcp_server
 from backend.middleware.auth import (
     auth_middleware,
@@ -48,6 +53,12 @@ logger = logging.getLogger(__name__)
 
 _ttl_task: asyncio.Task[None] | None = None
 _keepalive_task: asyncio.Task[None] | None = None
+
+# FastMCP's Streamable HTTP app owns a session manager that must run inside
+# the parent FastAPI lifespan; mounted sub-app lifespans are not started by
+# Starlette automatically.  The middleware requires a scoped API key for every
+# request before the FastMCP transport sees it.
+mcp_http_app = MCPApiKeyAuthMiddleware(mcp_server.streamable_http_app())
 
 
 class CreateApiKeyRequest(BaseModel):
@@ -121,7 +132,7 @@ async def _backfill_org_embeddings(org_id: str) -> int:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def _brain_lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _ttl_task, _keepalive_task
 
     await store.init_db()
@@ -202,6 +213,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await store.close()
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Run the app and the stateless Streamable HTTP MCP manager together."""
+    async with mcp_server.session_manager.run():
+        async with _brain_lifespan(app):
+            yield
+
+
 app = FastAPI(
     title="Company Brain",
     description="MemoryAgent — Operating Memory Primitive (Qwen Cloud Hackathon 2026)",
@@ -209,11 +228,30 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+def _cors_origins() -> list[str]:
+    """Return an explicit browser-origin allowlist.
+
+    The deployed UI is same-origin, so it only needs its configured public
+    hostname. Local Vite origins remain available when no public hostname is
+    configured. Other browser clients must be added deliberately via env.
+    """
+    configured = getattr(settings, "CORS_ALLOWED_ORIGINS", "")
+    values = configured.replace(",", " ").split() if isinstance(configured, str) else []
+    origins = {value.rstrip("/") for value in values if value.strip()}
+    public = str(getattr(settings, "PUBLIC_BASE_URL", "")).strip().rstrip("/")
+    if public.startswith(("https://", "http://")):
+        origins.add(public)
+    if not origins:
+        origins.update({"http://localhost:5173", "http://127.0.0.1:5173"})
+    return sorted(origins)
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins(),
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Brain-Api-Key"],
     allow_credentials=False,
 )
 
@@ -227,6 +265,7 @@ from backend.routers import attestation as attestation_router
 from backend.routers import audit as audit_router
 from backend.routers import benchmark as benchmark_router
 from backend.routers import github_integration as github_router
+from backend.routers import integration_catalog as integration_catalog_router
 from backend.routers import sag as sag_router
 from backend.routers import workflows as workflows_router
 
@@ -234,6 +273,7 @@ app.include_router(attestation_router.router)
 app.include_router(audit_router.router)
 app.include_router(benchmark_router.router)
 app.include_router(github_router.router)
+app.include_router(integration_catalog_router.router)
 app.include_router(sag_router.router)
 app.include_router(workflows_router.router)
 
@@ -257,9 +297,27 @@ async def get_attestation(request: Request) -> dict[str, Any]:
         )
     return base
 
-# Mount the FastMCP server. FastMCP exposes /sse and /messages relative to the
-# mount point; mounting at /mcp gives /mcp/sse externally (matches MCP_SERVER_URL).
-app.mount("/mcp", mcp_server.sse_app())
+# Canonical remote MCP endpoint.  FastMCP is configured with path "/", so the
+# mount produces exactly /mcp/ rather than /mcp/mcp.
+@app.api_route("/mcp", methods=["GET", "POST", "DELETE"], include_in_schema=False)
+async def redirect_mcp_to_canonical_endpoint() -> RedirectResponse:
+    return RedirectResponse(url="/mcp/", status_code=status.HTTP_308_PERMANENT_REDIRECT)
+
+
+@app.api_route("/mcp/sse", methods=["GET", "POST", "DELETE"], include_in_schema=False)
+async def retired_mcp_sse_endpoint() -> JSONResponse:
+    """Explicit migration response for the unauthenticated legacy SSE path."""
+    return JSONResponse(
+        {
+            "error": "MCP_SSE_RETIRED",
+            "detail": "Legacy MCP SSE is disabled. Use authenticated Streamable HTTP at /mcp/.",
+            "migration_endpoint": "/mcp/",
+        },
+        status_code=status.HTTP_410_GONE,
+    )
+
+
+app.mount("/mcp", mcp_http_app)
 
 
 # ---------- helpers ----------
@@ -550,10 +608,18 @@ async def get_metrics(request: Request) -> dict[str, Any]:
 @app.post("/settings/api-keys")
 async def create_api_key_route(request: Request, body: CreateApiKeyRequest) -> dict[str, Any]:
     org_id = _get_org_id(request)
+    try:
+        permissions = validate_api_key_permissions(
+            body.permissions or DEFAULT_MCP_API_KEY_PERMISSIONS
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     result = await store.create_api_key(
         org_id=org_id,
         name=body.name,
-        permissions=body.permissions or "read:skills read:events",
+        # New keys are safe MCP connector keys by default.  mcp:write remains
+        # opt-in because it can compile durable organizational memory.
+        permissions=permissions,
     )
     return result
 
@@ -719,7 +785,7 @@ async def root() -> dict[str, Any]:
             "/brain/intercepts", "/brain/events",
             "/agents/{support|engineering|product}/run",
             "/sessions/{user_id}", "/stream",
-            "/mcp/sse", "/mcp/attestation",
+            "/mcp/", "/mcp/attestation",
             "/settings/api-keys", "/settings/metrics", "/settings/seed-demo-data",
             "/workflow-templates", "/workflow-runs/{run_id}", "/workflow-sources",
             "/demo/readiness",

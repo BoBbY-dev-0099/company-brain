@@ -18,11 +18,11 @@ flowchart LR
     %% One-line judge story: input → API → recall/SAG → decision → durable memory + Qwen.
     subgraph INPUTS["1 · Inputs"]
         UI["Operator browser<br/><b>React + Vite</b><br/>Brain · Agents · Events · Settings"]
-        EXT["External agent / REST client<br/><b>MCP over SSE</b>"]
+        EXT["External agent / REST client<br/><b>authenticated MCP Streamable HTTP</b>"]
     end
 
     subgraph CONTROL["2 · FastAPI control plane"]
-        API["REST routes + FastMCP gateway<br/><b>/api/* · /mcp/sse</b>"]
+        API["REST routes + FastMCP gateway<br/><b>/api/* · /mcp/</b>"]
         AGENTS["Qwen tool-loop agents<br/><b>Engineering · Support · Product</b>"]
         COMPILER["Experience compiler<br/><b>raw event → versioned skill</b>"]
     end
@@ -44,7 +44,7 @@ flowchart LR
     QWEN["Qwen Cloud DashScope<br/><b>qwen-plus</b> generation +<br/><b>text-embedding-v3</b> vectors"]
 
     UI -->|"REST /api"| API
-    EXT -->|"MCP over SSE"| API
+    EXT -->|"MCP Streamable HTTP + scoped API key"| API
     API --> RECALL
     API --> COMPILER
     API --> AGENTS

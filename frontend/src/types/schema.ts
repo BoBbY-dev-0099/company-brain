@@ -183,6 +183,7 @@ export type WorkflowRun = {
   id: string
   run_id?: string
   template_id: string
+  org_id?: string
   template_name?: string
   status?: string
   brief?: DecisionBrief
@@ -250,5 +251,44 @@ export type DemoReadiness = {
   canonical_skill_count?: number
   ready?: boolean
   checks?: Record<string, boolean | string | number | null>
+  [key: string]: unknown
+}
+
+export type IntegrationStatus = "connected" | "setup_required" | "contract_ready" | "fixture" | "preview" | string
+
+export type IntegrationContract = {
+  method?: string
+  path?: string
+  endpoint?: string
+  title?: string
+  description?: string
+  purpose?: string
+  name?: string
+  permission?: string
+  [key: string]: unknown
+}
+
+export type IntegrationBoundary = {
+  id?: string
+  title?: string
+  status?: IntegrationStatus
+  description?: string
+  endpoint?: string
+  requirements?: string[]
+  contracts?: Array<IntegrationContract | string>
+  tools?: Array<IntegrationContract | string>
+  example?: unknown
+  example_request?: unknown
+  examples?: unknown[]
+  [key: string]: unknown
+}
+
+export type IntegrationCatalog = {
+  version?: number | string
+  positioning?: string
+  public_base_url?: string
+  connection_boundaries?: IntegrationBoundary[]
+  connections?: IntegrationBoundary[]
+  status_definitions?: Record<string, string>
   [key: string]: unknown
 }

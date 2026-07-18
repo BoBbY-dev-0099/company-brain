@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Company Brain certificate renewal check
+
+[Timer]
+OnCalendar=*-*-* 03:17:00
+RandomizedDelaySec=2h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

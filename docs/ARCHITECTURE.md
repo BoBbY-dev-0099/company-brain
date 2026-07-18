@@ -63,10 +63,10 @@ SAG is not an additional LLM decision: after the relevance gate picks the approp
 | Interceptor | `backend/core/interceptor.py` | Selects relevant skills with keyword plus optional cosine similarity, applies result thresholds, persists audit records, and broadcasts updates. |
 | Applicability | `backend/core/applicability.py` | Deterministically evaluates `applies_if` and `invalidated_if` against request/live metadata; can suspend stale skills. |
 | Compiler | `backend/core/compiler.py` | Converts a raw event into a typed skill with structured Qwen output and creates its embedding. |
-| MCP | `backend/mcp/{server,tools}.py` | Exposes `recall_skills`, `check_intercept`, and `compile_experience` over FastMCP/SSE; the same tools are called in-process by demo agents. |
+| MCP | `backend/mcp/{server,tools,auth}.py` | Exposes `recall_skills`, `check_intercept`, `evaluate_workflow`, and `compile_experience` over authenticated Streamable HTTP at `/mcp/`; the same underlying functions are called in-process by demo agents. |
 | Agents | `backend/agents/` | Shared Qwen function-calling loop plus Support, Engineering, and Product agent specializations. |
 | Memory store and propagation | `backend/brain/store.py`, `backend/core/propagator.py` | MongoDB persistence/indexes, org-scoped reads/writes, intercept audit logging, and operator event fan-out. |
-| Integration examples | `integrations/` | Reference REST/client integrations and example source-system adapters for GitHub PRs, Zendesk, billing/refunds, feature flags, and product sessions. |
+| Integration examples | `integrations/` | Reference REST clients and explicitly labelled adapter fixtures; only the signed GitHub merged-PR intake can become a configured source connection. |
 | Local deployment shape | `Dockerfile`, `Dockerfile.frontend`, `docker-compose.yml`, `deploy/nginx.docker.conf` | Containerized API, frontend/nginx, and MongoDB. The compose file labels this as an **ECS mimic**, not proof of a deployed ECS instance. |
 
 ## Data model

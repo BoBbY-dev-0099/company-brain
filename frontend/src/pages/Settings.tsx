@@ -234,12 +234,13 @@ export default function Settings() {
               — SAG demo + attestation tab
             </li>
             <li>
-              MCP SSE endpoint:{" "}
-              <span className="font-mono text-[#e4e4e7]">/mcp/sse</span>
+              MCP endpoint:{" "}
+              <span className="font-mono text-[#e4e4e7]">/mcp/</span> (authenticated
+              Streamable HTTP; API key required)
             </li>
             <li>
-              Attestation:{" "}
-              <span className="font-mono text-[#e4e4e7]">/mcp/attestation</span>
+              Legacy SSE is retired. <span className="font-mono text-[#e4e4e7]">/mcp/sse</span>{" "}
+              returns an explicit migration response.
             </li>
           </ul>
         </div>

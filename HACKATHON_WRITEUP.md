@@ -60,8 +60,9 @@ GET  /demo/readiness
 
 - The UI renders backend-returned verdicts only. If the backend is unavailable, it says so; it does not manufacture a green/red outcome.
 - `POST /workflow-runs` normalizes the supplied evidence, computes freshness and missing fields, runs Qwen compilation where configured, and evaluates the template's deterministic SAG predicate.
-- The Release Safety path is connected to the real signed GitHub merged-PR webhook. The webhook persists raw evidence, compiled skill, audit record, SSE propagation, and a linked `release-safety` workflow run before returning success. A PR with no runtime telemetry honestly returns `review_required`.
+- Release Safety implements a real signed GitHub merged-PR webhook when its secret, token, and repository allowlist are configured. The webhook persists raw evidence, compiled skill, audit record, SSE propagation, and a linked `release-safety` workflow run before returning success. A PR with no runtime telemetry honestly returns `review_required`.
 - Money Safety and Rollout Safety use the identical contract as visibly labelled canonical demo fixtures, not claimed live connectors.
+- The `/app/connect` page and server-defined `GET /integration-catalog` distinguish a configured source, a stable REST contract, a fixture, and a preview rather than implying a connector marketplace.
 - `judge-demo-v1` is immutable. The open UI writes to `sandbox`; fixture replays never add a canonical skill or confidence increment.
 - A skill can only gain confidence or become `auto_execute`-eligible after a persisted **human-confirmed** outcome. All workflow actions remain human-approved.
 

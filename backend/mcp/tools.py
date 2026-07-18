@@ -1,8 +1,8 @@
 """MCP tool implementations.
 
 These are the actual Python functions that back the MCP tools. The MCP server
-(server.py) registers them via @mcp.tool() so external clients can reach them
-over SSE. In-process agents import them directly to avoid SSE loopback.
+(server.py) registers scoped wrappers over authenticated Streamable HTTP.
+In-process agents import these functions directly to avoid transport loopback.
 """
 
 from __future__ import annotations
@@ -138,6 +138,10 @@ def attestation() -> dict[str, Any]:
             "purpose": "Pre-flight governance with optional SAG metadata",
         },
         {
+            "name": "evaluate_workflow",
+            "purpose": "Return an evidence-backed DecisionBrief for a workflow template",
+        },
+        {
             "name": "compile_experience",
             "purpose": "Write resolved experience back to the brain",
         },
@@ -149,7 +153,7 @@ def attestation() -> dict[str, Any]:
         "attestation_verified": True,
         "measurement": measurement,
         "issued_at": datetime.now(timezone.utc).isoformat(),
-        "mcp_endpoint": "/mcp/sse",
+        "mcp_endpoint": "/mcp/",
         "attestation_endpoint": "/mcp/attestation",
         "tools": tools_manifest,
         "narrative": (

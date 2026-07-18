@@ -1,27 +1,33 @@
-# Integrations — production-shaped connectors
+# Integration adapters and examples
 
-These clients act like **external systems** calling Company Brain. They do not
-embed Stripe/GitHub/Zendesk SDKs; they map realistic payloads into the brain’s
-existing REST contracts (`POST /decisions/check`, `POST /events`, agent runs).
+These scripts are reference adapters that show how an existing company system
+can shape a payload for Company Brain's REST contracts. They are not installed
+connectors and they do not use live Stripe, Zendesk, feature-flag, or GitHub
+SDKs.
 
-## Auth
+The product's truthful connection boundary is documented in
+[`../CONNECT.md`](../CONNECT.md): the signed GitHub merged-PR webhook is the
+only source connector that can become `connected` in this submission. The
+other scripts are deterministic examples or fixture-shaped adapters.
 
-Always use:
+## Authentication
 
-```
+REST clients use an organization-scoped API key:
+
+```text
 X-Brain-Api-Key: cb_live_...
 ```
 
-Do **not** send `Authorization: Bearer cb_live_...` (returns 401).
+Do not send `Authorization: Bearer cb_live_...`; API-key authentication uses
+the explicit header above.
 
-Bootstrap a clean org (`integrations-demo`) with seed + embeddings + API key:
+Bootstrap a local key for an isolated example organization:
 
 ```bash
 python integrations/python-client/bootstrap_api_key.py
-# prints BRAIN_API_KEY=cb_live_...
 ```
 
-## Run all workflows
+## Run the examples
 
 ```bash
 export BRAIN_BASE_URL=http://127.0.0.1:8000
@@ -29,13 +35,18 @@ export BRAIN_API_KEY=cb_live_...
 python integrations/python-client/connect_to_brain.py
 ```
 
-| Workflow | Adapter | Metadata / action |
-|----------|---------|-------------------|
-| W1 Engineering | `example-systems/github_pr_export.py` | `export_chunk_size_mb` 25 vs 8 |
-| W2 Support | `example-systems/billing_refund.py` | `days_since_purchase` 20 vs 60 |
-| W3 Product | `example-systems/feature_flag_rollout.py` | `feature_flag_rollout_percent` 3 vs 40 |
-| W4 Support learn | `example-systems/zendesk_resolve.py` | `POST /events` compile |
-| W5 Product memory | `example-systems/product_session.py` | cross-session agent runs |
+| Example | Script | Honest status | Contract exercised |
+| --- | --- | --- | --- |
+| Engineering export | `example-systems/github_pr_export.py` | adapter example | `POST /decisions/check` |
+| Billing refund | `example-systems/billing_refund.py` | fixture-shaped adapter | `POST /decisions/check` |
+| Feature-flag rollout | `example-systems/feature_flag_rollout.py` | fixture-shaped adapter | `POST /decisions/check` |
+| Support resolution | `example-systems/zendesk_resolve.py` | fixture-shaped adapter | `POST /events` |
+| Product session | `example-systems/product_session.py` | fixture-shaped adapter | agent/session API |
 
-Exit code is non-zero if any SAG/result expectation fails (W1–W3).
-W4–W5 need `QWEN_API_KEY` on the server; they are skipped cleanly if compile/agent is unavailable.
+The command exits non-zero when an expected deterministic safety result is not
+returned. Qwen-backed compile/agent examples require `QWEN_API_KEY`; they may
+be skipped cleanly when it is unavailable.
+
+For the generalized workflow contract used by the judge inbox, use
+`POST /workflow-runs` with normalized evidence and live context. The API
+catalog provides a fresh copy-paste request at `GET /integration-catalog`.
