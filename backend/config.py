@@ -26,8 +26,15 @@ class Settings(BaseSettings):
 
     BRAIN_API_KEY: str = os.getenv("BRAIN_API_KEY", "")
 
-    # Open UI / hackathon demo org (keep separate from polluted local `default`).
-    DEMO_ORG_ID: str = os.getenv("DEMO_ORG_ID", "integrations-demo")
+    # Open UI / hackathon sandbox (keep separate from the immutable fixture).
+    DEMO_ORG_ID: str = os.getenv("DEMO_ORG_ID", "sandbox")
+    # The canonical judge fixture is deliberately separate from the open UI
+    # org.  It is seeded once and must not be used as a scratchpad for clicks
+    # during a recording or a live judging session.
+    JUDGE_DEMO_ORG_ID: str = os.getenv("JUDGE_DEMO_ORG_ID", "judge-demo-v1")
+    SANDBOX_ORG_ID: str = os.getenv("SANDBOX_ORG_ID", "sandbox")
+    DEMO_SCENARIO_VERSION: str = os.getenv("DEMO_SCENARIO_VERSION", "judge-demo-v1")
+    BUILD_SHA: str = os.getenv("BUILD_SHA", "unknown")
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000

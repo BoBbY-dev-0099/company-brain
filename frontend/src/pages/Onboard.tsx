@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle, Copy, Key, Zap } from "lucide-react"
 import ApiKeyCreation from "../components/layout/ApiKeyCreation"
-import { apiPost } from "../lib/api"
 
 type OnboardStep = "welcome" | "api-key" | "done"
 
@@ -11,17 +10,6 @@ export default function Onboard() {
   const [step, setStep] = useState<OnboardStep>("welcome")
   const [apiKey, setApiKey] = useState<string>("")
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    async function detectIntegration() {
-      try {
-        await apiPost("/settings/api-keys", { name: "auto-detect", permissions: "read:skills" })
-      } catch {
-        // ignore
-      }
-    }
-    void detectIntegration()
-  }, [])
 
   const copyKey = async () => {
     if (!apiKey) return
@@ -55,7 +43,7 @@ export default function Onboard() {
               <Zap className="w-4 h-4 text-[#22c55e]" /> Pre-flight intercept decisions before LLM calls
             </li>
             <li className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-[#22c55e]" /> Reinforce confidence over time
+              <Zap className="w-4 h-4 text-[#22c55e]" /> Record human-confirmed outcomes before memory gains trust
             </li>
           </ul>
         </div>
@@ -113,12 +101,12 @@ export default function Onboard() {
         </div>
       )}
       <button
-        onClick={() => navigate("/app/dashboard")}
+        onClick={() => navigate("/app/inbox")}
         className="bg-[#22c55e] hover:bg-[#16a34a] text-[#050505] font-medium rounded px-6 py-3"
       >
-        Go to Dashboard
+        Open Operations
       </button>
-      <div className="text-xs text-[#7c7c8a] font-mono">Org: integrations-demo (open demo)</div>
+      <div className="text-xs text-[#7c7c8a] font-mono">Org: sandbox (open demo)</div>
     </div>
   )
 }

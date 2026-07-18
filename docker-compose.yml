@@ -42,6 +42,9 @@ services:
       MONGODB_DB_NAME: companybrain
       HOST: 0.0.0.0
       PORT: "8000"
+      # Set by deploy/deploy.sh from the checked-out Git commit. This is
+      # returned by /demo/readiness so a screenshot can prove what is running.
+      BUILD_SHA: ${BUILD_SHA:-unknown}
       AUDIT_PRIVATE_KEY_PATH: /opt/company-brain/secrets/audit_private.pem
       AUDIT_PUBLIC_KEY_PATH: /opt/company-brain/secrets/audit_public.pem
     volumes:

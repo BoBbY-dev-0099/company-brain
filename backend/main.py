@@ -35,6 +35,7 @@ from backend.core.schema import (
     SSEEventType,
 )
 from backend.demo import seed_data
+from backend.demo.state import build_demo_readiness
 from backend.mcp import tools as brain_tools
 from backend.mcp.server import mcp_server
 from backend.middleware.auth import (
@@ -127,18 +128,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Seed the clean demo org used by open UI (not the polluted local `default`).
     # Order inside seed_for_org / seed_demo_stage: Skill → Config=25 → Horror intercept.
     seeded = await seed_data.seed_for_org(settings.DEMO_ORG_ID)
-    logger.info("Seed result: %s", seeded)
-    try:
-        stage = await seed_data.seed_demo_stage(settings.DEMO_ORG_ID)
-        logger.info("Demo stage: %s", stage)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Demo stage seed failed: %s", exc)
+    logger.info("Sandbox seed result: %s", seeded)
+    if settings.JUDGE_DEMO_ORG_ID != settings.DEMO_ORG_ID:
+        # Controlled, idempotent fixture bootstrap. Workflow fixtures are
+        # regenerated from versioned code; public actions cannot write here.
+        judge_seeded = await seed_data.seed_for_org(settings.JUDGE_DEMO_ORG_ID)
+        logger.info("Canonical judge fixture seed result: %s", judge_seeded)
     try:
         filled = await _backfill_org_embeddings(settings.DEMO_ORG_ID)
         if filled:
             logger.info("Backfilled %d embeddings for demo org %s", filled, settings.DEMO_ORG_ID)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Demo org embedding backfill failed: %s", exc)
+    if settings.JUDGE_DEMO_ORG_ID != settings.DEMO_ORG_ID:
+        try:
+            filled = await _backfill_org_embeddings(settings.JUDGE_DEMO_ORG_ID)
+            if filled:
+                logger.info(
+                    "Backfilled %d embeddings for canonical judge org %s",
+                    filled,
+                    settings.JUDGE_DEMO_ORG_ID,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Canonical judge embedding backfill failed: %s", exc)
 
     embedding_status = await check_embedding_health()
     if not embedding_status["healthy"]:
@@ -216,12 +228,14 @@ from backend.routers import audit as audit_router
 from backend.routers import benchmark as benchmark_router
 from backend.routers import github_integration as github_router
 from backend.routers import sag as sag_router
+from backend.routers import workflows as workflows_router
 
 app.include_router(attestation_router.router)
 app.include_router(audit_router.router)
 app.include_router(benchmark_router.router)
 app.include_router(github_router.router)
 app.include_router(sag_router.router)
+app.include_router(workflows_router.router)
 
 # Register this concrete endpoint before the /mcp sub-application. Starlette
 # dispatches in registration order, so placing it after the mount makes the
@@ -262,12 +276,23 @@ async def health() -> dict[str, Any]:
     return {
         "status": "ok" if db_status["connected"] else "degraded",
         "version": "1.0.0",
+        "build_sha": settings.BUILD_SHA,
         "skills_compiled": await store.get_skill_count(),
         "subscribers": propagator.subscriber_count(),
         "db": db_status,
         "qwen_configured": bool(settings.QWEN_API_KEY),
         "embedding_healthy": getattr(app.state, "embedding_healthy", None),
     }
+
+
+@app.get("/demo/readiness")
+async def demo_readiness() -> dict[str, Any]:
+    """Return server-observed deployment facts for the judge route."""
+    return await build_demo_readiness(
+        qwen_configured=bool(settings.QWEN_API_KEY),
+        embedding_healthy=getattr(app.state, "embedding_healthy", None),
+        build_sha=settings.BUILD_SHA,
+    )
 
 
 # ---------- events / compilation ----------
@@ -498,6 +523,7 @@ async def get_metrics(request: Request) -> dict[str, Any]:
     active_skills = await store.get_skill_count(org_id=org_id, active_only=True)
     recent_events = await store.get_recent_events(org_id=org_id, limit=10)
     intercept_stats = await store.get_intercept_stats(org_id=org_id)
+    registered_agent_ids = await store.get_all_agent_ids(org_id=org_id)
     last_event = recent_events[0] if recent_events else None
     return {
         "metrics": {
@@ -506,11 +532,15 @@ async def get_metrics(request: Request) -> dict[str, Any]:
             "total_decisions": intercept_stats["total_intercepts"],
             "governance_hits": intercept_stats["governance_hits"],
             "est_llm_tokens_saved": intercept_stats["est_llm_tokens_saved"],
+            "est_llm_tokens_saved_is_estimate": intercept_stats["est_llm_tokens_saved_is_estimate"],
+            "est_llm_tokens_saved_assumption": intercept_stats["est_llm_tokens_saved_assumption"],
             "intercept_by_result": intercept_stats["by_result"],
             "decisions_today": len(recent_events),
             "avg_confidence": sum(r.get("confidence", 0) for r in recent_events) / max(len(recent_events), 1),
-            "avg_intercept_time": 0.0,
-            "active_agents": 3,
+            "avg_intercept_time": None,
+            "avg_intercept_time_availability": "not measured",
+            "active_agents": len(registered_agent_ids),
+            "active_agents_definition": "registered agent records for this org; not concurrent activity",
         },
         "last_event": last_event,
         "timestamp": store.utc_now().isoformat(),
@@ -691,5 +721,7 @@ async def root() -> dict[str, Any]:
             "/sessions/{user_id}", "/stream",
             "/mcp/sse", "/mcp/attestation",
             "/settings/api-keys", "/settings/metrics", "/settings/seed-demo-data",
+            "/workflow-templates", "/workflow-runs/{run_id}", "/workflow-sources",
+            "/demo/readiness",
         ],
     }

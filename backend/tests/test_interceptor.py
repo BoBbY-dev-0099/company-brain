@@ -146,8 +146,8 @@ async def test_high_confidence_skill_clears_relevance_gate():
     with patch("backend.core.interceptor.store.get_all_active_skills",
                return_value=[skill]), \
          patch("backend.core.interceptor.store.log_intercept"), \
-         patch("backend.core.interceptor.store.reinforce_skill",
-               return_value=None):
+          patch("backend.core.interceptor.store.reinforce_skill",
+                return_value=None) as mock_reinforce:
         req = DecisionCheckRequest(
             agent_id="eng-01",
             decision_text=("Increase data export chunk size to improve throughput "
@@ -157,6 +157,7 @@ async def test_high_confidence_skill_clears_relevance_gate():
         result = await check_decision(req)
         assert result.result != InterceptResult.CLEAR
         assert result.confidence is not None
+        mock_reinforce.assert_not_called()
 
 
 async def test_sag_conditioned_skill_beats_text_only_lookalike():

@@ -7,9 +7,9 @@ Operating Memory Primitive for agent fleets — Qwen Cloud Global AI Hackathon 2
 
 > **Most agents remember. Company Brain knows when to stop trusting what it remembers.**
 
-**Judges / 30s demo:** open the UI → **Brain** → ① Config = 8MB (**suspended**) → ② Config = 25MB (**auto_execute**).  
-Open UI uses org `integrations-demo` (no login).  
-**Live ECS:** http://8.218.174.77 · Writeup: [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) · **License:** [MIT](LICENSE)
+**Judges / 30s demo:** open **Operations** (`/app/inbox`) and inspect one server-owned workflow card: evidence → Qwen memory → live context → SAG verdict → human owner.
+The open UI writes to the disposable `sandbox` org; the versioned `judge-demo-v1` fixture is immutable.
+**Writeup:** [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) · **Deployment evidence:** [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) · **License:** [MIT](LICENSE)
 
 ## Submission pack (for judges)
 
@@ -21,6 +21,7 @@ Open UI uses org `integrations-demo` (no login).
 | Mermaid source | [`docs/ARCHITECTURE.mmd`](docs/ARCHITECTURE.mmd) |
 | Judging alignment | [`docs/JUDGING_ALIGNMENT.md`](docs/JUDGING_ALIGNMENT.md) |
 | Submission checklist | [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) |
+| Deployment proof packet | [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) |
 | License | [`LICENSE`](LICENSE) (MIT) |
 | Integrations examples | [`integrations/`](integrations/) |
 
@@ -36,7 +37,7 @@ Company Brain sits between agent fleets / the operator UI and Qwen Cloud: FastAP
 ```mermaid
 flowchart LR
     subgraph INPUTS["1 · Inputs"]
-        UI["Operator browser<br/>React + Vite<br/>Brain · Agents · Events · Settings"]
+        UI["Operator browser<br/>React + Vite<br/>Operations Inbox · Brain · Agents"]
         EXT["External agent / REST client<br/>MCP over SSE"]
     end
 
@@ -109,11 +110,28 @@ Company Brain is not a chatbot and not an agent platform. It is a
 2. **Recall** under limited context (`top_k`)
 3. **Intercept** before action (hybrid keyword + embedding)
 4. **SAG** — deterministic `applies_if` / `invalidated_if` vs live `metadata`
-5. **Reinforce** confidence; **forget** via decay TTL + suspension
+5. **Record a human-confirmed outcome** before confidence can increase
 6. **Propagate** via SSE to the operator UI
 
-Three demo agents (support, engineering, product) prove the loop. They are
-not the product — production systems call the same APIs (see `integrations/`).
+Three demo agents (support, engineering, product) remain technical proof. The
+primary product route is the reusable Operational Risk Inbox; production
+systems call the same APIs (see `integrations/`).
+
+## Operational workflow engine
+
+The inbox is driven by server-defined, versioned `WorkflowTemplate`s rather
+than isolated demo agents. Every template declares required source evidence,
+live-context fields, deterministic SAG predicates, memory type, accountable
+owner, recommended action, fixture, and evaluation cases. Every run returns a
+common `DecisionBrief` with facts, Qwen inference, missing evidence, cited
+sources/freshness, memory provenance, SAG trace, verdict, owner, and next
+action.
+
+The three submission templates are **Release Safety**, **Money Safety**, and
+**Rollout Safety**. GitHub merged-PR intake is genuinely connected to Release
+Safety; the other two are visibly labelled fixtures replayed through the same
+contract. See [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) for the demo flow
+and boundaries.
 
 ## Who this is for
 
@@ -280,7 +298,7 @@ python integrations/python-client/connect_to_brain.py
 curl -N "localhost:8000/stream?token=$BRAIN_API_KEY"
 ```
 
-## Docker (ECS mimic — local last step)
+## Docker (local ECS-shaped validation)
 
 Full stack (Mongo + API + nginx serving the built frontend):
 
@@ -290,14 +308,21 @@ docker compose --profile full up --build -d
 curl http://localhost/api/health
 ```
 
-This mirrors the ECS layout (nginx → uvicorn + static UI). Real Alibaba ECS
-is optional after this is green.
+This mirrors the ECS layout (nginx → uvicorn + static UI), but it is not cloud
+deployment proof. Use it as a validation gate before the Alibaba ECS/SAS proof
+steps in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
 
 ## API
 
 | Method | Path                          | Purpose                                                             |
 | ------ | ----------------------------- | ------------------------------------------------------------------- |
 | GET | `/health`                     | service + db status, skill count, qwen-configured flag              |
+| GET | `/demo/readiness`             | build SHA, Qwen/embedding state, fixture policy, canonical counts   |
+| GET | `/workflow-templates`         | versioned templates plus server-evaluated fixture previews           |
+| POST | `/workflow-runs`             | normalize evidence, compile/reuse memory, evaluate live-context SAG |
+| GET | `/workflow-runs/{id}`         | one auditable DecisionBrief and outcome history                      |
+| POST | `/workflow-runs/{id}/outcome` | record a human outcome; gate any reinforcement                      |
+| GET | `/workflow-sources`           | canonical fixture and sandbox source-backed evidence                 |
 | POST   | `/events`                     | compile a raw event into a skill, persist, propagate                |
 | GET    | `/brain/events`               | list recent compiled events (org-scoped)                            |
 | POST   | `/decisions/check`            | hybrid keyword + cosine intercept check + SAG                       |
@@ -318,6 +343,7 @@ is optional after this is green.
 
 | Page | Path | Purpose |
 |------|------|---------|
+| Operations | `/app/inbox` | Primary judge route: evidence, memory, SAG decision, human action |
 | Brain | `/app/brain` | Skills, SAG demo, decision history, TEE attestation |
 | Agents | `/app/agents` | Run demo agents with metadata |
 | Events | `/app/events` | Event timeline + compile form |
@@ -343,9 +369,12 @@ sudo docker compose --profile full up -d --build
 curl http://127.0.0.1/api/health
 ```
 
-Current demo host (Singapore ECS `ecs.r9i.xlarge`, public): `http://8.218.174.77`  
-This instance family is **not** TDX-capable — decisions use **RSA-PSS audit fallback**.  
-For hardware TDX quotes, use `g7t` / `g8i` Confidential VM + `/dev/tdx_guest`.
+Do not claim a live URL until the checked-out commit has been verified on
+Alibaba Cloud. Follow [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) to
+capture the Workbench Overview, deployed `/api/health` and
+`/api/demo/readiness`, and the public Operations inbox. On a non-TDX host,
+decisions use the **RSA-PSS audit fallback**; hardware TDX quotes require a
+`g7t` / `g8i` Confidential VM with `/dev/tdx_guest`.
 
 **Bare-metal systemd alternative:**
 

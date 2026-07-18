@@ -16,12 +16,15 @@ from fastapi.responses import JSONResponse
 
 from backend.brain.store import get_db
 from backend.config import settings
+from backend.demo.state import is_canonical_demo_org
 
 logger = logging.getLogger(__name__)
 
 _PUBLIC_PATHS = {
     "/health",
     "/api/health",
+    "/demo/readiness",
+    "/api/demo/readiness",
     "/readme",
     "/api/readme",
     "/mcp/sse",
@@ -29,6 +32,16 @@ _PUBLIC_PATHS = {
     "/docs",
     "/openapi.json",
 }
+
+_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _canonical_fixture_write_blocked(request: Request) -> bool:
+    """Keep API-key holders from accidentally changing the judge fixture."""
+    return (
+        request.method in _MUTATING_METHODS
+        and is_canonical_demo_org(str(getattr(request.state, "org_id", "")))
+    )
 
 
 async def _verify_agent_api_key(api_key: str) -> tuple[str, str]:
@@ -63,6 +76,14 @@ async def auth_middleware(request: Request, call_next: Any) -> Any:
             org_id, _key_id = await _verify_agent_api_key(api_key)
             request.state.org_id = org_id
             request.state.auth_type = "agent"
+            if _canonical_fixture_write_blocked(request):
+                return JSONResponse(
+                    {
+                        "error": "Canonical judge fixture is immutable",
+                        "detail": "Use the sandbox org for exploratory writes.",
+                    },
+                    status_code=409,
+                )
             return await call_next(request)
         except HTTPException:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
@@ -74,6 +95,14 @@ async def auth_middleware(request: Request, call_next: Any) -> Any:
     request.state.org_id = settings.DEMO_ORG_ID
     request.state.auth_type = "open"
     request.state.user_id = "demo"
+    if _canonical_fixture_write_blocked(request):
+        return JSONResponse(
+            {
+                "error": "Canonical judge fixture is immutable",
+                "detail": "Set DEMO_ORG_ID to the sandbox for interactive use.",
+            },
+            status_code=409,
+        )
     return await call_next(request)
 
 

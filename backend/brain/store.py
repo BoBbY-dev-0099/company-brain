@@ -9,7 +9,7 @@ from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo import ASCENDING, DESCENDING, TEXT
-from pymongo.errors import DuplicateKeyError, ServerSelectionTimeoutError
+from pymongo.errors import DuplicateKeyError, OperationFailure, ServerSelectionTimeoutError
 
 from backend.config import settings
 from backend.core.schema import (
@@ -81,6 +81,7 @@ async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:
 
     await db.events.create_index([("event_id", ASCENDING), ("org_id", ASCENDING)], unique=True)
     await db.events.create_index([("agent_id", ASCENDING), ("occurred_at", DESCENDING)])
+    await db.events.create_index([("org_id", ASCENDING), ("ingestion_status", ASCENDING)])
 
     await db.agents.create_index([("agent_id", ASCENDING), ("org_id", ASCENDING)], unique=True)
 
@@ -97,6 +98,22 @@ async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     await db.tdx_quotes.create_index([("org_id", ASCENDING), ("created_at", DESCENDING)])
     await db.tdx_quotes.create_index([("skill_id", ASCENDING), ("created_at", DESCENDING)])
     await db.audit_log.create_index([("org_id", ASCENDING), ("skill_id", ASCENDING), ("created_at", DESCENDING)])
+    await db.skill_outcomes.create_index([("outcome_id", ASCENDING)], unique=True)
+    await db.skill_outcomes.create_index([("org_id", ASCENDING), ("skill_id", ASCENDING), ("created_at", DESCENDING)])
+    # Migrate the former sparse compound index. A compound sparse index still
+    # indexes a document when ``org_id`` exists but ``source_run_id`` does not,
+    # effectively allowing only one manual (no-run) outcome per org.
+    try:
+        await db.skill_outcomes.drop_index("org_id_1_source_run_id_1")
+    except OperationFailure as exc:
+        if exc.code != 27:  # IndexNotFound
+            raise
+    await db.skill_outcomes.create_index(
+        [("org_id", ASCENDING), ("source_run_id", ASCENDING)],
+        name="unique_source_run_per_org",
+        unique=True,
+        partialFilterExpression={"source_run_id": {"$type": "string"}},
+    )
 
 
 def _compute_expires_at(decay_rate: str) -> datetime | None:
@@ -132,6 +149,11 @@ async def save_skill(skill: CompanyBrainSkill, org_id: str = "default") -> Compa
         skill.created_at = existing.get("created_at", skill.created_at)
     skill.updated_at = utc_now()
     skill.org_id = org_id
+    # A compiled or manually seeded skill is never eligible to auto-execute
+    # until its provenance contains at least one explicit human confirmation.
+    # This also safely downgrades older documents that predate the field.
+    if skill.provenance.human_confirmed_outcome_count < 1:
+        skill.executable.auto_execute = False
 
     doc = _skill_to_doc(skill)
     await db.skills.replace_one({"skill_id": skill.skill_id, "org_id": org_id}, doc, upsert=True)
@@ -185,12 +207,11 @@ async def invalidate_skill(skill_id: str, superseded_by: str | None = None, org_
     await db.skills.update_one({"skill_id": skill_id, "org_id": org_id}, update)
 
 
-async def reinforce_skill(skill_id: str, org_id: str = "default") -> CompanyBrainSkill | None:
-    """Atomically reinforce a skill's confidence and counter.
-
-    Uses an aggregation-pipeline update so concurrent intercepts on the same
-    skill do not race on the read-modify-write path.
-    """
+async def _apply_human_confirmed_reinforcement(
+    skill_id: str,
+    org_id: str,
+) -> CompanyBrainSkill | None:
+    """Apply one already-persisted human confirmation atomically."""
     db = get_db()
     now = utc_now()
     await db["skills"].update_one(
@@ -200,6 +221,12 @@ async def reinforce_skill(skill_id: str, org_id: str = "default") -> CompanyBrai
                 "$set": {
                     "provenance.reinforcement_count": {
                         "$add": [{"$ifNull": ["$provenance.reinforcement_count", 0]}, 1]
+                    },
+                    "provenance.human_confirmed_outcome_count": {
+                        "$add": [
+                            {"$ifNull": ["$provenance.human_confirmed_outcome_count", 0]},
+                            1,
+                        ]
                     },
                     "provenance.confidence": {
                         "$min": [
@@ -219,10 +246,10 @@ async def reinforce_skill(skill_id: str, org_id: str = "default") -> CompanyBrai
             {
                 "$set": {
                     "executable.auto_execute": {
-                        "$cond": [
+                        "$and": [
                             {"$gte": ["$provenance.confidence", settings.CONFIDENCE_AUTO_EXECUTE]},
-                            True,
-                            {"$ifNull": ["$executable.auto_execute", False]},
+                            {"$gte": ["$provenance.human_confirmed_outcome_count", 1]},
+                            {"$eq": ["$is_active", True]},
                         ]
                     }
                 }
@@ -231,6 +258,26 @@ async def reinforce_skill(skill_id: str, org_id: str = "default") -> CompanyBrai
     )
     updated = await db.skills.find_one({"skill_id": skill_id, "org_id": org_id})
     return _doc_to_skill(updated) if updated else None
+
+
+async def reinforce_skill(
+    skill_id: str,
+    org_id: str = "default",
+    *,
+    human_confirmed: bool = False,
+    confirmation_id: str | None = None,
+) -> CompanyBrainSkill | None:
+    """Compatibility wrapper that rejects observation-only reinforcement.
+
+    Use :func:`record_human_outcome` from an outcome route.  The explicit
+    arguments make it hard for a future interceptor or demo click to raise
+    confidence by accident.
+    """
+    if not human_confirmed or not confirmation_id:
+        raise ValueError(
+            "reinforcement requires a persisted human-confirmed outcome and confirmation_id"
+        )
+    return await _apply_human_confirmed_reinforcement(skill_id, org_id)
 
 
 async def save_event(event: RawEvent, skill_compiled: str | None = None, org_id: str = "default") -> None:
@@ -242,6 +289,184 @@ async def save_event(event: RawEvent, skill_compiled: str | None = None, org_id:
         await db.events.insert_one(doc)
     except DuplicateKeyError:
         await db.events.replace_one({"event_id": event.event_id, "org_id": org_id}, doc)
+
+
+async def get_event(event_id: str, org_id: str = "default") -> dict[str, Any] | None:
+    """Fetch one normalized raw event, including its ingestion state."""
+    db = get_db()
+    doc = await db.events.find_one({"event_id": event_id, "org_id": org_id})
+    if doc is None:
+        return None
+    doc.pop("_id", None)
+    return doc
+
+
+async def claim_event(event: RawEvent, org_id: str = "default") -> tuple[bool, dict[str, Any]]:
+    """Durably claim an inbound event before compiling it.
+
+    The unique event index makes GitHub delivery retries idempotent.  A caller
+    that did not claim the event receives the persisted record and can either
+    return its completed result or resume a failed processing stage.
+    """
+    db = get_db()
+    now = utc_now()
+    doc = event.model_dump(mode="python")
+    doc.update(
+        {
+            "org_id": org_id,
+            "skill_compiled": None,
+            "ingestion_status": "received",
+            "ingestion_received_at": now,
+            "ingestion_updated_at": now,
+        }
+    )
+    try:
+        await db.events.insert_one(doc)
+        return True, doc
+    except DuplicateKeyError:
+        existing = await get_event(event.event_id, org_id=org_id)
+        if existing is None:  # defensive: a concurrent delete after duplicate
+            raise RuntimeError("event claim conflicted but persisted event was unavailable")
+        return False, existing
+
+
+async def update_event_ingestion(
+    event_id: str,
+    org_id: str,
+    status: str,
+    *,
+    skill_compiled: str | None = None,
+    audit_id: str | None = None,
+    workflow_run_id: str | None = None,
+    workflow_status: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any] | None:
+    """Advance an event's durable intake state without replacing raw evidence."""
+    db = get_db()
+    update: dict[str, Any] = {
+        "ingestion_status": status,
+        "ingestion_updated_at": utc_now(),
+    }
+    if skill_compiled is not None:
+        update["skill_compiled"] = skill_compiled
+    if audit_id is not None:
+        update["audit_id"] = audit_id
+    if workflow_run_id is not None:
+        update["workflow_run_id"] = workflow_run_id
+    if workflow_status is not None:
+        update["workflow_status"] = workflow_status
+    if error is not None:
+        update["ingestion_error"] = error[:500]
+    else:
+        update["ingestion_error"] = None
+    await db.events.update_one(
+        {"event_id": event_id, "org_id": org_id},
+        {"$set": update},
+    )
+    return await get_event(event_id, org_id=org_id)
+
+
+_HUMAN_OUTCOME_STATES = frozenset({"confirmed_effective", "rejected", "needs_review"})
+
+
+def _outcome_public(doc: dict[str, Any]) -> dict[str, Any]:
+    out = dict(doc)
+    if "_id" in out:
+        out["outcome_id"] = str(out.pop("_id"))
+    return out
+
+
+async def record_human_outcome(
+    skill_id: str,
+    org_id: str,
+    outcome: str,
+    confirmed_by: str,
+    *,
+    note: str = "",
+    source_run_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist a human outcome and reinforce only a confirmed-effective skill.
+
+    ``confirmed_effective`` is the sole outcome allowed to change confidence or
+    auto-execute eligibility.  ``rejected`` and ``needs_review`` remain useful
+    auditable outcomes, but do not change the skill.  ``source_run_id`` makes a
+    workflow outcome retry idempotent when supplied.
+    """
+    normalized_outcome = outcome.strip().lower()
+    if normalized_outcome not in _HUMAN_OUTCOME_STATES:
+        allowed = ", ".join(sorted(_HUMAN_OUTCOME_STATES))
+        raise ValueError(f"outcome must be one of: {allowed}")
+    if not confirmed_by or not confirmed_by.strip():
+        raise ValueError("confirmed_by is required for a human outcome")
+
+    db = get_db()
+    if source_run_id:
+        existing = await db.skill_outcomes.find_one(
+            {"org_id": org_id, "source_run_id": source_run_id}
+        )
+        if existing is not None:
+            existing_skill = await get_skill(skill_id, org_id=org_id)
+            return {
+                "record": _outcome_public(existing),
+                "skill": existing_skill,
+                "reinforced": bool(existing.get("reinforcement_applied", False)),
+            }
+
+    skill = await get_skill(skill_id, org_id=org_id)
+    if skill is None:
+        return {"record": None, "skill": None, "reinforced": False}
+
+    now = utc_now()
+    record = {
+        "outcome_id": uuid.uuid4().hex,
+        "org_id": org_id,
+        "skill_id": skill_id,
+        "outcome": normalized_outcome,
+        "confirmed_by": confirmed_by.strip(),
+        "note": note.strip()[:2_000],
+        "created_at": now,
+        "reinforcement_applied": False,
+    }
+    # Omit absent run IDs so the sparse unique index does not treat every
+    # manual outcome as the same null value.
+    if source_run_id:
+        record["source_run_id"] = source_run_id
+    try:
+        await db.skill_outcomes.insert_one(record)
+    except DuplicateKeyError:
+        # A concurrent retry with the same workflow run has already become the
+        # source of truth.  Never double-increment confidence for that retry.
+        if source_run_id:
+            existing = await db.skill_outcomes.find_one(
+                {"org_id": org_id, "source_run_id": source_run_id}
+            )
+            if existing is not None:
+                return {
+                    "record": _outcome_public(existing),
+                    "skill": await get_skill(skill_id, org_id=org_id),
+                    "reinforced": bool(existing.get("reinforcement_applied", False)),
+                }
+        raise
+
+    if normalized_outcome != "confirmed_effective":
+        return {"record": record, "skill": skill, "reinforced": False}
+
+    try:
+        updated_skill = await _apply_human_confirmed_reinforcement(skill_id, org_id)
+        if updated_skill is None:
+            raise RuntimeError(f"skill {skill_id} disappeared before reinforcement")
+        await db.skill_outcomes.update_one(
+            {"outcome_id": record["outcome_id"]},
+            {"$set": {"reinforcement_applied": True, "reinforced_at": utc_now()}},
+        )
+        record["reinforcement_applied"] = True
+        return {"record": record, "skill": updated_skill, "reinforced": True}
+    except Exception as exc:
+        await db.skill_outcomes.update_one(
+            {"outcome_id": record["outcome_id"]},
+            {"$set": {"reinforcement_error": str(exc)[:500]}},
+        )
+        raise
 
 
 async def get_recent_events(org_id: str = "default", limit: int = 50) -> list[dict[str, Any]]:
@@ -341,7 +566,8 @@ async def get_intercept_stats(org_id: str = "default") -> dict[str, Any]:
         by_result.get(k, 0)
         for k in ("block", "warn", "auto_execute", "suspended")
     )
-    # Rough estimate: each governance hit avoids one full agent LLM turn (~2k tokens).
+    # This is deliberately a labelled estimate, not observed provider usage.
+    # A real deployment may have a materially different token profile.
     est_tokens_saved = governance_hits * 2000
 
     return {
@@ -349,6 +575,10 @@ async def get_intercept_stats(org_id: str = "default") -> dict[str, Any]:
         "by_result": by_result,
         "governance_hits": governance_hits,
         "est_llm_tokens_saved": est_tokens_saved,
+        "est_llm_tokens_saved_is_estimate": True,
+        "est_llm_tokens_saved_assumption": (
+            "governance_hits multiplied by 2,000 tokens; not measured provider usage"
+        ),
     }
 
 

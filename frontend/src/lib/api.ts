@@ -1,4 +1,12 @@
 import axios from "axios"
+import type {
+  DemoReadiness,
+  EvidenceRecord,
+  WorkflowOutcome,
+  WorkflowRun,
+  WorkflowSource,
+  WorkflowTemplate,
+} from "../types/schema"
 
 export const apiClient = axios.create({
   baseURL: "/api",
@@ -18,4 +26,48 @@ export async function apiPost<T = any>(path: string, body: any): Promise<T> {
 export async function apiDelete<T = any>(path: string, options?: any): Promise<T> {
   const res = await apiClient.delete(path, options)
   return res.data
+}
+
+export type WorkflowTemplatesResponse = { templates: WorkflowTemplate[] }
+export type WorkflowSourcesResponse = { sources: WorkflowSource[] }
+export type WorkflowRunRequest = {
+  template_id: string
+  fixture?: boolean
+  evidence?: EvidenceRecord[]
+  live_context?: Record<string, unknown>
+}
+export type WorkflowOutcomeRequest = {
+  approved: boolean
+  outcome: string
+  note?: string
+  actor: string
+}
+
+// Keep this small surface explicit: the Operations inbox is a consumer of
+// server-owned templates and auditable runs, not a client-side workflow engine.
+export function getWorkflowTemplates() {
+  return apiGet<WorkflowTemplatesResponse>("/workflow-templates")
+}
+
+export function createWorkflowRun(body: WorkflowRunRequest) {
+  return apiPost<WorkflowRun | { run: WorkflowRun }>("/workflow-runs", body)
+}
+
+export function getWorkflowRun(runId: string) {
+  return apiGet<WorkflowRun | { run: WorkflowRun }>(`/workflow-runs/${encodeURIComponent(runId)}`)
+}
+
+export function postWorkflowOutcome(runId: string, body: WorkflowOutcomeRequest) {
+  return apiPost<WorkflowRun | WorkflowOutcome | { run: WorkflowRun }>(
+    `/workflow-runs/${encodeURIComponent(runId)}/outcome`,
+    body,
+  )
+}
+
+export function getWorkflowSources() {
+  return apiGet<WorkflowSourcesResponse>("/workflow-sources")
+}
+
+export function getDemoReadiness() {
+  return apiGet<DemoReadiness>("/demo/readiness")
 }

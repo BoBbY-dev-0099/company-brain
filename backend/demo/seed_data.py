@@ -86,6 +86,9 @@ def _skill(
             compiled_at=utc_now() - timedelta(days=2),
             confidence=confidence,
             reinforcement_count=reinforcement_count,
+            # Curated fixture confidence represents historical, manually
+            # reviewed outcomes. It is not produced by a demo click.
+            human_confirmed_outcome_count=reinforcement_count,
             last_validated=utc_now(),
             decay_rate=decay_rate,
             applies_if=applies_if or [],
@@ -407,10 +410,23 @@ async def _patch_sag_skill(skill_id: str, org_id: str) -> bool:
     skill = await store.get_skill(skill_id, org_id=org_id)
     if skill is None:
         return False
-    if skill.provenance.applies_if or skill.provenance.invalidated_if:
+    changed = False
+    if not (skill.provenance.applies_if or skill.provenance.invalidated_if):
+        skill.provenance.applies_if = applies
+        skill.provenance.invalidated_if = invalidated
+        changed = True
+    # Older demo documents predate human_confirmed_outcome_count. Their seeded
+    # reinforcement history is curated fixture provenance, so migrate only the
+    # explicit seed records rather than blessing arbitrary legacy skills.
+    if (
+        skill.provenance.source_event_id.startswith("seed-")
+        and skill.provenance.human_confirmed_outcome_count
+        < skill.provenance.reinforcement_count
+    ):
+        skill.provenance.human_confirmed_outcome_count = skill.provenance.reinforcement_count
+        changed = True
+    if not changed:
         return False
-    skill.provenance.applies_if = applies
-    skill.provenance.invalidated_if = invalidated
     await store.save_skill(skill, org_id=org_id)
     logger.info("Patched SAG conditions onto %s (org=%s)", skill_id, org_id)
     return True

@@ -24,12 +24,23 @@ mkdir -p "$(dirname "$APP_DIR")"
 if [ ! -d "$APP_DIR/.git" ]; then
   git clone -b "$BRANCH" "$REPO_URL" "$APP_DIR"
 else
-  git -C "$APP_DIR" fetch origin "$BRANCH"
-  git -C "$APP_DIR" checkout "$BRANCH"
-  git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
+  # The provisioned ECS image ships Git 1.8, which predates `git -C`.
+  # Enter the checkout explicitly so this deploy path remains portable to
+  # older Alibaba Cloud images as well as modern local environments.
+  (
+    cd "$APP_DIR"
+    git fetch origin "$BRANCH"
+    git checkout "$BRANCH"
+    git pull --ff-only origin "$BRANCH"
+  )
 fi
 
 cd "$APP_DIR"
+
+# Keep the runtime self-identifying. Docker Compose passes this through to the
+# API, which exposes it from /demo/readiness for deployment proof.
+export BUILD_SHA="$(git rev-parse HEAD)"
+echo "    BUILD_SHA=$BUILD_SHA"
 
 if [ ! -f .env ]; then
   if [ -f .env.example ]; then
@@ -51,4 +62,5 @@ PUBLIC_IP="$(curl -s --max-time 5 ifconfig.me || hostname -I | awk '{print $1}')
 echo ""
 echo "App running at http://${PUBLIC_IP}"
 echo "Health: curl -s http://127.0.0.1/api/health"
+echo "Readiness: curl -s http://127.0.0.1/api/demo/readiness"
 echo "TDX guest: ls -l /dev/tdx_guest 2>/dev/null || echo RSA fallback"

@@ -100,3 +100,155 @@ export type ProductSession = {
   messages: ProductMessage[]
   brainUpdated?: string
 }
+
+/**
+ * The operational-memory API intentionally keeps evidence separate from the
+ * model's inference.  UI consumers should render these records as supplied,
+ * rather than manufacture a decision when an API is unavailable.
+ */
+export type EvidenceRecord = {
+  id?: string
+  evidence_id?: string
+  source?: string
+  source_type?: string
+  source_name?: string
+  label?: string
+  external_id?: string
+  url?: string
+  timestamp?: string | number
+  occurred_at?: string | number
+  excerpt?: string
+  freshness?: string
+  availability?: string
+  mode?: string
+  is_demo_fixture?: boolean
+  [key: string]: unknown
+}
+
+export type DecisionFact = {
+  statement: string
+  source_evidence_ids?: string[]
+}
+
+export type DecisionInference = {
+  text: string
+  generated_by?: string
+  is_model_generated?: boolean
+}
+
+export type MissingEvidence = {
+  field: string
+  reason: string
+  source_evidence_id?: string
+}
+
+export type MemoryReference = {
+  id?: string
+  memory_id?: string
+  skill_id?: string
+  name?: string
+  version?: string | number
+  summary?: string
+  source?: string
+  [key: string]: unknown
+}
+
+export type DecisionBrief = {
+  facts?: Array<string | DecisionFact>
+  inference?: string | string[] | DecisionInference
+  missing_evidence?: Array<string | MissingEvidence>
+  evidence?: EvidenceRecord[]
+  memory_refs?: MemoryReference[]
+  sag_trace?: Record<string, unknown> | string | null
+  verdict?: string
+  recommended_action?: string
+  recommended_next_action?: string
+  owner?: string
+  what_changed?: string | string[]
+  [key: string]: unknown
+}
+
+export type WorkflowOutcome = {
+  id?: string
+  approved?: boolean
+  outcome?: string
+  actor?: string
+  created_at?: string | number
+  timestamp?: string | number
+  recorded_at?: string | number
+  [key: string]: unknown
+}
+
+export type WorkflowRun = {
+  id: string
+  run_id?: string
+  template_id: string
+  template_name?: string
+  status?: string
+  brief?: DecisionBrief
+  decision_brief?: DecisionBrief
+  recommended_next_action?: string
+  human_approval_required?: boolean
+  owner?: string
+  outcomes?: WorkflowOutcome[]
+  fixture?: boolean
+  is_demo_fixture?: boolean
+  mode?: string
+  created_at?: string | number
+  updated_at?: string | number
+  [key: string]: unknown
+}
+
+export type WorkflowTemplate = {
+  id?: string
+  template_id?: string
+  title?: string
+  name?: string
+  display_name?: string
+  version?: string | number
+  description?: string
+  supported_source_types?: string[]
+  source_types?: string[]
+  required_evidence_fields?: string[]
+  live_context_schema?: Record<string, unknown>
+  sag_predicates?: string[]
+  memory_type?: "policy" | "incident" | "decision" | "commitment" | "exception" | string
+  recommended_actions?: string[]
+  owner_role?: string
+  human_approval_required?: boolean
+  fixture?: boolean | Record<string, unknown>
+  demo_fixture?: boolean | Record<string, unknown>
+  latest_run?: WorkflowRun
+  demo_run?: WorkflowRun
+  demo_preview?: WorkflowRun
+  current_run?: WorkflowRun
+  [key: string]: unknown
+}
+
+export type WorkflowSource = {
+  id?: string
+  evidence_id?: string
+  label?: string
+  source_name?: string
+  source_type?: string
+  external_id?: string
+  status?: string
+  availability?: string
+  freshness?: string
+  last_synced_at?: string | number
+  occurred_at?: string | number
+  mode?: string
+  is_demo_fixture?: boolean
+  [key: string]: unknown
+}
+
+export type DemoReadiness = {
+  build_sha?: string
+  qwen_configured?: boolean
+  embedding_healthy?: boolean | null
+  scenario_version?: string
+  canonical_skill_count?: number
+  ready?: boolean
+  checks?: Record<string, boolean | string | number | null>
+  [key: string]: unknown
+}

@@ -2,7 +2,7 @@
 
 ## System summary
 
-Company Brain is a persistent operating-memory and governance layer for AI agents. Resolved experiences enter as raw events and are compiled by Qwen into versioned, scoped skills; agents and external MCP clients can recall those skills or run a pre-flight decision check before acting. The interceptor combines keyword and embedding relevance with the deterministic Semantic Applicability Gate (SAG), which evaluates each matched skill's live preconditions against organization metadata. The React UI presents the stored brain and its audit trail, changes live configuration through FastAPI, and receives state changes through SSE. MongoDB stores the organizational memory and configuration; Qwen Cloud DashScope supplies generation and embeddings.
+Company Brain is a persistent operating-memory and governance layer for AI agents. Resolved experiences enter as raw events and are compiled by Qwen into versioned, scoped skills; agents and external MCP clients can recall those skills or run a pre-flight decision check before acting. The generalized workflow engine also turns source-backed evidence into a shared `DecisionBrief`, checks its live context with deterministic SAG, and routes a recommended action to a human owner. The React Operational Risk Inbox is the primary judge route; Brain and Agents remain technical proof. MongoDB stores organization-scoped memory and configuration; Qwen Cloud DashScope supplies generation and embeddings.
 
 ## Main system diagram
 
@@ -16,7 +16,7 @@ npm exec --yes --package=@mermaid-js/mermaid-cli -- mmdc -i docs/ARCHITECTURE.mm
 
 ## SAG live-config sequence: 8MB versus 25MB
 
-The following is the seeded `data-export-large-file-timeout` demonstration skill. Its preconditions are `applies_if export_chunk_size_mb > 10` and `invalidated_if export_chunk_size_mb <= 10`; its seeded confidence is 0.94 and `auto_execute` is enabled. The decision is the same in both cases. The metadata changes the result.
+The following is the legacy technical `data-export-large-file-timeout` demonstration skill. Its preconditions are `applies_if export_chunk_size_mb > 10` and `invalidated_if export_chunk_size_mb <= 10`. `auto_execute` is only an eligibility result; it never invokes an external action. It requires a persisted human-confirmed outcome before it can be eligible, and routine intercepts no longer raise confidence.
 
 ```mermaid
 sequenceDiagram
@@ -33,7 +33,7 @@ sequenceDiagram
     API->>Store: Merge metadata and update updated_at
     API->>SSE: Emit config_updated
     API->>INT: Same engineering decision + live metadata
-    INT->>Store: Load active skill and persist audit result
+        INT->>Store: Load active skill and persist audit result only
     INT->>SAG: Evaluate applies_if / invalidated_if
 
     alt export_chunk_size_mb = 8
@@ -44,9 +44,9 @@ sequenceDiagram
         API-->>UI: sag.result=suspended
     else export_chunk_size_mb = 25
         SAG-->>INT: active: applies_if > 10 holds
-        INT->>Store: Reinforce eligible skill; log intercept
+        INT->>Store: Log intercept; do not reinforce on observation alone
         INT->>SSE: Emit decision_intercepted
-        INT-->>API: result=auto_execute for this seeded skill
+        INT-->>API: result=auto_execute eligibility; external action still needs human approval
         API-->>UI: sag.result=auto_execute
     end
 ```
@@ -57,8 +57,9 @@ SAG is not an additional LLM decision: after the relevance gate picks the approp
 
 | Area | Repository paths | Responsibility |
 |---|---|---|
-| Frontend pages | `frontend/src/pages/{Dashboard,Brain,Intercepts,Agents,Events,Settings,ApiKeys,Landing,Onboard}.tsx` | Operator UI for the brain, live SAG configuration, audit history, agent runs, events, metrics, and API keys. |
-| API and stream | `backend/main.py` | FastAPI lifespan, REST endpoints, `GET /stream`, `/settings/live-config`, agent routes, and the mounted MCP server. |
+| Frontend pages | `frontend/src/pages/{Operations,Dashboard,Brain,Intercepts,Agents,Events,Settings,ApiKeys,Landing,Onboard}.tsx` | Operational Risk Inbox plus technical proof pages for the brain, live SAG configuration, audit history, agent runs, events, metrics, and API keys. |
+| API and stream | `backend/main.py`, `backend/routers/workflows.py` | FastAPI lifespan, workflow API/readiness endpoints, `GET /stream`, `/settings/live-config`, agent routes, and the mounted MCP server. |
+| Workflow engine | `backend/workflows/` | Code-owned templates normalize evidence, attach memory provenance, evaluate live context, and return a human-gated DecisionBrief. |
 | Interceptor | `backend/core/interceptor.py` | Selects relevant skills with keyword plus optional cosine similarity, applies result thresholds, persists audit records, and broadcasts updates. |
 | Applicability | `backend/core/applicability.py` | Deterministically evaluates `applies_if` and `invalidated_if` against request/live metadata; can suspend stale skills. |
 | Compiler | `backend/core/compiler.py` | Converts a raw event into a typed skill with structured Qwen output and creates its embedding. |
@@ -78,7 +79,7 @@ MongoDB is the durable, organization-scoped memory store (`backend/brain/store.p
 | `events` | `event_id`, `agent_id`, `content`, `outcome`, `metadata`, `org_id`, `session_id`, `occurred_at` | Raw cross-session experiences that may be compiled into skills. |
 | `intercept_log` | `agent_id`, `decision_text`, `matched_skill`, `result`, `confidence`, `org_id`, `occurred_at`, `applicability_status`, `suspension_reason` | Immutable-style audit trail for blocked, warned, auto-executed, and suspended decisions. |
 | `org_configs` | `org_id`, `metadata`, `created_at`, `updated_at` | Current per-organization live metadata, including the demo `export_chunk_size_mb`, consumed by SAG when the UI posts `/settings/live-config`. |
-| Supporting collections | `sessions`, `agents`, `api_keys` | Cross-session agent context, registered agents, and organization-scoped credentials. |
+| Supporting collections | `sessions`, `agents`, `api_keys`, `workflow_runs`, `workflow_sources`, `skill_outcomes` | Cross-session context, registered agents, API-key metadata, normalized evidence/runs, and human-confirmed outcome records. |
 
 The store creates compound unique indexes for `skills(skill_id, org_id)`, `events(event_id, org_id)`, `agents(agent_id, org_id)`, and `sessions(session_id, org_id)`, plus skill TTL/indexing and intercept lookup indexes.
 

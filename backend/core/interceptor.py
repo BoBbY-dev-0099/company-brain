@@ -14,7 +14,8 @@ Decision stages:
      - confidence >= RELEVANCE_FLOOR      → WARN
      - else                               → CLEAR (defensive)
 
-Reinforcement fires on every non-clear hit.
+Interceptions are observations only. Confidence changes only after a separate,
+persisted human-confirmed outcome.
 """
 
 from __future__ import annotations
@@ -270,11 +271,9 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
             org_id=req.org_id,
         )
 
-    # Reinforce on every non-clear hit.
-    reinforced = await store.reinforce_skill(top_skill.skill_id, org_id=req.org_id)
-    if reinforced is not None:
-        top_skill = reinforced
-        skill_conf = top_skill.provenance.confidence
+    # A matching intercept is not evidence that the recommended action worked.
+    # Do not mutate confidence or auto-execute eligibility here; the workflow
+    # outcome path records an explicit human confirmation before doing that.
 
     decision_label = (
         "auto_execute" if result == InterceptResult.AUTO_EXECUTE else "intercepted"

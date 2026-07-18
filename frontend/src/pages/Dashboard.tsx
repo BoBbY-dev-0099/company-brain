@@ -47,20 +47,20 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
           <p className="text-sm text-[#7c7c8a] mt-1">
-            Operating memory for agent fleets — demo org is clean and seeded for SAG.
+            Technical observability for the clean demo organization.
           </p>
         </div>
         <a
-          href="/app/brain"
+          href="/app/inbox"
           className="text-sm text-[#22c55e] hover:underline font-medium"
         >
-          → 30s demo: Brain · 8MB suspend / 25MB auto
+          → Judge route: Operational Risk Inbox
         </a>
       </div>
 
       <div className="rounded border border-[#1f1f22] bg-[#111114] px-4 py-3 text-sm text-[#a1a1aa]">
-        <span className="text-[#e4e4e7] font-medium">Judge script: </span>
-        Brain → ① 8MB (suspended) → ② 25MB (auto_execute) → Intercepts → Agents Engineering.
+        <span className="text-[#e4e4e7] font-medium">Judge route: </span>
+        Operations → evidence and change → memory → SAG decision → human action. Brain remains technical proof.
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

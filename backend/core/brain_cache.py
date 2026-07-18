@@ -48,7 +48,7 @@ markdown, no code fences):
     "intercept_message": str (1-2 sentences shown to an agent at intercept time)
     "recommended_action": str (concrete next step; reference code paths/runbooks if known)
     "avoid_actions": list[str] (1-3 anti-patterns)
-    "auto_execute": false  // ALWAYS false at compile time; promotion happens via reinforcement
+    "auto_execute": false  // ALWAYS false at compile time; eligibility requires a human-confirmed outcome
     "escalate_if": list[str] (conditions that demand human involvement)
   }
   "decay_rate": "slow" | "medium" | "fast" | "never"
@@ -57,8 +57,8 @@ markdown, no code fences):
 # Hard rules
 
 - Output VALID JSON ONLY. No prose before or after. No markdown fences.
-- ALWAYS set executable.auto_execute = false. The system promotes auto-execute
-  later via reinforcement; you do not.
+- ALWAYS set executable.auto_execute = false. The system may mark a skill
+  eligible only after a persisted human-confirmed effective outcome; you do not.
 - Pick decay_rate carefully:
     * "never"  -> policies, regulatory rules, legal positions
     * "slow"   -> stable architecture/db/infra patterns (~6mo)
@@ -79,8 +79,9 @@ markdown, no code fences):
 # Confidence
 
 You do NOT set confidence. The system initializes every newly compiled skill at
-0.60 and reinforces upward via re-occurrence. Your job is to make a skill that
-is WORTH reinforcing — sharp pattern, sharp anti-conditions, sharp action.
+0.60 and raises it only after a human confirms an effective outcome. Your job is
+to make a skill that is WORTH validating — sharp pattern, sharp anti-conditions,
+sharp action.
 
 """
 

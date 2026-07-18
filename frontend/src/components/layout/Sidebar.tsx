@@ -10,6 +10,7 @@ import {
   Megaphone,
   Sparkles,
   Menu,
+  ShieldCheck,
   X,
 } from "lucide-react"
 import BrainHealthStatus from "./BrainHealthStatus"
@@ -23,6 +24,7 @@ export default function Sidebar() {
   }, [location.pathname])
 
   const links = [
+    { to: "/app/inbox", label: "Operations", icon: ShieldCheck },
     { to: "/app/dashboard", label: "Dashboard", icon: Zap },
     { to: "/app/brain", label: "Brain", icon: Brain },
     { to: "/app/intercepts", label: "Intercepts", icon: ShieldAlert },
@@ -78,8 +80,8 @@ export default function Sidebar() {
       <div className="space-y-3">
         <BrainHealthStatus />
         <div className="text-[#7c7c8a] text-xs border-t border-[#1f1f22] pt-3 space-y-1">
-          <div className="font-mono">org: integrations-demo</div>
-          <div>open mode · no login</div>
+          <div className="font-mono">org: judge-demo-v1</div>
+          <div>canonical demo · human-approved actions</div>
         </div>
       </div>
     </aside>
@@ -98,7 +100,7 @@ export default function Sidebar() {
           <Menu className="w-5 h-5" />
         </button>
         <span className="text-sm font-semibold text-[#e4e4e7]">Company Brain</span>
-        <span className="ml-auto font-mono text-[10px] text-[#7c7c8a]">integrations-demo</span>
+        <span className="ml-auto font-mono text-[10px] text-[#7c7c8a]">judge-demo-v1</span>
       </div>
 
       {/* Desktop sticky sidebar */}

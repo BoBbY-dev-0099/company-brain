@@ -1,15 +1,19 @@
 # Judging alignment scorecard
 
-| Criterion | Status | Scorecard |
-|---|---|---|
-| Innovation & AI Creativity (30%) | Green | Company Brain pairs persistent, Qwen-compiled organizational skills with a deterministic live-context gate that can suspend stale guidance; the 8MB/25MB flip makes that distinction easy to demonstrate. |
-| Technical Depth & Engineering (30%) | Yellow | FastAPI, MongoDB, FastMCP, SSE, Qwen tool calling, vector retrieval, typed SAG conditions, organization scoping, and audit logs are real, but Alibaba Cloud deployment proof is still required. |
-| Problem Value & Impact (25%) | Green | The product addresses a concrete agent-fleet failure mode: losing resolved operational knowledge or applying it after conditions changed; cross-session skills plus live applicability are a credible product direction. |
-| Presentation & Documentation (15%) | Yellow | The UI and written architecture are ready to support a clear walkthrough, but the public demo video and final Devpost presentation fields still need completion. |
+| Criterion | Current status | Evidence and remaining proof |
+| --- | --- | --- |
+| Innovation & AI Creativity | Green | The product is a reusable operational-memory engine: three code-owned templates share one evidence, memory, live-context, and human-action contract. The inbox turns an abstract memory problem into immediately legible release, money, and rollout risks. |
+| Technical Depth & Engineering | Green in code; deployment proof pending | FastAPI workflow API, Qwen compiler provenance, deterministic SAG, Mongo-backed sources/runs, durable idempotent GitHub intake, signed audit, SSE, test coverage, canonical fixture isolation, and human-only reinforcement are implemented. Attach actual Alibaba proof before claiming cloud completion. |
+| Problem Value & Impact | Green | Each template names the blocker, accountable role, and safe next action when current evidence invalidates previously trusted operational memory. No unsupported savings or autonomous-action claim is required. |
+| Presentation & Documentation | Green in repository; video pending | `/app/inbox` is the primary judge route. [`HACKATHON_WRITEUP.md`](../HACKATHON_WRITEUP.md), [`DEPLOYMENT_PROOF.md`](DEPLOYMENT_PROOF.md), and the pre-submit checklist now mirror the same demo story. Record the final public video and attach real deployment evidence. |
 
-## Main remaining blockers
+## Only external blockers
 
-1. **Alibaba Cloud deployment proof — Red until supplied.** Local Docker is explicitly an ECS mimic, not an Alibaba Cloud deployment. Capture real ECS/SAS evidence after deployment and link code that shows the Qwen Cloud integration.
-2. **LICENSE visibility — Yellow until verified on GitHub.** The repository now has an MIT [LICENSE](../LICENSE), but it must be committed to the public repository and visibly recognized on its GitHub page.
+1. Deploy the verified commit to Alibaba ECS/SAS and complete the evidence
+   manifest in [`DEPLOYMENT_PROOF.md`](DEPLOYMENT_PROOF.md).
+2. Publish the final public video and live URL after the deployed route is
+   rehearsed.
+3. Confirm the current official rules and complete every Devpost field.
 
-Keep the TEE message exact: the attestation endpoint is a mock/envelope that demonstrates the intended integration shape, not production TDX attestation.
+The implementation does not claim these external steps are complete until the
+corresponding evidence is attached.

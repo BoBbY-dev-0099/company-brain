@@ -1,112 +1,104 @@
-# Company Brain — Project Writeup
+# Company Brain — Operational Memory for Safe Company Actions
 
-**Track:** MemoryAgent · Qwen Cloud Global AI Hackathon 2026  
-**One-liner:** Operating memory for agent fleets that knows when to stop trusting what it remembers.
+**Track:** MemoryAgent · Qwen Cloud Global AI Hackathon 2026
+**One line:** Company Brain turns changing operational evidence into governed memory, checks it against live context, and routes a safe next step to a human owner.
 
-**Live demo (Alibaba Cloud ECS):** http://8.218.174.77  
-**Repo:** https://github.com/BoBbY-dev-0099/company-brain · **License:** MIT
+**Judge route:** `/app/inbox` after deployment.
+**Deployment evidence:** [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) is intentionally pending until a verified Alibaba Cloud ECS/SAS deployment is captured.
 
----
+## The problem
 
-## Problem (10 seconds)
+Teams already have the evidence they need to avoid bad actions: a merged PR, a support-policy exception, or an error spike. The failure is that the evidence lives in separate systems while agents act from an older memory.
 
-Agent fleets retrieve past lessons and act on them confidently — even when **live system state** has changed. Wrong refund window. Wrong export chunk size. Wrong rollout %. Memory without applicability is a liability.
+That creates a familiar operational mistake:
 
-## Solution (10 seconds)
+> “This used to be safe” becomes “do it automatically,” even though live reality changed.
 
-**Company Brain** is not a chatbot. It is a **memory-and-governance layer** any agent plugs into via REST or MCP:
+Company Brain makes that break visible before an action happens.
 
-1. **Compile** experience → versioned skills (Qwen)
-2. **Recall** under limited context
-3. **Intercept** before action (keyword + embedding)
-4. **SAG** — deterministic `applies_if` / `invalidated_if` vs live `metadata` (no second LLM)
-5. **Attest** the decision — Intel TDX quote when available, else **RSA-PSS audit**
-6. **Reinforce / forget** via confidence + decay + suspension
-7. **Propagate** to operators over SSE
+## What judges see first
 
-## The differentiator: Semantic Applicability Gate (SAG)
+The Operational Risk Inbox shows three reusable workflow templates, not three disconnected agents:
 
-Same skill. Same decision text. Different live config → different outcome.
+| Template | Evidence that changes the answer | Safe result |
+| --- | --- | --- |
+| Release Safety | A GitHub PR and runtime evidence lower the worker-memory limit below the runbook assumption. | Suspend the release; assign an engineering owner. |
+| Money Safety | A support request conflicts with an enterprise contract or refund policy. | Pause the automatic refund; assign support operations. |
+| Rollout Safety | Current error rate and an open incident invalidate a feature-flag expansion. | Hold expansion; assign the rollout owner. |
 
-| Live metadata | Result |
-|---------------|--------|
-| `export_chunk_size_mb: 8` | **SUSPENDED** — preconditions broken |
-| `export_chunk_size_mb: 25` | **AUTO_EXECUTE** — skill still valid |
+Every card is server-evaluated and exposes the same `DecisionBrief`:
 
-Every evaluation returns an **AST trace** (operators + timings) so judges can see *why* the gate fired — typically under a millisecond, not an LLM round-trip.
+`facts · Qwen inference · missing evidence · source excerpts/freshness · prior memory · SAG trace · verdict · owner · recommended next action`
 
-That flip is the product. Judges should see it in the first 30 seconds.
+## How it works
 
-## 30-second demo script (record this)
+```mermaid
+flowchart LR
+  E[Source-backed evidence] --> N[Normalize: source, ID, URL, time, excerpt, freshness]
+  N --> Q[Qwen compiler produces memory with provenance]
+  Q --> M[Prior + compiled memory]
+  M --> S[Deterministic SAG over live context]
+  S --> B[DecisionBrief]
+  B --> H[Human-approved operational action]
+  H --> O[Audited outcome]
+```
 
-**URL:** http://8.218.174.77/app/brain (no login; org `integrations-demo`)
+`WorkflowTemplate`s are code-owned and versioned for this submission. Each declares source requirements, required evidence fields, live-context schema, deterministic SAG rule, memory type, owner role, action recommendation, fixture, and evaluation cases. This is deliberately not a no-code builder.
 
-1. Open **Brain** — live config **25MB**, giant badge **GREEN AUTO_EXECUTE**
-2. Click the **8MB** toggle (or press keyboard **`8`**) → badge flips **RED SUSPENDED** instantly
-3. Expand **Evaluation trace** → see `lte` / `gt` / `and` / `not` tree
-4. Note the integrity badge: **RSA Audited** on the current r9i host (honest — not fake TDX)
-5. Click **25MB** (or press **`2`**) → green again
-6. Open **Intercepts** → horror-story seed + fresh toggle audit rows
+The stable API surface is:
 
-Narration: *“Most memory systems always trust the top match. We check whether the memory still applies against live config — before the agent acts. And we cryptographically bind that decision.”*
+```text
+GET  /workflow-templates
+POST /workflow-runs
+GET  /workflow-runs/{id}
+POST /workflow-runs/{id}/outcome
+GET  /workflow-sources
+GET  /demo/readiness
+```
 
-## Who it’s for
+## Why this is real rather than a scripted verdict
 
-Teams already running multiple independent AI agents who need shared, governed memory — without building that layer from scratch. Infrastructure, not an application.
+- The UI renders backend-returned verdicts only. If the backend is unavailable, it says so; it does not manufacture a green/red outcome.
+- `POST /workflow-runs` normalizes the supplied evidence, computes freshness and missing fields, runs Qwen compilation where configured, and evaluates the template's deterministic SAG predicate.
+- The Release Safety path is connected to the real signed GitHub merged-PR webhook. The webhook persists raw evidence, compiled skill, audit record, SSE propagation, and a linked `release-safety` workflow run before returning success. A PR with no runtime telemetry honestly returns `review_required`.
+- Money Safety and Rollout Safety use the identical contract as visibly labelled canonical demo fixtures, not claimed live connectors.
+- `judge-demo-v1` is immutable. The open UI writes to `sandbox`; fixture replays never add a canonical skill or confidence increment.
+- A skill can only gain confidence or become `auto_execute`-eligible after a persisted **human-confirmed** outcome. All workflow actions remain human-approved.
 
-## What’s shipped
+## Under-three-minute video script
 
-| Surface | What judges see |
-|---------|-----------------|
-| Open React UI | Dashboard, Brain (SAG toggle + eval trace + integrity badge), Intercepts, Agents, Events, Settings |
-| Three demo agents | Support / Engineering / Product (real Qwen) |
-| `integrations/` | Production-shaped connectors + real GitHub PR webhook → skill compile |
-| MCP | `recall_skills`, `check_intercept`, `compile_experience` + attestation status |
-| Integrity | `POST /attestation/quote` (TDX) · `POST /audit/sign` (RSA fallback) · `POST /sag/evaluate` (trace) |
-| Auth | Open demo org for UI; `X-Brain-Api-Key` for agents |
-| Docs | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) + [`docs/architecture.png`](docs/architecture.png) |
+1. Open `/app/inbox`. In one glance, show the three cards: blocker, owner, recommendation, source freshness, and server verdict.
+2. Open **Release Safety** → **Why this decision?**. Show the GitHub PR and runtime evidence, the remembered 25 MiB rule, the changed value of 8 MiB, and the deterministic SAG trace. Record a human decision; explain that the fixture does not train canonical memory.
+3. Quickly open **Money Safety** and **Rollout Safety** to prove they use the same evidence → memory → live context → action contract.
+4. Open **Brain** only as technical proof: the underlying SAG trace, skill/audit history, and Qwen-backed memory layer are still available.
+5. Show `/api/demo/readiness` on the deployed host: build SHA, Qwen configuration, scenario version, and canonical counts. Then show the redacted Alibaba Workbench Overview screenshot.
 
-## Stack
+Suggested narration: *“Company Brain does not merely retrieve a lesson. It proves whether that lesson still applies, names the accountable owner, and preserves the outcome without silently training itself from a demo click.”*
 
-- **LLM / embeddings:** Qwen (`qwen-plus`) + `text-embedding-v3` via DashScope international
-- **API:** FastAPI + Motor/MongoDB + SSE + FastMCP
-- **UI:** React 18 + Vite + Tailwind (no login wall)
-- **Cloud:** Alibaba Cloud ECS + Docker Compose (nginx → API → Mongo)
-- **Integrity:** Intel TDX on Confidential VM (`g7t`/`g8i`); RSA-PSS-SHA256 fallback otherwise
+## Qwen use
 
-## Deployment & attestation (honest)
+- `qwen-plus` compiles normalized operational evidence into structured, versioned memory.
+- `text-embedding-v3` supports the existing recall layer.
+- The Semantic Applicability Gate is intentionally deterministic after the model step, so an operator can inspect exactly why a recommendation was suspended or requires review.
 
-| Host | Attestation mode |
-|------|------------------|
-| Current demo ECS (`ecs.r9i.xlarge`, `8.218.174.77`) | **RSA audit fallback** — no `/dev/tdx_guest` |
-| Target Confidential VM (`g8i` / `g7t`) | **Hardware TDX quotes** via Alibaba quote-generation binary |
+## Governance and scope boundaries
 
-We do **not** claim TDX on the r9i demo host. The UI shows **RSA Audited**; the attestation tab narrates the fallback. Moving the same stack onto g8i enables real quotes without changing the SAG product.
+- External actions are recommendations only; the product does not execute refunds, deploys, or flag changes.
+- Missing, stale, unavailable, or unsupported evidence returns `review_required`; no answer is invented.
+- API-key permission strings are recorded as metadata in this hackathon build, not a complete RBAC authorization system.
+- TDX hardware quotes are available only on an eligible Alibaba Confidential VM. On other hosts, the UI/API must present the RSA-PSS audit fallback, not claim hardware attestation.
+- Operational counters are observed counts. The token-savings field is explicitly an estimate, not measured cost savings.
 
-## Honest scope
+## Deployment proof
 
-- SAG evaluates **metadata you pass** (config, flags, counters) — not automatic world-model scraping
-- Intercept returns structured guidance; it does not patch production code by itself
-- Outcome Feedback Loop (demote skills from confirmed real-world outcomes) is roadmap, not this build
-
-## Why Qwen
-
-Compiler, agents, and embeddings all run on Qwen Cloud compatible-mode. The governance layer is model-agnostic at the API boundary; the demo proves the loop with real Qwen calls end-to-end on Alibaba Cloud.
+The repository contains the Docker/ECS deployment path and a runtime build-SHA readiness endpoint. The official rules require a repository code-file link that demonstrates Alibaba Cloud services/APIs; the deployment packet names those files and adds supplemental Workbench/runtime captures. Actual Alibaba deployment, public URL, and video publication are external submission steps and must only be marked complete after evidence is attached in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
 
 ## Links
 
 | Asset | Path |
-|-------|------|
-| Live demo | http://8.218.174.77 |
-| Architecture diagram | [`docs/architecture.png`](docs/architecture.png) |
-| Architecture writeup | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| --- | --- |
+| Judge-facing workflow UI | `/app/inbox` |
+| Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Deployment proof packet | [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) |
 | Submission checklist | [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) |
-| Judging alignment | [`docs/JUDGING_ALIGNMENT.md`](docs/JUDGING_ALIGNMENT.md) |
-| README / quick start | [`README.md`](README.md) |
-| Integrations | [`integrations/README.md`](integrations/README.md) |
-| ECS visual E2E | [`E2E_ECS_VISUAL_REPORT.md`](E2E_ECS_VISUAL_REPORT.md) — **ECS READY TO RECORD** |
-
----
-
-**Closing line for video:**  
-*Company Brain turns agent experience into versioned skills — suspends those skills the moment live reality says they’re stale — and binds that decision with cryptographic integrity.*
+| Source code | `backend/workflows/`, `backend/routers/workflows.py`, `frontend/src/pages/Operations.tsx` |

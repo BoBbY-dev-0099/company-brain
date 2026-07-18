@@ -8,14 +8,15 @@ import Agents from "./pages/Agents"
 import Events from "./pages/Events"
 import Settings from "./pages/Settings"
 import ApiKeys from "./pages/ApiKeys"
+import Operations from "./pages/Operations"
 import AppShell from "./components/layout/AppShell"
 
 const router = createBrowserRouter([
   { path: "/", element: <Landing /> },
-  { path: "/sign-in", element: <Navigate to="/app/dashboard" replace /> },
-  { path: "/sign-in/*", element: <Navigate to="/app/dashboard" replace /> },
-  { path: "/sign-up", element: <Navigate to="/app/dashboard" replace /> },
-  { path: "/sign-up/*", element: <Navigate to="/app/dashboard" replace /> },
+  { path: "/sign-in", element: <Navigate to="/app/inbox" replace /> },
+  { path: "/sign-in/*", element: <Navigate to="/app/inbox" replace /> },
+  { path: "/sign-up", element: <Navigate to="/app/inbox" replace /> },
+  { path: "/sign-up/*", element: <Navigate to="/app/inbox" replace /> },
   {
     path: "/app",
     element: (
@@ -24,7 +25,8 @@ const router = createBrowserRouter([
       </AppShell>
     ),
     children: [
-      { index: true, element: <Navigate to="dashboard" replace /> },
+      { index: true, element: <Navigate to="inbox" replace /> },
+      { path: "inbox", element: <Operations /> },
       { path: "dashboard", element: <Dashboard /> },
       { path: "brain", element: <Brain /> },
       { path: "intercepts", element: <Intercepts /> },

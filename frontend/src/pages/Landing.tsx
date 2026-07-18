@@ -14,8 +14,8 @@ export default function Landing() {
             <a href="#demo" className="text-[#a1a1aa] hover:text-[#e4e4e7]">
               30s demo
             </a>
-            <Link to="/app/brain" className="text-[#22c55e] hover:underline">
-              Open App
+            <Link to="/app/inbox" className="text-[#22c55e] hover:underline">
+              Open Inbox
             </Link>
           </nav>
         </div>
@@ -39,16 +39,16 @@ export default function Landing() {
         </p>
         <div className="flex flex-wrap items-center gap-4">
           <Link
-            to="/app/brain"
+            to="/app/inbox"
             className="bg-[#22c55e] hover:bg-[#16a34a] text-[#050505] font-medium rounded px-6 py-3 flex items-center gap-2"
           >
-            Run the 30s demo <ArrowRight className="w-4 h-4" />
+            Open the risk inbox <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
             to="/app/dashboard"
             className="border border-[#1f1f22] hover:border-[#22c55e] text-[#e4e4e7] rounded px-6 py-3"
           >
-            Dashboard
+            Technical dashboard
           </Link>
         </div>
       </section>
@@ -57,25 +57,22 @@ export default function Landing() {
         <h2 className="text-xl font-semibold mb-4">First 30 seconds (judges)</h2>
         <ol className="space-y-3 text-[#a1a1aa] text-sm md:text-base list-decimal list-inside">
           <li>
-            Open <span className="text-[#e4e4e7]">Brain</span> → click{" "}
-            <span className="text-[#f59e0b]">① Config = 8MB</span> → skill{" "}
-            <code className="text-[#22c55e]">data-export-large-file-timeout</code>{" "}
-            becomes <span className="text-[#f59e0b]">suspended</span>.
+            Open <span className="text-[#e4e4e7]">Operations</span> and inspect a
+            source-backed workflow card with its server-returned decision.
           </li>
           <li>
-            Click <span className="text-[#22c55e]">② Config = 25MB</span> → same
-            skill returns <span className="text-[#22c55e]">auto_execute</span>.
+            Select <span className="text-[#22c55e]">Why this decision?</span> to
+            follow evidence, Qwen inference, memory, and the deterministic SAG trace.
           </li>
           <li>
-            Same memory, different live metadata — that is the Semantic
-            Applicability Gate (SAG).
+            Record a human next step. Demo fixtures remain labeled and isolated from canonical memory.
           </li>
         </ol>
         <Link
-          to="/app/brain"
+          to="/app/inbox"
           className="inline-flex mt-6 text-[#22c55e] hover:underline items-center gap-1 text-sm"
         >
-          Go to Brain <ArrowRight className="w-3 h-3" />
+          Open Operations <ArrowRight className="w-3 h-3" />
         </Link>
       </section>
 

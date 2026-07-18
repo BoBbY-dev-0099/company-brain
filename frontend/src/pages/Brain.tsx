@@ -43,10 +43,6 @@ function normalizeSkill(raw: any): Skill {
 
 type SagBadge = "suspended" | "auto_execute" | "unknown"
 
-function expectedBadge(chunk: number): SagBadge {
-  return chunk <= 10 ? "suspended" : "auto_execute"
-}
-
 export default function Brain() {
   const [activeTab, setActiveTab] = useState("skills")
   const [skills, setSkills] = useState<Skill[]>([])
@@ -59,8 +55,8 @@ export default function Brain() {
   const [attestation, setAttestation] = useState<any>(null)
   const [attestationLoading, setAttestationLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [chunkMb, setChunkMb] = useState(25)
-  const [sagBadge, setSagBadge] = useState<SagBadge>("auto_execute")
+  const [chunkMb, setChunkMb] = useState<number | null>(null)
+  const [sagBadge, setSagBadge] = useState<SagBadge>("unknown")
   const [sagReason, setSagReason] = useState<string>("")
   const [toggleBusy, setToggleBusy] = useState(false)
   const [sagTrace, setSagTrace] = useState<any>(null)
@@ -91,23 +87,22 @@ export default function Brain() {
 
   const applySagFromApi = useCallback((chunk: number, sag: any | null | undefined) => {
     if (!sag) {
-      setSagBadge(expectedBadge(chunk))
-      setSagReason(
-        chunk <= 10
-          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
-          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`,
-      )
+      setSagBadge("unknown")
+      setSagReason("No backend SAG verdict was returned for the current live configuration.")
       return
     }
-    const suspended =
-      sag.result === "suspended" || sag.applicability_status === "suspended"
-    setSagBadge(suspended ? "suspended" : "auto_execute")
+    const reportedDecision = sag.result ?? sag.decision
+    const badge: SagBadge =
+      reportedDecision === "suspended"
+        ? "suspended"
+        : reportedDecision === "auto_execute"
+          ? "auto_execute"
+          : "unknown"
+    setSagBadge(badge)
     setSagReason(
       sag.suspension_reason ||
         sag.reason ||
-        (suspended
-          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
-          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`),
+        (badge === "unknown" ? "Backend SAG evaluation did not include a recognized verdict." : "Backend SAG evaluation returned a verdict."),
     )
     setDemoStatus(
       `${chunk}MB → ${sag.result || "—"} (${sag.applicability_status || "active"}) · skill: ${
@@ -116,22 +111,46 @@ export default function Brain() {
     )
   }, [])
 
+  const requestSagEvaluation = useCallback(
+    async (chunk: number) => {
+      const evalResp = await apiPost("/sag/evaluate", {
+        skill_id: "data-export-large-file-timeout",
+        metadata: { export_chunk_size_mb: chunk },
+        attest: true,
+      })
+      setSagTrace(evalResp?.trace ?? null)
+      setSagMs(typeof evalResp?.evaluated_in_ms === "number" ? evalResp.evaluated_in_ms : null)
+      setIntegrity((evalResp?.integrity as IntegrityInfo) ?? null)
+      applySagFromApi(chunk, {
+        result: evalResp?.decision,
+        reason: evalResp?.reason,
+        applicability_status: evalResp?.status,
+        skill_id: evalResp?.skill_id,
+      })
+    },
+    [applySagFromApi],
+  )
+
   const loadLiveConfig = useCallback(async () => {
     try {
       const data = await apiGet("/settings/live-config")
-      const chunk = Number(data?.metadata?.export_chunk_size_mb ?? 25)
+      const chunk = Number(data?.metadata?.export_chunk_size_mb)
+      if (!Number.isFinite(chunk)) throw new Error("Live configuration did not include export_chunk_size_mb.")
       setChunkMb(chunk)
-      setSagBadge(expectedBadge(chunk))
-      setSagReason(
-        chunk <= 10
-          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
-          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`,
-      )
+      setSagBadge("unknown")
+      setSagReason("Live configuration loaded; requesting backend SAG evaluation.")
+      try {
+        await requestSagEvaluation(chunk)
+      } catch {
+        setSagBadge("unknown")
+        setSagReason("Live configuration loaded, but the backend SAG evaluation is unavailable.")
+      }
     } catch {
-      setChunkMb(25)
-      setSagBadge("auto_execute")
+      setChunkMb(null)
+      setSagBadge("unknown")
+      setSagReason("Live configuration is unavailable.")
     }
-  }, [])
+  }, [requestSagEvaluation])
 
   useEffect(() => {
     loadSkills()
@@ -140,14 +159,6 @@ export default function Brain() {
 
   const switchConfig = useCallback(
     async (chunk: number) => {
-      // Optimistic UI — instant flip for judges.
-      setChunkMb(chunk)
-      setSagBadge(expectedBadge(chunk))
-      setSagReason(
-        chunk <= 10
-          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
-          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`,
-      )
       setDemoStatus(`Switching live config → ${chunk}MB…`)
       setToggleBusy(true)
       try {
@@ -156,21 +167,11 @@ export default function Brain() {
         })
         const next = Number(resp?.metadata?.export_chunk_size_mb ?? chunk)
         setChunkMb(next)
-        applySagFromApi(next, resp?.sag)
+        setSagBadge("unknown")
+        setSagReason("Live configuration updated; awaiting backend SAG evaluation.")
+        if (resp?.sag) applySagFromApi(next, resp.sag)
         try {
-          const evalResp = await apiPost("/sag/evaluate", {
-            skill_id: "data-export-large-file-timeout",
-            metadata: { export_chunk_size_mb: next },
-            attest: true,
-          })
-          setSagTrace(evalResp?.trace ?? null)
-          setSagMs(
-            typeof evalResp?.evaluated_in_ms === "number" ? evalResp.evaluated_in_ms : null,
-          )
-          setIntegrity((evalResp?.integrity as IntegrityInfo) ?? null)
-          if (evalResp?.decision) {
-            setSagBadge(evalResp.decision === "suspended" ? "suspended" : "auto_execute")
-          }
+          await requestSagEvaluation(next)
         } catch {
           /* live-config already flipped; trace is optional */
         }
@@ -182,7 +183,7 @@ export default function Brain() {
         setToggleBusy(false)
       }
     },
-    [applySagFromApi, loadLiveConfig, loadSkills],
+    [applySagFromApi, loadLiveConfig, loadSkills, requestSagEvaluation],
   )
 
   // Keyboard: 8 → 8MB, 2 → 25MB (ignore when typing in inputs).
@@ -210,7 +211,8 @@ export default function Brain() {
         const chunk = Number(data.metadata.export_chunk_size_mb)
         setChunkMb(chunk)
         // Background verify only — do not fight optimistic UI.
-        setSagBadge((prev) => prev || expectedBadge(chunk))
+        setSagBadge("unknown")
+        setSagReason("Live configuration changed; awaiting a backend SAG evaluation.")
         return
       }
 
@@ -242,7 +244,8 @@ export default function Brain() {
         )
         setSelected((prev) => (prev?.skill_id === skillId ? { ...prev, ...patch } : prev))
         if (skillId === "data-export-large-file-timeout") {
-          setSagBadge("auto_execute")
+          setSagBadge("unknown")
+          setSagReason("Skill became active; no explicit backend decision verdict was included in this event.")
         }
       }
     },
@@ -291,12 +294,13 @@ export default function Brain() {
   }
 
   const suspended = sagBadge === "suspended"
+  const autoExecute = sagBadge === "auto_execute"
 
   return (
     <div className="space-y-4">
       <div className="rounded border border-[#22c55e]/30 bg-[#22c55e]/5 px-4 py-3 text-sm text-[#a1a1aa]">
-        <span className="text-[#22c55e] font-medium">30-second SAG demo: </span>
-        Live config toggle → instant badge flip. Keys{" "}
+        <span className="text-[#22c55e] font-medium">Backend-evaluated SAG: </span>
+        Change live config, then wait for the server verdict. Keys{" "}
         <kbd className="px-1 rounded bg-[#111114] border border-[#1f1f22] font-mono text-[10px]">8</kbd>{" "}
         /{" "}
         <kbd className="px-1 rounded bg-[#111114] border border-[#1f1f22] font-mono text-[10px]">2</kbd>
@@ -307,7 +311,7 @@ export default function Brain() {
         <div className="bg-[#111114] border border-[#1f1f22] rounded-lg p-5 space-y-4">
           <div className="text-xs uppercase tracking-wide text-[#7c7c8a]">Live config</div>
           <div className="flex items-baseline gap-2">
-            <span className="text-5xl font-bold font-mono text-[#e4e4e7]">{chunkMb}</span>
+            <span className="text-5xl font-bold font-mono text-[#e4e4e7]">{chunkMb ?? "--"}</span>
             <span className="text-[#7c7c8a]">MB chunk</span>
           </div>
           <div className="rounded-lg bg-white px-2 py-3">
@@ -332,7 +336,9 @@ export default function Brain() {
           className={`lg:col-span-2 rounded-lg border p-6 space-y-4 transition-colors ${
             suspended
               ? "border-[#ef4444]/50 bg-[#ef4444]/5 sag-badge-shake"
-              : "border-[#22c55e]/50 bg-[#22c55e]/5 sag-badge-glow"
+              : autoExecute
+                ? "border-[#22c55e]/50 bg-[#22c55e]/5 sag-badge-glow"
+                : "border-[#2a2a30] bg-[#111114]"
           }`}
         >
           <div className="text-xs uppercase tracking-wide text-[#7c7c8a]">
@@ -343,16 +349,22 @@ export default function Brain() {
             className={`inline-flex items-center gap-3 px-5 py-3 rounded-xl text-2xl font-bold tracking-wide ${
               suspended
                 ? "bg-[#ef4444] text-white shadow-[0_0_24px_rgba(239,68,68,0.45)]"
-                : "bg-[#22c55e] text-[#050505] shadow-[0_0_24px_rgba(34,197,94,0.45)]"
+                : autoExecute
+                  ? "bg-[#22c55e] text-[#050505] shadow-[0_0_24px_rgba(34,197,94,0.45)]"
+                  : "bg-[#2a2a30] text-[#e4e4e7]"
             }`}
           >
             {suspended ? (
               <>
                 <PauseCircle className="w-8 h-8" /> SUSPENDED
               </>
-            ) : (
+            ) : autoExecute ? (
               <>
                 <CheckCircle className="w-8 h-8" /> AUTO_EXECUTE
+              </>
+            ) : (
+              <>
+                <ShieldAlert className="w-8 h-8" /> DECISION PENDING
               </>
             )}
           </div>

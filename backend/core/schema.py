@@ -99,6 +99,9 @@ class SkillProvenance(BaseModel):
     compiled_at: datetime = Field(default_factory=utc_now)
     confidence: float = 0.60
     reinforcement_count: int = 0
+    # Confidence can only be raised by a persisted, explicitly human-confirmed
+    # outcome.  Intercepts and demo clicks are observations, not validation.
+    human_confirmed_outcome_count: int = 0
     last_validated: datetime = Field(default_factory=utc_now)
     decay_rate: DecayRate = DecayRate.MEDIUM
     expires_at: datetime | None = None
