@@ -1,44 +1,79 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Arial, sans-serif",
+    "fontSize": "19px",
+    "primaryColor": "#eef2ff",
+    "primaryTextColor": "#172033",
+    "primaryBorderColor": "#5967d8",
+    "lineColor": "#64748b",
+    "secondaryColor": "#ecfdf5",
+    "tertiaryColor": "#fff7ed",
+    "clusterBkg": "#f8fafc",
+    "clusterBorder": "#94a3b8"
+  }
+}}%%
+
 flowchart LR
-    subgraph Browser["Operator browser"]
-        UI["React + Vite UI<br/>Dashboard, Brain, Intercepts,<br/>Agents, Events, Settings"]
+    %% One-line judge story: input → API → recall/SAG → decision → durable memory + Qwen.
+    subgraph INPUTS["1 · Inputs"]
+        UI["Operator browser<br/><b>React + Vite</b><br/>Brain · Agents · Events · Settings"]
+        EXT["External agent / REST client<br/><b>MCP over SSE</b>"]
     end
 
-    subgraph API["FastAPI application (backend/main.py)"]
-        Routes["REST routes<br/>events, decisions, settings, agents"]
-        Agents["Qwen tool-loop agents<br/>Support, Engineering, Product"]
-        MCP["FastMCP server<br/>/mcp/sse"]
-        Compiler["Experience compiler<br/>core/compiler.py"]
-        Interceptor["Hybrid interceptor<br/>core/interceptor.py"]
-        SAG["Semantic Applicability Gate<br/>core/applicability.py"]
-        Propagator["Event propagator<br/>core/propagator.py"]
-        Stream["SSE endpoint<br/>GET /stream"]
+    subgraph CONTROL["2 · FastAPI control plane"]
+        API["REST routes + FastMCP gateway<br/><b>/api/* · /mcp/sse</b>"]
+        AGENTS["Qwen tool-loop agents<br/><b>Engineering · Support · Product</b>"]
+        COMPILER["Experience compiler<br/><b>raw event → versioned skill</b>"]
     end
 
-    External["External REST / MCP client"]
-    Mongo[("MongoDB<br/>skills, events, configs, audit logs")]
-    Qwen["Qwen Cloud DashScope<br/>compatible-mode API"]
+    subgraph BRAIN["3 · Governance engine"]
+        RECALL["Hybrid recall<br/>keyword + embedding relevance"]
+        SAG["Deterministic SAG<br/><b>applies_if / invalidated_if</b><br/>no second LLM call"]
+        DECISION["Decision + audit<br/><b>block · warn · auto_execute · suspended</b>"]
+    end
 
-    UI -->|"REST /api"| Routes
-    UI <-->|"SSE /stream"| Stream
-    External -->|"MCP over SSE"| MCP
+    subgraph GATE["Recording gate · same skill, different live metadata"]
+        LIVE["export_chunk_size_mb"]
+        EIGHT["8 MB<br/><b>SUSPENDED</b><br/><small>invalidated_if ≤ 10</small>"]
+        TWENTYFIVE["25 MB<br/><b>AUTO_<br/>EXECUTE</b><br/><small>applies_if &gt; 10</small>"]
+    end
 
-    Routes --> Agents
-    Routes --> Interceptor
-    Routes --> Compiler
-    Routes -->|"live config"| Mongo
-    Agents -->|"in-process tool dispatch"| MCP
-    MCP --> Interceptor
-    MCP --> Compiler
+    SSE["Live audit stream<br/><b>SSE /stream</b><br/>UI subscribes here"]
+    MONGO[("MongoDB<br/><b>org-scoped memory</b><br/>skills · events · configs · audit logs")]
+    QWEN["Qwen Cloud DashScope<br/><b>qwen-plus</b> generation +<br/><b>text-embedding-v3</b> vectors"]
 
-    Compiler -->|"read/write skills and events"| Mongo
-    Interceptor -->|"read skills; write intercept_log"| Mongo
-    Interceptor --> SAG
-    SAG -->|"active or suspended"| Interceptor
-    Compiler --> Propagator
-    Interceptor --> Propagator
-    Propagator --> Stream
+    UI -->|"REST /api"| API
+    EXT -->|"MCP over SSE"| API
+    API --> RECALL
+    API --> COMPILER
+    API --> AGENTS
 
-    Agents -->|"qwen-plus chat + tool calls"| Qwen
-    Compiler -->|"qwen-plus structured compilation"| Qwen
-    Compiler -->|"text-embedding-v3 skill vectors"| Qwen
-    Interceptor -->|"text-embedding-v3 query vector when available"| Qwen
+    RECALL --> SAG --> DECISION
+    LIVE --> SAG
+    SAG --> EIGHT
+    SAG --> TWENTYFIVE
+    DECISION -->|"append intercept_log"| MONGO
+    DECISION --> SSE
+
+    COMPILER -->|"structured Qwen compilation"| QWEN
+    AGENTS -->|"chat + tool calls"| QWEN
+    RECALL -->|"query embedding when available"| QWEN
+    COMPILER -->|"write versioned skill + event"| MONGO
+    RECALL -->|"read active skills"| MONGO
+    API -->|"read/write live config"| MONGO
+
+    classDef input fill:#eef2ff,stroke:#5967d8,color:#172033,stroke-width:2px;
+    classDef control fill:#f0fdf4,stroke:#22a06b,color:#172033,stroke-width:2px;
+    classDef brain fill:#fff7ed,stroke:#d97706,color:#172033,stroke-width:2px;
+    classDef live fill:#fef2f2,stroke:#dc2626,color:#172033,stroke-width:2px;
+    classDef liveGreen fill:#ecfdf5,stroke:#16a34a,color:#172033,stroke-width:2px;
+    classDef infra fill:#ecfeff,stroke:#0891b2,color:#172033,stroke-width:2px;
+    classDef store fill:#f5f3ff,stroke:#7c3aed,color:#172033,stroke-width:2px;
+    class UI,EXT input;
+    class API,AGENTS,COMPILER control;
+    class RECALL,SAG,DECISION,SSE brain;
+    class LIVE,EIGHT live;
+    class TWENTYFIVE liveGreen;
+    class QWEN infra;
+    class MONGO store;

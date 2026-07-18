@@ -31,49 +31,52 @@ Company Brain sits between agent fleets / the operator UI and Qwen Cloud: FastAP
 
 ```mermaid
 flowchart LR
-    subgraph Browser["Operator browser"]
-        UI["React + Vite UI<br/>Dashboard, Brain, Intercepts,<br/>Agents, Events, Settings"]
+    subgraph INPUTS["1 · Inputs"]
+        UI["Operator browser<br/>React + Vite<br/>Brain · Agents · Events · Settings"]
+        EXT["External agent / REST client<br/>MCP over SSE"]
     end
 
-    subgraph API["FastAPI application (backend/main.py)"]
-        Routes["REST routes<br/>events, decisions, settings, agents"]
-        Agents["Qwen tool-loop agents<br/>Support, Engineering, Product"]
-        MCP["FastMCP server<br/>/mcp/sse"]
-        Compiler["Experience compiler<br/>core/compiler.py"]
-        Interceptor["Hybrid interceptor<br/>core/interceptor.py"]
-        SAG["Semantic Applicability Gate<br/>core/applicability.py"]
-        Propagator["Event propagator<br/>core/propagator.py"]
-        Stream["SSE endpoint<br/>GET /stream"]
+    subgraph CONTROL["2 · FastAPI control plane"]
+        API["REST routes + FastMCP gateway<br/>/api/* · /mcp/sse"]
+        AGENTS["Qwen tool-loop agents<br/>Engineering · Support · Product"]
+        COMPILER["Experience compiler<br/>raw event → versioned skill"]
     end
 
-    External["External REST / MCP client"]
-    Mongo[("MongoDB<br/>skills, events, configs, audit logs")]
-    Qwen["Qwen Cloud DashScope<br/>compatible-mode API"]
+    subgraph BRAIN["3 · Governance engine"]
+        RECALL["Hybrid recall<br/>keyword + embedding relevance"]
+        SAG["Deterministic SAG<br/>applies_if / invalidated_if<br/>no second LLM call"]
+        DECISION["Decision + audit<br/>block · warn · auto_execute · suspended"]
+    end
 
-    UI -->|"REST /api"| Routes
-    UI <-->|"SSE /stream"| Stream
-    External -->|"MCP over SSE"| MCP
+    subgraph GATE["Recording gate · same skill, different live metadata"]
+        LIVE["export_chunk_size_mb"]
+        EIGHT["8 MB<br/>SUSPENDED<br/>invalidated_if ≤ 10"]
+        TWENTYFIVE["25 MB<br/>AUTO_EXECUTE<br/>applies_if > 10"]
+    end
 
-    Routes --> Agents
-    Routes --> Interceptor
-    Routes --> Compiler
-    Routes -->|"live config"| Mongo
-    Agents -->|"in-process tool dispatch"| MCP
-    MCP --> Interceptor
-    MCP --> Compiler
+    SSE["Live audit stream<br/>SSE /stream"]
+    MONGO[("MongoDB<br/>org-scoped memory<br/>skills · events · configs · audit logs")]
+    QWEN["Qwen Cloud DashScope<br/>qwen-plus + text-embedding-v3"]
 
-    Compiler -->|"read/write skills and events"| Mongo
-    Interceptor -->|"read skills; write intercept_log"| Mongo
-    Interceptor --> SAG
-    SAG -->|"active or suspended"| Interceptor
-    Compiler --> Propagator
-    Interceptor --> Propagator
-    Propagator --> Stream
+    UI -->|"REST /api"| API
+    EXT -->|"MCP over SSE"| API
+    API --> RECALL
+    API --> COMPILER
+    API --> AGENTS
 
-    Agents -->|"qwen-plus chat + tool calls"| Qwen
-    Compiler -->|"qwen-plus structured compilation"| Qwen
-    Compiler -->|"text-embedding-v3 skill vectors"| Qwen
-    Interceptor -->|"text-embedding-v3 query vector when available"| Qwen
+    RECALL --> SAG --> DECISION
+    LIVE --> SAG
+    SAG --> EIGHT
+    SAG --> TWENTYFIVE
+    DECISION -->|"append intercept_log"| MONGO
+    DECISION --> SSE
+
+    COMPILER -->|"structured Qwen compilation"| QWEN
+    AGENTS -->|"chat + tool calls"| QWEN
+    RECALL -->|"query embedding when available"| QWEN
+    COMPILER -->|"write versioned skill + event"| MONGO
+    RECALL -->|"read active skills"| MONGO
+    API -->|"read/write live config"| MONGO
 ```
 
 </details>
