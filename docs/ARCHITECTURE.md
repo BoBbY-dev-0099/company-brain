@@ -53,7 +53,7 @@ flowchart LR
     Interceptor -->|"text-embedding-v3 query vector when available"| Qwen
 ```
 
-The standalone source for this diagram is [ARCHITECTURE.mmd](ARCHITECTURE.mmd). Mermaid CLI was not installed when these assets were prepared. To render a PNG later, run:
+Rendered PNG: ![system architecture](architecture.png) · Mermaid source: [ARCHITECTURE.mmd](ARCHITECTURE.mmd)
 
 ```powershell
 npm exec --yes --package=@mermaid-js/mermaid-cli -- mmdc -i docs/ARCHITECTURE.mmd -o docs/architecture.png

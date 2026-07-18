@@ -5,7 +5,87 @@ Operating Memory Primitive for agent fleets — Qwen Cloud Global AI Hackathon 2
 > **Most agents remember. Company Brain knows when to stop trusting what it remembers.**
 
 **Judges / 30s demo:** open the UI → **Brain** → ① Config = 8MB (**suspended**) → ② Config = 25MB (**auto_execute**).  
-Full writeup: [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md). Open UI uses org `integrations-demo` (no login).
+Open UI uses org `integrations-demo` (no login).
+
+## Submission pack (for judges)
+
+| Asset | Link |
+| ----- | ---- |
+| Written summary | [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) |
+| Architecture (diagram + SAG sequence) | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Architecture diagram (PNG) | [`docs/architecture.png`](docs/architecture.png) |
+| Mermaid source | [`docs/ARCHITECTURE.mmd`](docs/ARCHITECTURE.mmd) |
+| Judging alignment | [`docs/JUDGING_ALIGNMENT.md`](docs/JUDGING_ALIGNMENT.md) |
+| Submission checklist | [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) |
+| License | [`LICENSE`](LICENSE) (MIT) |
+| Integrations examples | [`integrations/`](integrations/) |
+
+## Architecture
+
+Company Brain sits between agent fleets / the operator UI and Qwen Cloud: FastAPI compiles experience into skills, intercepts decisions with hybrid recall + the deterministic Semantic Applicability Gate (SAG), persists state in MongoDB, and streams updates over SSE.
+
+![Company Brain system architecture](docs/architecture.png)
+
+<details>
+<summary>Mermaid source (same diagram)</summary>
+
+```mermaid
+flowchart LR
+    subgraph Browser["Operator browser"]
+        UI["React + Vite UI<br/>Dashboard, Brain, Intercepts,<br/>Agents, Events, Settings"]
+    end
+
+    subgraph API["FastAPI application (backend/main.py)"]
+        Routes["REST routes<br/>events, decisions, settings, agents"]
+        Agents["Qwen tool-loop agents<br/>Support, Engineering, Product"]
+        MCP["FastMCP server<br/>/mcp/sse"]
+        Compiler["Experience compiler<br/>core/compiler.py"]
+        Interceptor["Hybrid interceptor<br/>core/interceptor.py"]
+        SAG["Semantic Applicability Gate<br/>core/applicability.py"]
+        Propagator["Event propagator<br/>core/propagator.py"]
+        Stream["SSE endpoint<br/>GET /stream"]
+    end
+
+    External["External REST / MCP client"]
+    Mongo[("MongoDB<br/>skills, events, configs, audit logs")]
+    Qwen["Qwen Cloud DashScope<br/>compatible-mode API"]
+
+    UI -->|"REST /api"| Routes
+    UI <-->|"SSE /stream"| Stream
+    External -->|"MCP over SSE"| MCP
+
+    Routes --> Agents
+    Routes --> Interceptor
+    Routes --> Compiler
+    Routes -->|"live config"| Mongo
+    Agents -->|"in-process tool dispatch"| MCP
+    MCP --> Interceptor
+    MCP --> Compiler
+
+    Compiler -->|"read/write skills and events"| Mongo
+    Interceptor -->|"read skills; write intercept_log"| Mongo
+    Interceptor --> SAG
+    SAG -->|"active or suspended"| Interceptor
+    Compiler --> Propagator
+    Interceptor --> Propagator
+    Propagator --> Stream
+
+    Agents -->|"qwen-plus chat + tool calls"| Qwen
+    Compiler -->|"qwen-plus structured compilation"| Qwen
+    Compiler -->|"text-embedding-v3 skill vectors"| Qwen
+    Interceptor -->|"text-embedding-v3 query vector when available"| Qwen
+```
+
+</details>
+
+**SAG flip (demo):** same engineering export decision; live `export_chunk_size_mb` decides the outcome.
+
+| Config | SAG result |
+| ------ | ---------- |
+| `8` MB | `suspended` (`invalidated_if <= 10`) |
+| `25` MB | `auto_execute` (`applies_if > 10`) |
+
+Full sequence diagram and component tables: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## The problem
 
@@ -218,6 +298,7 @@ is optional after this is green.
 | GET    | `/brain/skills/{skill_id}`    | full skill detail                                                   |
 | GET    | `/brain/intercepts`           | intercept audit log                                                 |
 | GET    | `/settings/metrics`           | governance hits, est. tokens saved, intercept breakdown             |
+| GET/POST | `/settings/live-config`     | read/update org live metadata (SAG flip: `export_chunk_size_mb`)    |
 | POST   | `/settings/seed-demo-data`    | idempotent org-scoped seed of the demo skill set (open UI or API key) |
 | POST   | `/agents/{kind}/run`          | run support / engineering / product agent (Chat Completions + MCP)  |
 | GET    | `/sessions/{user_id}`         | sessions for a user (cross-session demo)                            |
