@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Check, ChevronDown, CircleAlert, Clock3, LoaderCircle, Sparkles, UserRound } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Clock3, Database, FileSearch, LoaderCircle, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { createDemoSession, createWorkflowRun, getWorkflowTemplates, postWorkflowOutcome } from "../lib/api"
 import type { DecisionBrief, WorkflowRun, WorkflowTemplate } from "../types/schema"
@@ -49,6 +49,36 @@ function getTemplateId(template: WorkflowTemplate): string {
 
 function sourceName(evidence: Record<string, unknown>): string {
   return String(evidence.source_name ?? evidence.source_type ?? "Source")
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function humanize(value: string): string {
+  return value.replaceAll("_", " ")
+}
+
+function valueText(value: unknown): string {
+  if (typeof value === "boolean") return value ? "true" : "false"
+  if (value === null || value === undefined) return "not reported"
+  return String(value)
+}
+
+function ruleText(rule: unknown): string {
+  const node = asRecord(rule)
+  const operator = Object.keys(node)[0]
+  if (!operator) return "Server-defined rule available in the audit proof."
+  const operands = Array.isArray(node[operator]) ? node[operator] : []
+  if (operator === "and" || operator === "or") {
+    return operands.map(ruleText).filter(Boolean).join(` ${operator.toUpperCase()} `)
+  }
+  if (operands.length === 2 && typeof operands[0] === "string") {
+    const field = humanize(operands[0])
+    const comparator: Record<string, string> = { gte: "at least", lte: "at most", eq: "equal to", gt: "greater than", lt: "less than" }
+    return `${field} is ${comparator[operator] ?? operator} ${valueText(operands[1])}`
+  }
+  return "Server-defined rule available in the audit proof."
 }
 
 export default function Simulation() {
@@ -153,6 +183,8 @@ export default function Simulation() {
         <div className="grid gap-3 md:grid-cols-4">{stages.map((stage, index) => <StageCard key={stage.id} stage={stage} index={index} />)}</div>
       </section>
 
+      {brief && <DecisionTrace run={run} brief={brief} />}
+
       {brief && <section className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <article className="rounded-3xl border border-[#d8d0c2] bg-[#fffcf7] p-6 shadow-[0_18px_55px_rgba(52,45,35,0.07)]"><div className="flex flex-wrap items-center gap-3"><span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${verdictTone(brief.verdict)}`}>{verdictLabel(brief.verdict)}</span><span className="text-xs font-medium text-[#697585]">Backend decision brief</span></div><h2 className="mt-5 text-2xl font-semibold tracking-tight text-[#17212b]">{brief.recommended_next_action ?? "No action returned"}</h2><p className="mt-4 text-sm leading-6 text-[#536170]">{inferenceText(brief)}</p><div className="mt-6 grid gap-3 sm:grid-cols-2"><DecisionCell label="Owner" value={brief.owner ?? "Not reported"} /><DecisionCell label="Live check" value={String((brief.sag_trace as Record<string, unknown>)?.status ?? "not reported").replaceAll("_", " ")} /></div><AuditProof brief={brief} /></article>
         <article className="rounded-3xl border border-[#d7e4df] bg-[#edf8f4] p-6"><div className="flex items-center gap-2 text-[#1d604f]"><UserRound className="h-5 w-5" /><h2 className="font-semibold">Human confirmation</h2></div><p className="mt-3 text-sm leading-6 text-[#3a6559]">Record a sandbox outcome. This proves the approval boundary; it cannot execute an external company action.</p>{confirmed ? <div className="mt-6 flex items-center gap-2 rounded-xl border border-[#2e7763]/25 bg-white/60 px-4 py-3 text-sm font-medium text-[#1d604f]"><Check className="h-4 w-4" />Sandbox outcome recorded</div> : <><label className="mt-5 block text-xs font-bold uppercase tracking-[0.12em] text-[#537267]">Your decision note<textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-2 min-h-28 w-full rounded-xl border border-[#b9d4c9] bg-white px-3 py-3 text-sm font-normal leading-6 text-[#17212b] outline-none focus:border-[#2e7763]" /></label><button type="button" onClick={() => void confirm()} disabled={confirming || !note.trim()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1d604f] px-4 py-3 text-sm font-semibold text-white hover:bg-[#174d40] disabled:opacity-50">{confirming && <LoaderCircle className="h-4 w-4 animate-spin" />}Confirm sandbox action</button></>}</article>
@@ -176,10 +208,62 @@ function DecisionCell({ label, value }: { label: string; value: string }) {
   return <div className="rounded-2xl border border-[#e0d8cb] bg-[#faf7f0] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#75808c]">{label}</p><p className="mt-2 text-sm font-medium leading-5 text-[#17212b]">{value}</p></div>
 }
 
+function DecisionTrace({ brief, run }: { brief: DecisionBrief; run: WorkflowRun | null }) {
+  const evidence = Array.isArray(brief.evidence) ? brief.evidence : []
+  const memories = Array.isArray(brief.memory_refs) ? brief.memory_refs : []
+  const priorMemory = memories.find((memory) => asRecord(memory.provenance).kind === "prior_memory")
+  const compiledMemory = memories.find((memory) => asRecord(memory.provenance).kind === "compiled_event")
+  const provenance = asRecord(compiledMemory?.provenance)
+  const sourceIds = Array.isArray(provenance.source_evidence_ids) ? provenance.source_evidence_ids.map(valueText) : []
+  const sag = asRecord(brief.sag_trace)
+  const liveContext = run?.live_context ?? {}
+  const qwenRan = qwenCompiled(brief)
+
+  return <section className="mt-6 rounded-3xl border border-[#cbd6e8] bg-[#f6f8fe] p-5 shadow-[0_18px_55px_rgba(47,94,235,0.07)] md:p-7" aria-label="Real decision trace">
+    <div className="max-w-3xl"><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#2f5eeb]">Real decision trace</p><h2 className="mt-2 text-2xl font-semibold tracking-tight text-[#17212b]">What each layer received — and what it passed on.</h2><p className="mt-2 text-sm leading-6 text-[#596778]">These are values returned by the current backend run. Qwen creates cited memory; deterministic SAG alone decides whether the action is safe.</p></div>
+    <div className="mt-6 space-y-3">
+      <TraceLayer number="01" icon={<FileSearch className="h-4 w-4" />} title="Evidence normalized" from="Company sources" to="Qwen compiler" tone="blue">
+        <div className="space-y-2">{evidence.map((item, index) => { const record = item as unknown as Record<string, unknown>; return <div key={String(record.evidence_id ?? index)} className="rounded-xl border border-[#dbe3f2] bg-white px-3 py-3"><div className="flex flex-wrap items-center gap-2 text-xs"><span className="font-semibold text-[#263544]">{sourceName(record)}</span><span className="text-[#718096]">{String(record.external_id ?? record.evidence_id ?? "source id not reported")}</span><span className="ml-auto rounded-full bg-[#edf2fb] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#49617f]">{humanize(String(record.freshness ?? "unknown"))}</span></div><p className="mt-2 text-xs leading-5 text-[#536170]">{String(record.excerpt ?? "No source excerpt returned.")}</p></div> })}</div>
+        <TracePass text={"Passed to Qwen: " + evidence.length + " normalized source record" + (evidence.length === 1 ? "" : "s") + " with IDs, timestamps, freshness, and excerpts."} />
+      </TraceLayer>
+
+      <TraceLayer number="02" icon={<Database className="h-4 w-4" />} title={qwenRan ? "Qwen compiles cited memory" : "Deterministic fallback"} from="Normalized evidence" to={qwenRan ? "Auditable memory candidate" : "Fallback statement"} tone="violet">
+        <div className="rounded-xl border border-[#e0d8ec] bg-white p-3"><p className="text-sm leading-6 text-[#364256]">{inferenceText(brief)}</p>{compiledMemory?.summary && <p className="mt-3 border-t border-[#ece8f2] pt-3 text-xs leading-5 text-[#596778]"><span className="font-bold uppercase tracking-[0.12em] text-[#6a578b]">Memory candidate</span><br />{compiledMemory.summary}</p>}</div>
+        <TracePass text={qwenRan && sourceIds.length > 0 ? "Qwen provenance links this memory to: " + sourceIds.join(", ") + "." : qwenRan ? "No durable memory was added; this sandbox result remains ephemeral." : "Qwen was unavailable, so the backend returned its stated deterministic fallback instead of claiming a compiled memory."} />
+      </TraceLayer>
+
+      <TraceLayer number="03" icon={<ShieldCheck className="h-4 w-4" />} title="SAG checks live reality" from="Server policy + live context" to={"Verdict: " + verdictLabel(brief.verdict)} tone="amber">
+        <div className="grid gap-2 sm:grid-cols-2">{Object.entries(liveContext).map(([key, value]) => <div key={key} className="rounded-xl border border-[#eadfc9] bg-white px-3 py-2"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#8a7352]">{humanize(key)}</p><p className="mt-1 text-sm font-semibold text-[#263544]">{valueText(value)}</p></div>)}</div>
+        <p className="mt-3 rounded-xl border border-[#eadfc9] bg-[#fffaf0] px-3 py-2 text-xs leading-5 text-[#5e574c]"><span className="font-semibold text-[#4d4333]">Rule evaluated:</span> {ruleText(sag.rule)}</p>
+        <TracePass text={(priorMemory?.summary ? "Prior policy memory is shown for context. " : "") + "SAG receives only the server-defined rule and the live values above — not Qwen's prose — then returns " + verdictLabel(brief.verdict) + "."} />
+      </TraceLayer>
+
+      <TraceLayer number="04" icon={<UserRound className="h-4 w-4" />} title="Human-owned decision brief" from="SAG verdict" to="Accountable owner" tone="green">
+        <div className="grid gap-2 sm:grid-cols-[0.6fr_1.4fr]"><div className="rounded-xl border border-[#cce3da] bg-white px-3 py-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#4c776b]">Owner</p><p className="mt-1 text-sm font-semibold text-[#263544]">{brief.owner ?? "Not reported"}</p></div><div className="rounded-xl border border-[#cce3da] bg-white px-3 py-3"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#4c776b]">Recommended action</p><p className="mt-1 text-sm leading-5 text-[#263544]">{brief.recommended_next_action ?? "No action returned"}</p></div></div>
+        <TracePass text="The result is a recommendation. The next button records human confirmation only; no refund, release, or rollout is executed." />
+      </TraceLayer>
+    </div>
+  </section>
+}
+
+function TraceLayer({ number, icon, title, from, to, tone, children }: { number: string; icon: React.ReactNode; title: string; from: string; to: string; tone: "blue" | "violet" | "amber" | "green"; children: React.ReactNode }) {
+  const colors = {
+    blue: "border-[#cbd6e8] bg-[#fbfcff] text-[#2f5eeb]",
+    violet: "border-[#ded6e9] bg-[#fdfbff] text-[#6a578b]",
+    amber: "border-[#eadfc9] bg-[#fffdf8] text-[#946615]",
+    green: "border-[#cce3da] bg-[#fbfefc] text-[#1d7660]",
+  }
+  return <article className={"rounded-2xl border p-4 md:p-5 " + colors[tone]}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="flex items-start gap-3"><span className="mt-0.5 text-[10px] font-bold tracking-[0.15em]">{number}</span><div><div className="flex items-center gap-2"><span>{icon}</span><h3 className="font-semibold text-[#17212b]">{title}</h3></div><p className="mt-1 text-xs text-[#627083]">{from} <ArrowRight className="mx-1 inline h-3 w-3" /> {to}</p></div></div><span className="rounded-full border border-current/20 bg-white/70 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]">Backend response</span></div><div className="mt-4">{children}</div></article>
+}
+
+function TracePass({ text }: { text: string }) {
+  return <p className="mt-3 border-t border-current/10 pt-3 text-xs leading-5 text-[#536170]"><span className="font-bold text-[#263544]">Handoff:</span> {text}</p>
+}
+
 function AuditProof({ brief }: { brief: DecisionBrief }) {
   const evidence = Array.isArray(brief.evidence) ? brief.evidence : []
   const memories = Array.isArray(brief.memory_refs) ? brief.memory_refs : []
   return <details className="group mt-6 rounded-2xl border border-[#ded7cb] bg-[#faf7f0]"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 text-sm font-semibold text-[#263544]">Audit proof<ChevronDown className="h-4 w-4 text-[#637080] transition group-open:rotate-180" /></summary><div className="space-y-5 border-t border-[#e5ddd0] p-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#75808c]">Evidence</p><div className="mt-2 space-y-2">{evidence.map((item, index) => { const record = item as unknown as Record<string, unknown>; return <div key={String(record.evidence_id ?? index)} className="rounded-xl bg-white p-3 text-xs leading-5 text-[#52606d]"><span className="font-semibold text-[#253443]">{sourceName(record)}</span> · {String(record.excerpt ?? "No excerpt")}</div> })}</div></div><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#75808c]">Memory and SAG</p><p className="mt-2 text-xs leading-5 text-[#52606d]">{inferenceText(brief)}</p>{memories.map((memory, index) => <p key={memory.memory_id ?? index} className="mt-2 rounded-xl bg-white p-3 text-xs leading-5 text-[#52606d]">{memory.summary}</p>)}<pre className="mt-3 overflow-auto rounded-xl bg-[#17212b] p-3 text-[11px] leading-5 text-[#d9e2ec]">{JSON.stringify(brief.sag_trace, null, 2)}</pre></div></div></details>
 }
 
-export { AuditProof, PageFrame, asRun, briefFor, inferenceText, verdictLabel, verdictTone }
+export { AuditProof, DecisionTrace, PageFrame, asRun, briefFor, inferenceText, verdictLabel, verdictTone }

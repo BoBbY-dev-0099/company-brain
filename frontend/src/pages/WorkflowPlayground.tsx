@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Check, LoaderCircle, RotateCcw, ShieldCheck } from "lucide-react"
 import { createDemoSession, createWorkflowRun, getWorkflowTemplates, postWorkflowOutcome, type WorkflowEvidenceInput } from "../lib/api"
 import type { WorkflowRun, WorkflowTemplate } from "../types/schema"
-import { AuditProof, PageFrame, asRun, briefFor, inferenceText, verdictLabel, verdictTone } from "./Simulation"
+import { AuditProof, DecisionTrace, PageFrame, asRun, briefFor, inferenceText, verdictLabel, verdictTone } from "./Simulation"
 
 type EditableEvidence = WorkflowEvidenceInput & { key: string }
 
@@ -134,6 +134,7 @@ export default function WorkflowPlayground() {
         <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[#e5ddd0] pt-6"><button type="button" onClick={() => void evaluate()} disabled={running} className="inline-flex items-center gap-2 rounded-xl bg-[#17212b] px-5 py-3 text-sm font-semibold text-[#fffdf7] hover:bg-[#293846] disabled:opacity-50">{running ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}{running ? "Evaluating with Qwen + SAG" : "Evaluate with Company Brain"}</button><span className="text-xs text-[#6b7280]">Private sandbox · expires after 60 minutes · never changes canonical memory</span></div>
       </>}
     </section>
+    {brief && <DecisionTrace run={run} brief={brief} />}
     {brief && <section className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]"><article className="rounded-3xl border border-[#d8d0c2] bg-[#fffcf7] p-6 shadow-[0_18px_55px_rgba(52,45,35,0.07)]"><span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${verdictTone(brief.verdict)}`}>{verdictLabel(brief.verdict)}</span><h2 className="mt-5 text-2xl font-semibold tracking-tight text-[#17212b]">{brief.recommended_next_action ?? "No action returned"}</h2><p className="mt-4 text-sm leading-6 text-[#536170]">{inferenceText(brief)}</p><AuditProof brief={brief} /></article><article className="rounded-3xl border border-[#d7e4df] bg-[#edf8f4] p-6"><h2 className="font-semibold text-[#1d604f]">Human confirmation</h2><p className="mt-3 text-sm leading-6 text-[#3a6559]">The owner is <strong>{brief.owner ?? "not reported"}</strong>. This confirmation records only a sandbox outcome.</p>{confirmed ? <div className="mt-6 flex items-center gap-2 rounded-xl border border-[#2e7763]/25 bg-white/60 px-4 py-3 text-sm font-medium text-[#1d604f]"><Check className="h-4 w-4" />Sandbox outcome recorded</div> : <><textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-5 min-h-28 w-full rounded-xl border border-[#b9d4c9] bg-white px-3 py-3 text-sm leading-6 text-[#17212b] outline-none focus:border-[#2e7763]" /><button type="button" onClick={() => void confirm()} disabled={confirming || !note.trim()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1d604f] px-4 py-3 text-sm font-semibold text-white hover:bg-[#174d40] disabled:opacity-50">{confirming && <LoaderCircle className="h-4 w-4 animate-spin" />}Confirm sandbox action</button></>}</article></section>}
   </PageFrame>
 }

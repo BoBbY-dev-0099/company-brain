@@ -150,6 +150,8 @@ export type MemoryReference = {
   version?: string | number
   summary?: string
   source?: string
+  is_ephemeral?: boolean
+  provenance?: Record<string, unknown>
   [key: string]: unknown
 }
 
@@ -196,6 +198,7 @@ export type WorkflowRun = {
   is_demo_fixture?: boolean
   is_judge_sandbox?: boolean
   expires_at?: string | number
+  live_context?: Record<string, unknown>
   mode?: string
   created_at?: string | number
   updated_at?: string | number
