@@ -57,7 +57,10 @@ mkdir -p secrets
 chmod 700 secrets || true
 
 COMPOSE=(docker compose -f docker-compose.yml -f deploy/docker-compose.tls.yml)
-"${COMPOSE[@]}" --profile full up --build -d
+# Force recreation so newly published ports (notably 443 during the first TLS
+# rollout) are applied even if Compose considers the existing service image
+# current.
+"${COMPOSE[@]}" --profile full up --build -d --force-recreate
 "${COMPOSE[@]}" --profile full ps
 
 PUBLIC_IP="$(curl -s --max-time 5 ifconfig.me || hostname -I | awk '{print $1}')"
