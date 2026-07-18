@@ -80,8 +80,8 @@ export default function Sidebar() {
       <div className="space-y-3">
         <BrainHealthStatus />
         <div className="text-[#7c7c8a] text-xs border-t border-[#1f1f22] pt-3 space-y-1">
-          <div className="font-mono">org: judge-demo-v1</div>
-          <div>canonical demo · human-approved actions</div>
+          <div className="font-mono">fixture: judge-demo-v1</div>
+          <div>canonical evidence → sandbox replays</div>
         </div>
       </div>
     </aside>
@@ -100,7 +100,7 @@ export default function Sidebar() {
           <Menu className="w-5 h-5" />
         </button>
         <span className="text-sm font-semibold text-[#e4e4e7]">Company Brain</span>
-        <span className="ml-auto font-mono text-[10px] text-[#7c7c8a]">judge-demo-v1</span>
+        <span className="ml-auto font-mono text-[10px] text-[#7c7c8a]">fixture v1</span>
       </div>
 
       {/* Desktop sticky sidebar */}

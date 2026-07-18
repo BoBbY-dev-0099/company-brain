@@ -298,7 +298,7 @@ function WorkflowCard({
           className="inline-flex items-center gap-1.5 rounded bg-[#22c55e] px-3 py-2 text-xs font-semibold text-[#050505] transition-colors hover:bg-[#4ade80] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-          {run ? "Re-run fixture" : "Run fixture"}
+          Replay in sandbox
         </button>
         <button
           type="button"
