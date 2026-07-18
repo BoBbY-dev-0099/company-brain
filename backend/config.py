@@ -9,7 +9,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    QWEN_API_KEY: str = ""
+    QWEN_API_KEY: str = os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY", "")
     QWEN_BASE_URL: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     # Embeddings may need a different compatible-mode endpoint than chat completions.
     QWEN_EMBEDDING_BASE_URL: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
@@ -38,6 +38,28 @@ class Settings(BaseSettings):
     RELEVANCE_FLOOR: float = float(os.getenv("RELEVANCE_FLOOR", "0.35"))
     CONFIDENCE_INCREMENT: float = 0.05
     EMBEDDING_DIMENSIONS: int = 1024
+
+    # TDX attestation (Alibaba Confidential VM). Soft-fails to RSA audit.
+    TDX_BINARY_PATH: str = os.getenv(
+        "TDX_BINARY_PATH",
+        "/opt/alibaba/tdx-quote-generation-sample/app",
+    )
+    TDX_TIMEOUT: float = float(os.getenv("TDX_TIMEOUT", "10"))
+
+    # RSA decision-audit fallback keys
+    AUDIT_PRIVATE_KEY_PATH: str = os.getenv(
+        "AUDIT_PRIVATE_KEY_PATH",
+        "secrets/audit_private.pem",
+    )
+    AUDIT_PUBLIC_KEY_PATH: str = os.getenv(
+        "AUDIT_PUBLIC_KEY_PATH",
+        "secrets/audit_public.pem",
+    )
+
+    # Optional real GitHub webhook connector
+    GITHUB_WEBHOOK_SECRET: str = os.getenv("GITHUB_WEBHOOK_SECRET", "")
+    GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
+    GITHUB_REPOS: str = os.getenv("GITHUB_REPOS", "")
 
 
 settings = Settings()

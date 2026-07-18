@@ -11,6 +11,9 @@ import {
 import { apiGet, apiPost } from "../lib/api"
 import { useSSE } from "../hooks/useSSE"
 import InterceptList, { type Intercept } from "../components/InterceptList"
+import SAGToggle from "../components/SAGToggle"
+import EvalTrace from "../components/EvalTrace"
+import TDXBadge, { type IntegrityInfo } from "../components/TDXBadge"
 
 interface Skill {
   skill_id: string
@@ -60,6 +63,9 @@ export default function Brain() {
   const [sagBadge, setSagBadge] = useState<SagBadge>("auto_execute")
   const [sagReason, setSagReason] = useState<string>("")
   const [toggleBusy, setToggleBusy] = useState(false)
+  const [sagTrace, setSagTrace] = useState<any>(null)
+  const [sagMs, setSagMs] = useState<number | null>(null)
+  const [integrity, setIntegrity] = useState<IntegrityInfo | null>(null)
 
   const loadSkills = useCallback(async () => {
     try {
@@ -151,6 +157,23 @@ export default function Brain() {
         const next = Number(resp?.metadata?.export_chunk_size_mb ?? chunk)
         setChunkMb(next)
         applySagFromApi(next, resp?.sag)
+        try {
+          const evalResp = await apiPost("/sag/evaluate", {
+            skill_id: "data-export-large-file-timeout",
+            metadata: { export_chunk_size_mb: next },
+            attest: true,
+          })
+          setSagTrace(evalResp?.trace ?? null)
+          setSagMs(
+            typeof evalResp?.evaluated_in_ms === "number" ? evalResp.evaluated_in_ms : null,
+          )
+          setIntegrity((evalResp?.integrity as IntegrityInfo) ?? null)
+          if (evalResp?.decision) {
+            setSagBadge(evalResp.decision === "suspended" ? "suspended" : "auto_execute")
+          }
+        } catch {
+          /* live-config already flipped; trace is optional */
+        }
         await loadSkills()
       } catch (e: any) {
         setDemoStatus(`Error: ${e.message}`)
@@ -287,25 +310,22 @@ export default function Brain() {
             <span className="text-5xl font-bold font-mono text-[#e4e4e7]">{chunkMb}</span>
             <span className="text-[#7c7c8a]">MB chunk</span>
           </div>
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={() => switchConfig(8)}
-              disabled={toggleBusy}
-              className="w-full py-3 rounded-lg text-sm font-semibold border border-[#ef4444]/50 text-[#fca5a5] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 disabled:opacity-50"
-            >
-              Switch to 8MB
-            </button>
-            <button
-              onClick={() => switchConfig(25)}
-              disabled={toggleBusy}
-              className="w-full py-3 rounded-lg text-sm font-semibold border border-[#22c55e]/50 text-[#86efac] bg-[#22c55e]/10 hover:bg-[#22c55e]/20 disabled:opacity-50"
-            >
-              Switch to 25MB
-            </button>
+          <div className="rounded-lg bg-white px-2 py-3">
+            <SAGToggle
+              chunkMb={chunkMb}
+              sagBadge={sagBadge}
+              busy={toggleBusy}
+              onToggle={(n) => void switchConfig(n)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <TDXBadge integrity={integrity} />
+            <span className="text-[10px] text-[#7c7c8a]">keys 8 / 2</span>
           </div>
           {demoStatus && (
             <p className="text-[11px] font-mono text-[#a1a1aa] break-words">{demoStatus}</p>
           )}
+          <EvalTrace trace={sagTrace} evaluatedInMs={sagMs} />
         </div>
 
         <div

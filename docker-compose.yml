@@ -41,6 +41,10 @@ services:
       MONGODB_DB_NAME: companybrain
       HOST: 0.0.0.0
       PORT: "8000"
+      AUDIT_PRIVATE_KEY_PATH: /opt/company-brain/secrets/audit_private.pem
+      AUDIT_PUBLIC_KEY_PATH: /opt/company-brain/secrets/audit_public.pem
+    volumes:
+      - audit_secrets:/opt/company-brain/secrets
     depends_on:
       mongodb:
         condition: service_healthy
@@ -62,3 +66,4 @@ services:
 volumes:
   mongodb_data:
   mongodb_config:
+  audit_secrets:

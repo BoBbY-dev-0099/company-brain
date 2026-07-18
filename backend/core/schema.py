@@ -169,6 +169,9 @@ class DecisionCheckResponse(BaseModel):
     applicability_status: Optional[str] = None
     suspension_reason: Optional[str] = None
     suspension_evidence: Optional[dict] = None
+    sag_trace: Optional[dict] = None
+    sag_evaluated_in_ms: Optional[float] = None
+    integrity: Optional[dict] = None
 
 
 class AgentRunRequest(BaseModel):

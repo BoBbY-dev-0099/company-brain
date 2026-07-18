@@ -3,6 +3,7 @@
 .env.local
 *.pem
 *.key
+secrets/
 e2e_key*.txt
 e2e_org*_key.txt
 org2_key.txt

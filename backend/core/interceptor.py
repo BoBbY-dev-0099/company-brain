@@ -186,6 +186,22 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
     sag_status = sag_result["status"]
     sag_reason = sag_result["reason"]
     sag_evidence = sag_result["evidence"]
+    sag_trace = sag_result.get("trace")
+    sag_ms = sag_result.get("evaluated_in_ms")
+
+    async def _integrity(decision: str) -> dict | None:
+        try:
+            from backend.services import decision_integrity
+
+            return await decision_integrity.attest_decision(
+                org_id=req.org_id,
+                skill_id=top_skill.skill_id,
+                metadata=live_context,
+                decision=decision,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("decision integrity attach failed: %s", exc)
+            return None
 
     if sag_status == ApplicabilityStatus.suspended:
         top_skill.provenance.applicability_status = ApplicabilityStatus.suspended
@@ -193,6 +209,7 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
         top_skill.provenance.last_invalid_reason = sag_reason
         await store.save_skill(top_skill, org_id=req.org_id)
 
+        integrity = await _integrity("suspended")
         await store.log_intercept(
             agent_id=req.agent_id,
             decision_text=req.decision_text,
@@ -211,6 +228,8 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
                     "skill_id": top_skill.skill_id,
                     "reason": sag_reason,
                     "evidence": sag_evidence,
+                    "trace": sag_trace,
+                    "integrity": integrity,
                 },
             ),
             org_id=req.org_id,
@@ -229,6 +248,9 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
             applicability_status=ApplicabilityStatus.suspended.value,
             suspension_reason=sag_reason,
             suspension_evidence=sag_evidence,
+            sag_trace=sag_trace,
+            sag_evaluated_in_ms=sag_ms,
+            integrity=integrity,
         )
 
     # Reactivate a skill that was previously suspended but is now applicable.
@@ -254,6 +276,11 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
         top_skill = reinforced
         skill_conf = top_skill.provenance.confidence
 
+    decision_label = (
+        "auto_execute" if result == InterceptResult.AUTO_EXECUTE else "intercepted"
+    )
+    integrity = await _integrity(decision_label)
+
     await store.log_intercept(
         agent_id=req.agent_id,
         decision_text=req.decision_text,
@@ -261,6 +288,7 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
         result=result,
         confidence=skill_conf,
         org_id=req.org_id,
+        applicability_status=ApplicabilityStatus.active.value,
     )
 
     return DecisionCheckResponse(
@@ -274,6 +302,10 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
             f"matched {top_skill.skill_id} | final_score={final:.2f} | "
             f"skill_conf={skill_conf:.2f}"
         ),
+        applicability_status=ApplicabilityStatus.active.value,
+        sag_trace=sag_trace,
+        sag_evaluated_in_ms=sag_ms,
+        integrity=integrity,
     )
 
 

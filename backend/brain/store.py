@@ -88,10 +88,15 @@ async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     await db.sessions.create_index([("user_id", ASCENDING), ("last_updated", DESCENDING)])
 
     await db.intercept_log.create_index([("agent_id", ASCENDING), ("occurred_at", DESCENDING)])
+    await db.intercept_log.create_index([("org_id", ASCENDING), ("occurred_at", DESCENDING)])
 
     await db["api_keys"].create_index([("key_id", ASCENDING)], unique=True)
     await db["api_keys"].create_index([("api_key", ASCENDING)], unique=True)
     await db["api_keys"].create_index([("org_id", ASCENDING)])
+
+    await db.tdx_quotes.create_index([("org_id", ASCENDING), ("created_at", DESCENDING)])
+    await db.tdx_quotes.create_index([("skill_id", ASCENDING), ("created_at", DESCENDING)])
+    await db.audit_log.create_index([("org_id", ASCENDING), ("skill_id", ASCENDING), ("created_at", DESCENDING)])
 
 
 def _compute_expires_at(decay_rate: str) -> datetime | None:
@@ -496,6 +501,63 @@ async def revoke_api_key(key_id: str, org_id: str) -> bool:
         {"$set": {"revoked_at": utc_now()}},
     )
     return result.modified_count > 0
+
+
+async def save_tdx_quote(doc: dict[str, Any]) -> str:
+    db = get_db()
+    result = await db.tdx_quotes.insert_one(doc)
+    return str(result.inserted_id)
+
+
+async def get_tdx_quote(quote_id: str, org_id: str | None = None) -> dict[str, Any] | None:
+    from bson import ObjectId
+
+    db = get_db()
+    query: dict[str, Any] = {"_id": ObjectId(quote_id)}
+    if org_id:
+        query["org_id"] = org_id
+    doc = await db.tdx_quotes.find_one(query)
+    if not doc:
+        return None
+    doc["quote_id"] = str(doc.pop("_id"))
+    return doc
+
+
+async def save_audit_log(doc: dict[str, Any]) -> str:
+    db = get_db()
+    result = await db.audit_log.insert_one(doc)
+    return str(result.inserted_id)
+
+
+async def list_audit_chain(skill_id: str, org_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    db = get_db()
+    cursor = (
+        db.audit_log.find({"skill_id": skill_id, "org_id": org_id})
+        .sort("created_at", DESCENDING)
+        .limit(limit)
+    )
+    out: list[dict[str, Any]] = []
+    async for d in cursor:
+        d["audit_id"] = str(d.pop("_id"))
+        out.append(d)
+    return out
+
+
+async def upsert_public_audit_key(org_id: str, fingerprint: str, pem: str) -> None:
+    db = get_db()
+    await db.config.update_one(
+        {"org_id": org_id, "key": "audit_public_key"},
+        {
+            "$set": {
+                "org_id": org_id,
+                "key": "audit_public_key",
+                "fingerprint": fingerprint,
+                "pem": pem,
+                "updated_at": utc_now(),
+            }
+        },
+        upsert=True,
+    )
 
 
 async def db_health() -> dict[str, Any]:

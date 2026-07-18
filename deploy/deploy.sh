@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Deploy Company Brain on Alibaba Cloud ECS (Docker Compose full profile).
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/company-brain}"
+REPO_URL="${REPO_URL:-https://github.com/BoBbY-dev-0099/company-brain.git}"
+BRANCH="${BRANCH:-main}"
+
+echo "==> Company Brain ECS deploy"
+echo "    APP_DIR=$APP_DIR"
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "==> Installing Docker"
+  curl -fsSL https://get.docker.com | sh
+  systemctl enable --now docker
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo "==> Docker Compose plugin missing"
+  exit 1
+fi
+
+mkdir -p "$(dirname "$APP_DIR")"
+if [ ! -d "$APP_DIR/.git" ]; then
+  git clone -b "$BRANCH" "$REPO_URL" "$APP_DIR"
+else
+  git -C "$APP_DIR" fetch origin "$BRANCH"
+  git -C "$APP_DIR" checkout "$BRANCH"
+  git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
+fi
+
+cd "$APP_DIR"
+
+if [ ! -f .env ]; then
+  if [ -f .env.example ]; then
+    cp .env.example .env
+    echo "Created .env from .env.example — set QWEN_API_KEY before serving traffic."
+  else
+    echo "Missing .env" >&2
+    exit 1
+  fi
+fi
+
+mkdir -p secrets
+chmod 700 secrets || true
+
+docker compose --profile full up --build -d
+docker compose --profile full ps
+
+PUBLIC_IP="$(curl -s --max-time 5 ifconfig.me || hostname -I | awk '{print $1}')"
+echo ""
+echo "App running at http://${PUBLIC_IP}"
+echo "Health: curl -s http://127.0.0.1/api/health"
+echo "TDX guest: ls -l /dev/tdx_guest 2>/dev/null || echo RSA fallback"

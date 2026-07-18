@@ -329,8 +329,23 @@ RUN_MONGO_TESTS=1 pytest -x          # full suite incl. store integration
 
 ## Deploy (Alibaba Cloud ECS)
 
+**Recommended (Docker Compose):**
+
 ```bash
-# After `git clone` + venv setup:
+# On the ECS instance (Ubuntu / Alibaba Cloud Linux):
+sudo bash deploy/deploy.sh
+# then edit /opt/company-brain/.env → set QWEN_API_KEY (or DASHSCOPE_API_KEY)
+sudo docker compose --profile full up -d --build
+curl http://127.0.0.1/api/health
+```
+
+Current demo host (Singapore ECS `ecs.r9i.xlarge`, public): `http://8.218.174.77`  
+This instance family is **not** TDX-capable — decisions use **RSA-PSS audit fallback**.  
+For hardware TDX quotes, use `g7t` / `g8i` Confidential VM + `/dev/tdx_guest`.
+
+**Bare-metal systemd alternative:**
+
+```bash
 sudo cp deploy/companybrain.service /etc/systemd/system/
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/companybrain
 sudo ln -sf /etc/nginx/sites-available/companybrain /etc/nginx/sites-enabled/
@@ -341,6 +356,16 @@ sudo nginx -t && sudo systemctl reload nginx
 
 The nginx config disables proxy buffering on `/stream` and `/mcp/sse` —
 without that SSE events are batched and the UI looks frozen.
+
+### Integrity APIs
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `POST /sag/evaluate` | SAG evaluate + AST trace + integrity attach |
+| `GET /benchmark/sag` | p50/p95/p99 SAG latency vs LLM baseline |
+| `POST /attestation/quote` | TDX quote (503 → RSA fallback on non-TDX hosts) |
+| `POST /audit/sign` · `GET /audit/public-key` | RSA decision audit |
+| `POST /integrations/github/pr` | Real GitHub merged-PR → skill compile |
 
 ## Notes on Qwen
 

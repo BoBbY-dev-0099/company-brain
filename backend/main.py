@@ -153,6 +153,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         app.state.embedding_healthy = True
 
+    import os
+
+    from backend.services import rsa_audit, tdx_attestation
+
+    if tdx_attestation.tdx_guest_present():
+        logger.info("TDX_READY: Confidential VM active")
+        app.state.tdx_ready = True
+    else:
+        logger.info("TDX_UNAVAILABLE: Running in standard mode, RSA fallback enabled")
+        app.state.tdx_ready = False
+    try:
+        rsa_audit.ensure_keys()
+        await store.upsert_public_audit_key(
+            settings.DEMO_ORG_ID,
+            rsa_audit.public_key_fingerprint(),
+            rsa_audit.public_key_pem(),
+        )
+        logger.info("RSA audit keys ready (fingerprint=%s)", rsa_audit.public_key_fingerprint()[:16])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("RSA audit key init failed: %s", exc)
+
     _ttl_task = asyncio.create_task(_ttl_sweeper())
     _keepalive_task = asyncio.create_task(_keepalive_loop())
 
@@ -190,13 +211,37 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.middleware("http")(auth_middleware)
 
+from backend.routers import attestation as attestation_router
+from backend.routers import audit as audit_router
+from backend.routers import benchmark as benchmark_router
+from backend.routers import github_integration as github_router
+from backend.routers import sag as sag_router
+
+app.include_router(attestation_router.router)
+app.include_router(audit_router.router)
+app.include_router(benchmark_router.router)
+app.include_router(github_router.router)
+app.include_router(sag_router.router)
+
 # Register this concrete endpoint before the /mcp sub-application. Starlette
 # dispatches in registration order, so placing it after the mount makes the
 # sub-application consume /mcp/attestation and respond 404.
 @app.get("/mcp/attestation")
 async def get_attestation(request: Request) -> dict[str, Any]:
     _get_org_id(request)
-    return brain_tools.attestation()
+    from backend.services import tdx_attestation
+
+    base = brain_tools.attestation()
+    base["tdx_guest"] = tdx_attestation.tdx_guest_present()
+    base["mode"] = "tdx" if getattr(request.app.state, "tdx_ready", False) else "rsa_fallback"
+    base["attestation_verified"] = bool(getattr(request.app.state, "tdx_ready", False))
+    if not base["attestation_verified"]:
+        base["narrative"] = (
+            "TDX guest device not present on this host. Decisions are integrity-protected "
+            "with RSA-PSS-SHA256 audit signatures (fallback). Deploy on Alibaba g7t/g8i "
+            "Confidential VM for hardware TDX quotes."
+        )
+    return base
 
 # Mount the FastMCP server. FastMCP exposes /sse and /messages relative to the
 # mount point; mounting at /mcp gives /mcp/sse externally (matches MCP_SERVER_URL).
