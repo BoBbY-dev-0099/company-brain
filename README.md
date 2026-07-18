@@ -1,12 +1,15 @@
 # Company Brain
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Track](https://img.shields.io/badge/Track-MemoryAgent-22c55e)](HACKATHON_WRITEUP.md)
+
 Operating Memory Primitive for agent fleets — Qwen Cloud Global AI Hackathon 2026 (MemoryAgent track).
 
 > **Most agents remember. Company Brain knows when to stop trusting what it remembers.**
 
 **Judges / 30s demo:** open the UI → **Brain** → ① Config = 8MB (**suspended**) → ② Config = 25MB (**auto_execute**).  
 Open UI uses org `integrations-demo` (no login).  
-**Live ECS:** http://8.218.174.77 · Writeup: [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md)
+**Live ECS:** http://8.218.174.77 · Writeup: [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) · **License:** [MIT](LICENSE)
 
 ## Submission pack (for judges)
 
