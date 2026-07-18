@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react"
-import { useAuth } from "@clerk/clerk-react"
 import {
   Brain as BrainIcon,
   CheckCircle,
@@ -39,21 +38,28 @@ function normalizeSkill(raw: any): Skill {
   }
 }
 
+type SagBadge = "suspended" | "auto_execute" | "unknown"
+
+function expectedBadge(chunk: number): SagBadge {
+  return chunk <= 10 ? "suspended" : "auto_execute"
+}
+
 export default function Brain() {
   const [activeTab, setActiveTab] = useState("skills")
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Skill | null>(null)
   const [demoStatus, setDemoStatus] = useState<string>("")
-  const [demoBusy, setDemoBusy] = useState(false)
   const [sseUrl, setSseUrl] = useState<string | null>(null)
   const [decisions, setDecisions] = useState<Intercept[]>([])
   const [decisionsLoading, setDecisionsLoading] = useState(false)
   const [attestation, setAttestation] = useState<any>(null)
   const [attestationLoading, setAttestationLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-
-  const { getToken } = useAuth()
+  const [chunkMb, setChunkMb] = useState(25)
+  const [sagBadge, setSagBadge] = useState<SagBadge>("auto_execute")
+  const [sagReason, setSagReason] = useState<string>("")
+  const [toggleBusy, setToggleBusy] = useState(false)
 
   const loadSkills = useCallback(async () => {
     try {
@@ -61,7 +67,13 @@ export default function Brain() {
       const normalized = (data.skills || []).map(normalizeSkill)
       setSkills(normalized)
       setSelected((prev) => {
-        if (!prev) return prev
+        if (!prev) {
+          return (
+            normalized.find((s: Skill) => s.skill_id === "data-export-large-file-timeout") ??
+            normalized[0] ??
+            null
+          )
+        }
         return normalized.find((s: Skill) => s.skill_id === prev.skill_id) ?? prev
       })
     } catch {
@@ -71,50 +83,152 @@ export default function Brain() {
     }
   }, [])
 
-  useEffect(() => {
-    loadSkills()
-  }, [loadSkills])
-
-  const handleSSE = useCallback((name: string, data: any) => {
-    const skillId = data?.skill_id as string | undefined
-    if (!skillId) return
-
-    if (name === "skill_suspended") {
-      const patch = {
-        applicability_status: "suspended" as const,
-        last_invalid_reason: (data.reason as string) ?? null,
-      }
-      setSkills((prev) =>
-        prev.map((s) => (s.skill_id === skillId ? { ...s, ...patch } : s)),
+  const applySagFromApi = useCallback((chunk: number, sag: any | null | undefined) => {
+    if (!sag) {
+      setSagBadge(expectedBadge(chunk))
+      setSagReason(
+        chunk <= 10
+          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
+          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`,
       )
-      setSelected((prev) => (prev?.skill_id === skillId ? { ...prev, ...patch } : prev))
       return
     }
+    const suspended =
+      sag.result === "suspended" || sag.applicability_status === "suspended"
+    setSagBadge(suspended ? "suspended" : "auto_execute")
+    setSagReason(
+      sag.suspension_reason ||
+        sag.reason ||
+        (suspended
+          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
+          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`),
+    )
+    setDemoStatus(
+      `${chunk}MB → ${sag.result || "—"} (${sag.applicability_status || "active"}) · skill: ${
+        sag.skill_id || "data-export-large-file-timeout"
+      }`,
+    )
+  }, [])
 
-    if (name === "skill_reinforced" && data.applicability_status === "active") {
-      const patch = {
-        applicability_status: "active" as const,
-        last_invalid_reason: null,
-      }
-      setSkills((prev) =>
-        prev.map((s) => (s.skill_id === skillId ? { ...s, ...patch } : s)),
+  const loadLiveConfig = useCallback(async () => {
+    try {
+      const data = await apiGet("/settings/live-config")
+      const chunk = Number(data?.metadata?.export_chunk_size_mb ?? 25)
+      setChunkMb(chunk)
+      setSagBadge(expectedBadge(chunk))
+      setSagReason(
+        chunk <= 10
+          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
+          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`,
       )
-      setSelected((prev) => (prev?.skill_id === skillId ? { ...prev, ...patch } : prev))
+    } catch {
+      setChunkMb(25)
+      setSagBadge("auto_execute")
     }
   }, [])
 
   useEffect(() => {
-    let active = true
-    getToken()
-      .then((token) => {
-        if (!active || !token) return
-        setSseUrl(`/stream?jwt=${encodeURIComponent(token)}`)
-      })
-      .catch(() => setSseUrl(null))
-    return () => {
-      active = false
+    loadSkills()
+    loadLiveConfig()
+  }, [loadSkills, loadLiveConfig])
+
+  const switchConfig = useCallback(
+    async (chunk: number) => {
+      // Optimistic UI — instant flip for judges.
+      setChunkMb(chunk)
+      setSagBadge(expectedBadge(chunk))
+      setSagReason(
+        chunk <= 10
+          ? `invalidated_if: export_chunk_size_mb <= 10 | current: ${chunk}`
+          : `applies_if: export_chunk_size_mb > 10 | current: ${chunk}`,
+      )
+      setDemoStatus(`Switching live config → ${chunk}MB…`)
+      setToggleBusy(true)
+      try {
+        const resp = await apiPost("/settings/live-config", {
+          export_chunk_size_mb: chunk,
+        })
+        const next = Number(resp?.metadata?.export_chunk_size_mb ?? chunk)
+        setChunkMb(next)
+        applySagFromApi(next, resp?.sag)
+        await loadSkills()
+      } catch (e: any) {
+        setDemoStatus(`Error: ${e.message}`)
+        await loadLiveConfig()
+      } finally {
+        setToggleBusy(false)
+      }
+    },
+    [applySagFromApi, loadLiveConfig, loadSkills],
+  )
+
+  // Keyboard: 8 → 8MB, 2 → 25MB (ignore when typing in inputs).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) {
+        return
+      }
+      if (e.key === "8") {
+        e.preventDefault()
+        void switchConfig(8)
+      } else if (e.key === "2") {
+        e.preventDefault()
+        void switchConfig(25)
+      }
     }
-  }, [getToken])
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [switchConfig])
+
+  const handleSSE = useCallback(
+    (name: string, data: any) => {
+      if (name === "config_updated" && data?.metadata?.export_chunk_size_mb != null) {
+        const chunk = Number(data.metadata.export_chunk_size_mb)
+        setChunkMb(chunk)
+        // Background verify only — do not fight optimistic UI.
+        setSagBadge((prev) => prev || expectedBadge(chunk))
+        return
+      }
+
+      const skillId = data?.skill_id as string | undefined
+      if (!skillId) return
+
+      if (name === "skill_suspended") {
+        const patch = {
+          applicability_status: "suspended" as const,
+          last_invalid_reason: (data.reason as string) ?? null,
+        }
+        setSkills((prev) =>
+          prev.map((s) => (s.skill_id === skillId ? { ...s, ...patch } : s)),
+        )
+        setSelected((prev) => (prev?.skill_id === skillId ? { ...prev, ...patch } : prev))
+        if (skillId === "data-export-large-file-timeout") {
+          setSagBadge("suspended")
+        }
+        return
+      }
+
+      if (name === "skill_reinforced" && data.applicability_status === "active") {
+        const patch = {
+          applicability_status: "active" as const,
+          last_invalid_reason: null,
+        }
+        setSkills((prev) =>
+          prev.map((s) => (s.skill_id === skillId ? { ...s, ...patch } : s)),
+        )
+        setSelected((prev) => (prev?.skill_id === skillId ? { ...prev, ...patch } : prev))
+        if (skillId === "data-export-large-file-timeout") {
+          setSagBadge("auto_execute")
+        }
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    setSseUrl("/stream")
+  }, [])
   useSSE(sseUrl, handleSSE)
 
   const loadDecisions = useCallback(async () => {
@@ -153,53 +267,87 @@ export default function Brain() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const triggerSagDemo = useCallback(async (chunkSize: number) => {
-    setDemoBusy(true)
-    setDemoStatus(`Sending decision with export_chunk_size_mb=${chunkSize}...`)
-    try {
-      const resp = await apiPost("/decisions/check", {
-        agent_id: "eng-01",
-        decision_text: "Increase data export chunk size to improve throughput",
-        decision_type: "pr_review",
-        metadata: { export_chunk_size_mb: chunkSize },
-      })
-      setDemoStatus(`Result: ${resp.result} | ${resp.applicability_status || "active"}`)
-      if (activeTab === "decisions") loadDecisions()
-    } catch (e: any) {
-      setDemoStatus(`Error: ${e.message}`)
-    } finally {
-      setDemoBusy(false)
-    }
-  }, [activeTab, loadDecisions])
+  const suspended = sagBadge === "suspended"
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Brain Explorer</h1>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-            {demoStatus && (
-              <span className="text-xs text-[#7c7c8a]">{demoStatus}</span>
-            )}
+      <div className="rounded border border-[#22c55e]/30 bg-[#22c55e]/5 px-4 py-3 text-sm text-[#a1a1aa]">
+        <span className="text-[#22c55e] font-medium">30-second SAG demo: </span>
+        Live config toggle → instant badge flip. Keys{" "}
+        <kbd className="px-1 rounded bg-[#111114] border border-[#1f1f22] font-mono text-[10px]">8</kbd>{" "}
+        /{" "}
+        <kbd className="px-1 rounded bg-[#111114] border border-[#1f1f22] font-mono text-[10px]">2</kbd>
+        {" "}(25MB). Memory that knows when to stop trusting itself.
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="bg-[#111114] border border-[#1f1f22] rounded-lg p-5 space-y-4">
+          <div className="text-xs uppercase tracking-wide text-[#7c7c8a]">Live config</div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-bold font-mono text-[#e4e4e7]">{chunkMb}</span>
+            <span className="text-[#7c7c8a]">MB chunk</span>
+          </div>
+          <div className="flex flex-col gap-2">
             <button
-              onClick={() => triggerSagDemo(8)}
-              disabled={demoBusy}
-              className="px-2 py-1 rounded text-xs border border-[#f59e0b]/40 text-[#f59e0b] hover:bg-[#f59e0b]/10 disabled:opacity-50"
+              onClick={() => switchConfig(8)}
+              disabled={toggleBusy}
+              className="w-full py-3 rounded-lg text-sm font-semibold border border-[#ef4444]/50 text-[#fca5a5] bg-[#ef4444]/10 hover:bg-[#ef4444]/20 disabled:opacity-50"
             >
-              Simulate: Small Chunk Config (8MB)
+              Switch to 8MB
             </button>
             <button
-              onClick={() => triggerSagDemo(25)}
-              disabled={demoBusy}
-              className="px-2 py-1 rounded text-xs border border-[#22c55e]/40 text-[#22c55e] hover:bg-[#22c55e]/10 disabled:opacity-50"
+              onClick={() => switchConfig(25)}
+              disabled={toggleBusy}
+              className="w-full py-3 rounded-lg text-sm font-semibold border border-[#22c55e]/50 text-[#86efac] bg-[#22c55e]/10 hover:bg-[#22c55e]/20 disabled:opacity-50"
             >
-              Simulate: Large Chunk Config (25MB)
+              Switch to 25MB
             </button>
           </div>
-          <p className="text-[10px] text-[#7c7c8a]">
-            These simulate a live config check against the data-export-large-file-timeout skill's precondition.
+          {demoStatus && (
+            <p className="text-[11px] font-mono text-[#a1a1aa] break-words">{demoStatus}</p>
+          )}
+        </div>
+
+        <div
+          className={`lg:col-span-2 rounded-lg border p-6 space-y-4 transition-colors ${
+            suspended
+              ? "border-[#ef4444]/50 bg-[#ef4444]/5 sag-badge-shake"
+              : "border-[#22c55e]/50 bg-[#22c55e]/5 sag-badge-glow"
+          }`}
+        >
+          <div className="text-xs uppercase tracking-wide text-[#7c7c8a]">
+            Hero skill · data-export-large-file-timeout
+          </div>
+          <h2 className="text-xl font-semibold text-[#e4e4e7]">Large data export timeout</h2>
+          <div
+            className={`inline-flex items-center gap-3 px-5 py-3 rounded-xl text-2xl font-bold tracking-wide ${
+              suspended
+                ? "bg-[#ef4444] text-white shadow-[0_0_24px_rgba(239,68,68,0.45)]"
+                : "bg-[#22c55e] text-[#050505] shadow-[0_0_24px_rgba(34,197,94,0.45)]"
+            }`}
+          >
+            {suspended ? (
+              <>
+                <PauseCircle className="w-8 h-8" /> SUSPENDED
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-8 h-8" /> AUTO_EXECUTE
+              </>
+            )}
+          </div>
+          <p className="text-sm font-mono text-[#a1a1aa]">{sagReason || "—"}</p>
+          <p className="text-xs text-[#7c7c8a]">
+            Same skill · different live metadata · no second LLM call.
           </p>
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-2xl font-semibold">Brain Explorer</h1>
+        <p className="text-[10px] text-[#7c7c8a]">
+          Toggle updates <code>/settings/live-config</code> and logs a fresh intercept.
+        </p>
       </div>
       <div className="flex gap-2">
         {["skills", "decisions", "attestation"].map((tab) => (

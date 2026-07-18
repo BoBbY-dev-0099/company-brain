@@ -47,9 +47,17 @@ export default function Settings() {
     try {
       const resp = await apiPost("/settings/seed-demo-data", {})
       if (resp.seeded) {
-        setSeedMsg(`Seeded ${resp.skill_count} skills for org ${resp.org_id}.`)
+        const emb =
+          resp.embeddings_backfilled > 0
+            ? ` (${resp.embeddings_backfilled} embeddings backfilled)`
+            : ""
+        setSeedMsg(`Seeded ${resp.skill_count} skills for org ${resp.org_id}.${emb}`)
       } else {
-        setSeedMsg(resp.reason || "Already seeded for this org.")
+        const emb =
+          resp.embeddings_backfilled > 0
+            ? ` Backfilled ${resp.embeddings_backfilled} embeddings.`
+            : ""
+        setSeedMsg((resp.reason || "Already seeded for this org.") + emb)
       }
       load()
     } catch (e: any) {

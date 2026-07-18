@@ -1,0 +1,44 @@
+flowchart LR
+    subgraph Browser["Operator browser"]
+        UI["React + Vite UI<br/>Dashboard, Brain, Intercepts,<br/>Agents, Events, Settings"]
+    end
+
+    subgraph API["FastAPI application (backend/main.py)"]
+        Routes["REST routes<br/>events, decisions, settings, agents"]
+        Agents["Qwen tool-loop agents<br/>Support, Engineering, Product"]
+        MCP["FastMCP server<br/>/mcp/sse"]
+        Compiler["Experience compiler<br/>core/compiler.py"]
+        Interceptor["Hybrid interceptor<br/>core/interceptor.py"]
+        SAG["Semantic Applicability Gate<br/>core/applicability.py"]
+        Propagator["Event propagator<br/>core/propagator.py"]
+        Stream["SSE endpoint<br/>GET /stream"]
+    end
+
+    External["External REST / MCP client"]
+    Mongo[("MongoDB<br/>skills, events, configs, audit logs")]
+    Qwen["Qwen Cloud DashScope<br/>compatible-mode API"]
+
+    UI -->|"REST /api"| Routes
+    UI <-->|"SSE /stream"| Stream
+    External -->|"MCP over SSE"| MCP
+
+    Routes --> Agents
+    Routes --> Interceptor
+    Routes --> Compiler
+    Routes -->|"live config"| Mongo
+    Agents -->|"in-process tool dispatch"| MCP
+    MCP --> Interceptor
+    MCP --> Compiler
+
+    Compiler -->|"read/write skills and events"| Mongo
+    Interceptor -->|"read skills; write intercept_log"| Mongo
+    Interceptor --> SAG
+    SAG -->|"active or suspended"| Interceptor
+    Compiler --> Propagator
+    Interceptor --> Propagator
+    Propagator --> Stream
+
+    Agents -->|"qwen-plus chat + tool calls"| Qwen
+    Compiler -->|"qwen-plus structured compilation"| Qwen
+    Compiler -->|"text-embedding-v3 skill vectors"| Qwen
+    Interceptor -->|"text-embedding-v3 query vector when available"| Qwen

@@ -1,0 +1,18 @@
+{
+  "system": "github",
+  "event": "pull_request.opened",
+  "repository": "acme/export-service",
+  "pull_request": {
+    "number": 1842,
+    "title": "Increase data export chunk size to improve throughput",
+    "body": "Bumps sync CSV export chunk from streaming batches to a larger in-memory chunk for /export/csv. Aimed at large file downloads.",
+    "user": "eng-bot",
+    "labels": ["engineering", "performance"]
+  },
+  "live_config": {
+    "export_chunk_size_mb": 25
+  },
+  "edge_config": {
+    "export_chunk_size_mb": 8
+  }
+}

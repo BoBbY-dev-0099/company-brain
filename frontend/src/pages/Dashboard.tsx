@@ -43,7 +43,25 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-[#7c7c8a] mt-1">
+            Operating memory for agent fleets — demo org is clean and seeded for SAG.
+          </p>
+        </div>
+        <a
+          href="/app/brain"
+          className="text-sm text-[#22c55e] hover:underline font-medium"
+        >
+          → 30s demo: Brain · 8MB suspend / 25MB auto
+        </a>
+      </div>
+
+      <div className="rounded border border-[#1f1f22] bg-[#111114] px-4 py-3 text-sm text-[#a1a1aa]">
+        <span className="text-[#e4e4e7] font-medium">Judge script: </span>
+        Brain → ① 8MB (suspended) → ② 25MB (auto_execute) → Intercepts → Agents Engineering.
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#111114] border border-[#1f1f22] rounded p-4">

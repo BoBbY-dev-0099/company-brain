@@ -23,6 +23,42 @@ services:
       start_period: 20s
       retries: 30
 
+  # ECS mimic: API + nginx (+ built frontend). Start with:
+  #   docker compose --profile full up --build -d
+  api:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: companybrain-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # directConnection without replicaSet avoids RS host advertisement issues
+      # between the api container and the mongo service DNS name.
+      MONGODB_URI: mongodb://mongodb:27017/companybrain?directConnection=true
+      MONGODB_DB_NAME: companybrain
+      HOST: 0.0.0.0
+      PORT: "8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  nginx:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: companybrain-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
 volumes:
   mongodb_data:
   mongodb_config:

@@ -164,8 +164,19 @@ class MCPToolLoopAgent:
         """
         return []
 
-    async def run(self, user_message: str) -> AgentRunResult:
+    def tool_schemas(self) -> list[dict[str, Any]]:
+        """Return the MCP tools available for this agent run.
+
+        Most agents can run their own pre-flight check.  Agents that receive a
+        deterministic check before the model loop can narrow this list so the
+        model cannot replace that result with a second, differently-contextual
+        check.
+        """
+        return _tool_schemas()
+
+    async def run(self, user_message: str, org_id: str | None = None) -> AgentRunResult:
         client = self.client()
+        resolved_org = org_id or settings.DEMO_ORG_ID
 
         messages: list[dict[str, Any]] = [{"role": "system", "content": self.system_prompt}]
         messages.extend(await self.pre_messages(user_message))
@@ -174,17 +185,25 @@ class MCPToolLoopAgent:
         skills_used: list[str] = []
         intercepted = False
         intercept_skill: str | None = None
+        available_tools = self.tool_schemas()
 
         for iteration in range(1, _MAX_ITERATIONS + 1):
-            resp = await client.chat.completions.create(
-                model=settings.QWEN_AGENT_MODEL,
-                messages=messages,
-                tools=_tool_schemas(),
-                tool_choice="auto",
-                parallel_tool_calls=True,
-                temperature=0.3,
-                extra_body={"enable_thinking": False},
-            )
+            request_args: dict[str, Any] = {
+                "model": settings.QWEN_AGENT_MODEL,
+                "messages": messages,
+                "temperature": 0.3,
+                "extra_body": {"enable_thinking": False},
+            }
+            # DashScope compatible mode rejects ``tools: []``.  Omitting the
+            # tool fields also makes a no-tool run an explicit Qwen response
+            # rather than a malformed function-calling request.
+            if available_tools:
+                request_args.update({
+                    "tools": available_tools,
+                    "tool_choice": "auto",
+                    "parallel_tool_calls": True,
+                })
+            resp = await client.chat.completions.create(**request_args)
             choice = resp.choices[0]
             msg = choice.message
 
@@ -221,6 +240,9 @@ class MCPToolLoopAgent:
                     fn_args = json.loads(tc.function.arguments or "{}")
                 except json.JSONDecodeError:
                     fn_args = {}
+
+                # Always scope tool calls to the request org (open demo or API key).
+                fn_args["org_id"] = resolved_org
 
                 handler = _DISPATCH.get(fn_name)
                 if handler is None:

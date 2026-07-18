@@ -247,7 +247,7 @@ def _seed_skills() -> list[CompanyBrainSkill]:
             name="SaaS refund policy: prorated for annual, full for first 14 days",
             domain="support",
             summary="Refund eligibility: full within 14d of first charge, prorated for annual after; never for monthly past 14d.",
-            keywords=["refund", "cancel", "annual", "subscription", "policy"],
+            keywords=["refund", "cancel", "annual", "subscription", "policy", "customer requesting refund", "annual plan", "requesting refund", "customer requesting refund on annual plan"],
             entity_types=["billing_account", "subscription"],
             context_signals=["refund_request"],
             what_happened="Inconsistent refund decisions across support agents created customer escalations and CFO involvement.",
@@ -262,13 +262,27 @@ def _seed_skills() -> list[CompanyBrainSkill]:
             reinforcement_count=4,
             decay_rate=DecayRate.NEVER,
             auto_execute=True,
+            applies_if=[
+                ApplicabilityCondition(
+                    key="days_since_purchase",
+                    operator=ApplicabilityOperator.lte,
+                    value=45,
+                )
+            ],
+            invalidated_if=[
+                ApplicabilityCondition(
+                    key="days_since_purchase",
+                    operator=ApplicabilityOperator.gt,
+                    value=45,
+                )
+            ],
         ),
         _skill(
             skill_id="feature-flag-cleanup-after-30d",
             name="Feature flags must be cleaned up within 30d of full rollout",
-            domain="engineering",
+            domain="product",
             summary="Stale feature flags accumulate; remove flag and dead branch within 30d of 100% rollout.",
-            keywords=["feature flag", "cleanup", "rollout", "tech debt", "stale"],
+            keywords=["feature flag", "cleanup", "rollout", "tech debt", "stale", "dashboard widgets", "expanding rollout", "widgets rollout", "expanding new dashboard widgets rollout"],
             entity_types=["feature_flag", "config"],
             context_signals=["flag_at_100pct_for>30d"],
             what_happened="A flag stale for 6 months caused a regression when its dead branch was accidentally re-enabled by config change.",
@@ -283,6 +297,20 @@ def _seed_skills() -> list[CompanyBrainSkill]:
             reinforcement_count=1,
             decay_rate=DecayRate.MEDIUM,
             auto_execute=False,
+            applies_if=[
+                ApplicabilityCondition(
+                    key="feature_flag_rollout_percent",
+                    operator=ApplicabilityOperator.lte,
+                    value=10,
+                )
+            ],
+            invalidated_if=[
+                ApplicabilityCondition(
+                    key="feature_flag_rollout_percent",
+                    operator=ApplicabilityOperator.gt,
+                    value=10,
+                )
+            ],
         ),
     ]
 
@@ -319,46 +347,159 @@ def _seed_sessions() -> list[SessionMemory]:
     ]
 
 
-async def patch_sag_demo_skill() -> bool:
-    """Ensure the data-export demo skill has SAG conditions on existing DBs."""
-    skill = await store.get_skill("data-export-large-file-timeout", org_id="default")
+_SAG_PATCHES: dict[str, tuple[list[ApplicabilityCondition], list[ApplicabilityCondition]]] = {
+    "data-export-large-file-timeout": (
+        [
+            ApplicabilityCondition(
+                key="export_chunk_size_mb",
+                operator=ApplicabilityOperator.gt,
+                value=10,
+            )
+        ],
+        [
+            ApplicabilityCondition(
+                key="export_chunk_size_mb",
+                operator=ApplicabilityOperator.lte,
+                value=10,
+            )
+        ],
+    ),
+    "customer-refund-policy-saas": (
+        [
+            ApplicabilityCondition(
+                key="days_since_purchase",
+                operator=ApplicabilityOperator.lte,
+                value=45,
+            )
+        ],
+        [
+            ApplicabilityCondition(
+                key="days_since_purchase",
+                operator=ApplicabilityOperator.gt,
+                value=45,
+            )
+        ],
+    ),
+    "feature-flag-cleanup-after-30d": (
+        [
+            ApplicabilityCondition(
+                key="feature_flag_rollout_percent",
+                operator=ApplicabilityOperator.lte,
+                value=10,
+            )
+        ],
+        [
+            ApplicabilityCondition(
+                key="feature_flag_rollout_percent",
+                operator=ApplicabilityOperator.gt,
+                value=10,
+            )
+        ],
+    ),
+}
+
+
+async def _patch_sag_skill(skill_id: str, org_id: str) -> bool:
+    """Ensure a demo skill has SAG conditions on existing DBs."""
+    applies, invalidated = _SAG_PATCHES.get(skill_id, ([], []))
+    if not applies and not invalidated:
+        return False
+    skill = await store.get_skill(skill_id, org_id=org_id)
     if skill is None:
         return False
     if skill.provenance.applies_if or skill.provenance.invalidated_if:
         return False
-    skill.provenance.applies_if = [
-        ApplicabilityCondition(
-            key="export_chunk_size_mb",
-            operator=ApplicabilityOperator.gt,
-            value=10,
-        )
-    ]
-    skill.provenance.invalidated_if = [
-        ApplicabilityCondition(
-            key="export_chunk_size_mb",
-            operator=ApplicabilityOperator.lte,
-            value=10,
-        )
-    ]
-    await store.save_skill(skill, org_id="default")
-    logger.info("Patched SAG conditions onto data-export-large-file-timeout")
+    skill.provenance.applies_if = applies
+    skill.provenance.invalidated_if = invalidated
+    await store.save_skill(skill, org_id=org_id)
+    logger.info("Patched SAG conditions onto %s (org=%s)", skill_id, org_id)
     return True
+
+
+async def patch_sag_demo_skills(org_id: str = "default") -> int:
+    """Patch all domain-general SAG demo skills for an org. Returns patch count."""
+    patched = 0
+    for skill_id in _SAG_PATCHES:
+        if await _patch_sag_skill(skill_id, org_id=org_id):
+            patched += 1
+    return patched
+
+
+async def patch_sag_demo_skill() -> bool:
+    """Backward-compatible wrapper for startup patch on default org."""
+    return (await patch_sag_demo_skills(org_id="default")) > 0
+
+
+async def ensure_export_sag_skill(org_id: str) -> bool:
+    """Ensure data-export-large-file-timeout exists with SAG rules. Returns True if inserted."""
+    existing = await store.get_skill("data-export-large-file-timeout", org_id=org_id)
+    if existing is None:
+        for s in _seed_skills():
+            if s.skill_id == "data-export-large-file-timeout":
+                await store.save_skill(s, org_id=org_id)
+                logger.info("Inserted export SAG skill into org '%s'", org_id)
+                return True
+        return False
+    await _patch_sag_skill("data-export-large-file-timeout", org_id=org_id)
+    return False
+
+
+async def seed_demo_stage(org_id: str) -> dict[str, Any]:
+    """Strict demo order: Skill → Config=25 → Horror intercept.
+
+    Safe to call on every startup for the open demo org.
+    """
+    from backend.core.schema import InterceptResult
+
+    skill_inserted = await ensure_export_sag_skill(org_id)
+    await patch_sag_demo_skills(org_id=org_id)
+    config = await store.set_live_config(org_id, {"export_chunk_size_mb": 25})
+    horror_inserted = False
+    if not await store.horror_intercept_exists(org_id):
+        await store.log_intercept(
+            agent_id="engineering-agent-1",
+            decision_text=(
+                "[horror-story] Agent tried large CSV export with live config "
+                "export_chunk_size_mb=8 — precondition broken"
+            ),
+            matched_skill="data-export-large-file-timeout",
+            result=InterceptResult.suspended,
+            confidence=1.0,
+            org_id=org_id,
+            applicability_status="suspended",
+            suspension_reason=(
+                "Precondition broken: export_chunk_size_mb (8) <= 10 "
+                "(invalidated_if matched)"
+            ),
+        )
+        horror_inserted = True
+    return {
+        "org_id": org_id,
+        "skill_inserted": skill_inserted,
+        "live_config": config.get("metadata"),
+        "horror_intercept_inserted": horror_inserted,
+    }
 
 
 async def seed_for_org(org_id: str = "default") -> dict[str, Any]:
     """Idempotently seed the demo skills and sessions into the given org.
 
     If the org already has any skills, only the SAG demo patch is applied.
+    Always finishes with demo-stage order: skill → config=25 → horror intercept.
     """
     await store.init_db()
     existing = await store.get_skill_count(active_only=False, org_id=org_id)
     if existing > 0:
-        logger.info("Seed: %d skills already exist for org '%s'; skipping", existing, org_id)
-        if org_id == "default":
-            patched = await patch_sag_demo_skill()
-        else:
-            patched = False
-        return {"skills_inserted": 0, "sessions_inserted": 0, "sag_patched": int(patched), "org_id": org_id}
+        logger.info("Seed: %d skills already exist for org '%s'; skipping full insert", existing, org_id)
+        patched = await patch_sag_demo_skills(org_id=org_id)
+        stage = await seed_demo_stage(org_id)
+        return {
+            "skills_inserted": 0,
+            "sessions_inserted": 0,
+            "sag_patched": patched,
+            "org_id": org_id,
+            "demo_stage": stage,
+        }
 
     skills = _seed_skills()
     for s in skills:
@@ -372,8 +513,14 @@ async def seed_for_org(org_id: str = "default") -> dict[str, Any]:
     await store.register_agent("engineering-agent-1", "engineering", org_id=org_id)
     await store.register_agent("product-agent-1", "product", org_id=org_id)
 
+    stage = await seed_demo_stage(org_id)
     logger.info("Seed: inserted %d skills, %d sessions into org '%s'", len(skills), len(sessions), org_id)
-    return {"skills_inserted": len(skills), "sessions_inserted": len(sessions), "org_id": org_id}
+    return {
+        "skills_inserted": len(skills),
+        "sessions_inserted": len(sessions),
+        "org_id": org_id,
+        "demo_stage": stage,
+    }
 
 
 async def seed_if_empty() -> dict[str, Any]:

@@ -1,0 +1,19 @@
+{
+  "system": "billing",
+  "event": "customer.refund_requested",
+  "customer_id": "cus_9f2a1c",
+  "subscription": {
+    "plan": "annual",
+    "product": "Acme SaaS"
+  },
+  "request": {
+    "channel": "support_chat",
+    "message": "Customer requesting refund on annual plan"
+  },
+  "within_window": {
+    "days_since_purchase": 20
+  },
+  "outside_window": {
+    "days_since_purchase": 60
+  }
+}

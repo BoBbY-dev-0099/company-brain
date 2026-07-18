@@ -21,3 +21,19 @@ html, body, #root {
 ::-webkit-scrollbar-thumb:hover { background: #2a2a30; }
 
 .font-mono { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; }
+
+@keyframes sag-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.sag-badge-shake {
+  animation: sag-shake 0.45s ease-in-out;
+}
+
+.sag-badge-glow {
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.2);
+}

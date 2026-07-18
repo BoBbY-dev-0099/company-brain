@@ -1,0 +1,12 @@
+{
+  "system": "launchdarkly_shaped",
+  "event": "flag.percentage_updated",
+  "flag_key": "new-dashboard-widgets",
+  "description": "Expanding new dashboard widgets rollout",
+  "under_threshold": {
+    "feature_flag_rollout_percent": 3
+  },
+  "over_threshold": {
+    "feature_flag_rollout_percent": 40
+  }
+}

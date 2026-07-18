@@ -1,0 +1,17 @@
+.git
+.venv
+venv
+frontend/node_modules
+**/__pycache__
+**/*.pyc
+.env
+.env.*
+Company Brain
+*.md
+!README.md
+PRE_RECORDING*
+E2E_*
+eng_*.json
+mcp_responses.txt
+agent-tools
+.cursor

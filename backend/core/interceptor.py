@@ -99,6 +99,42 @@ def _classify(skill_confidence: float, auto_execute: bool) -> InterceptResult:
     return InterceptResult.AUTO_EXECUTE if auto_execute else InterceptResult.BLOCK
 
 
+def _sag_condition_keys(skill: CompanyBrainSkill) -> set[str]:
+    provenance = skill.provenance
+    keys: set[str] = set()
+    for cond in list(provenance.applies_if or []) + list(provenance.invalidated_if or []):
+        if cond.key:
+            keys.add(cond.key)
+    return keys
+
+
+def _sag_metadata_overlap(skill: CompanyBrainSkill, live_context: dict) -> int:
+    """Count how many live metadata keys this skill's SAG conditions care about."""
+    if not live_context:
+        return 0
+    return len(_sag_condition_keys(skill) & set(live_context.keys()))
+
+
+def _pick_top_skill(
+    scored: list[tuple[float, float, CompanyBrainSkill]],
+    live_context: dict,
+) -> tuple[float, float, CompanyBrainSkill]:
+    """Prefer skills whose SAG conditions bind live metadata over text-only winners.
+
+    When the request carries live context keys (e.g. export_chunk_size_mb), a
+    skill that declares applies_if / invalidated_if on those keys should win
+    over a higher text-match skill with empty SAG conditions — otherwise the
+    demo flip is shadowed by compiled lookalikes.
+    """
+    above_floor = [row for row in scored if row[0] >= settings.RELEVANCE_FLOOR]
+    pool = above_floor or scored
+    if live_context:
+        sag_pool = [row for row in pool if _sag_metadata_overlap(row[2], live_context) > 0]
+        if sag_pool:
+            pool = sag_pool
+    return max(pool, key=lambda row: (row[0], _sag_metadata_overlap(row[2], live_context)))
+
+
 async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
     skills = await store.get_all_active_skills(domain=req.domain, org_id=req.org_id)
     if not skills:
@@ -113,15 +149,15 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
     if any(s.embedding for s in skills):
         query_emb = await generate_embedding(req.decision_text)
 
-    best: tuple[float, float, CompanyBrainSkill] | None = None  # (final, semantic, skill)
+    live_context = getattr(req, "metadata", None) or {}
+    scored: list[tuple[float, float, CompanyBrainSkill]] = []
     for skill in skills:
         kw = _keyword_score(skill, req.decision_text)
         sem = _cosine(query_emb, skill.embedding) if query_emb and skill.embedding else 0.0
         final = (0.6 * kw + 0.4 * sem) * _anti_condition_penalty(skill, req.decision_text)
-        if best is None or final > best[0]:
-            best = (final, sem, skill)
+        scored.append((final, sem, skill))
 
-    final, _sem, top_skill = best  # type: ignore[misc]
+    final, _sem, top_skill = _pick_top_skill(scored, live_context)
 
     if final < settings.RELEVANCE_FLOOR:
         return DecisionCheckResponse(
@@ -146,7 +182,6 @@ async def check_decision(req: DecisionCheckRequest) -> DecisionCheckResponse:
 
     # Semantic Applicability Gate (SAG): deterministic context checks.
     # No LLM calls are made in this path.
-    live_context = getattr(req, "metadata", None) or {}
     sag_result = evaluate_applicability(top_skill, live_context)
     sag_status = sag_result["status"]
     sag_reason = sag_result["reason"]

@@ -32,6 +32,7 @@ export function useSSE(url: string | null, onEvent: SSEHandler) {
         "decision_intercepted",
         "agent_action",
         "agent_registered",
+        "config_updated",
         "keepalive",
       ]
       for (const name of known) {

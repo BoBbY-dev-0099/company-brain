@@ -2,18 +2,31 @@
 
 Operating Memory Primitive for agent fleets — Qwen Cloud Global AI Hackathon 2026 (MemoryAgent track).
 
-Company Brain is not a chatbot, and it is not an agent. It is a
-**memory-and-governance layer** that any AI agent — yours, ours, or
-anyone's — plugs into via MCP or a REST API. Agents call in before
-acting; the brain tells them whether their planned action matches
-something the fleet has already learned, and whether that lesson
-still holds given the live state of the system.
+> **Most agents remember. Company Brain knows when to stop trusting what it remembers.**
 
-We built three example agents (support, engineering, product)
-purely to prove this mechanism works end-to-end. They are not the
-product — they are the smallest possible demonstration that shared,
-decaying, precondition-checked memory changes what an agent actually
-does, not just what it retrieves.
+**Judges / 30s demo:** open the UI → **Brain** → ① Config = 8MB (**suspended**) → ② Config = 25MB (**auto_execute**).  
+Full writeup: [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md). Open UI uses org `integrations-demo` (no login).
+
+## The problem
+
+Agent fleets retrieve past lessons but do not verify whether those lessons
+still hold against **live system state**. Stale memory auto-executes
+confidently — wrong refund window, wrong export chunk size, wrong rollout %.
+
+## How we tackle it
+
+Company Brain is not a chatbot and not an agent platform. It is a
+**memory-and-governance layer** that any AI agent plugs into via MCP or REST:
+
+1. **Compile** experience → versioned skills (Qwen)
+2. **Recall** under limited context (`top_k`)
+3. **Intercept** before action (hybrid keyword + embedding)
+4. **SAG** — deterministic `applies_if` / `invalidated_if` vs live `metadata`
+5. **Reinforce** confidence; **forget** via decay TTL + suspension
+6. **Propagate** via SSE to the operator UI
+
+Three demo agents (support, engineering, product) prove the loop. They are
+not the product — production systems call the same APIs (see `integrations/`).
 
 ## Who this is for
 
@@ -21,6 +34,24 @@ Teams already running multiple independent AI agents who want those
 agents to share what they've learned — without building a shared
 memory and governance layer from scratch. This is infrastructure,
 not an application.
+
+## Production-shaped workflows
+
+External systems do not live inside the brain. Thin connectors under
+[`integrations/`](integrations/) feed realistic payloads (GitHub PR,
+billing refund, feature-flag rollout, Zendesk resolve, product session)
+into `POST /decisions/check`, `POST /events`, and agent routes — the same
+contracts a real fleet would use.
+
+```bash
+# After backend is up and seeded (API key for the org):
+export BRAIN_BASE_URL=http://127.0.0.1:8000
+export BRAIN_API_KEY=cb_live_...
+python integrations/python-client/connect_to_brain.py
+```
+
+Demo order: Engineering export flip → Support refund flip → Product rollout
+flip → Intercepts → compile flash → TEE attestation tab.
 
 ## Semantic Applicability Gate (SAG)
 
@@ -38,32 +69,67 @@ so each skill's `applies_if` / `invalidated_if` preconditions are checked
 before block, warn, or auto-execute. The engineering agent's pre-flight
 check forwards request metadata into the same path.
 
+### Skill selection when metadata is present
+
+If the decision request includes live `metadata` keys, the interceptor
+**prefers skills whose `applies_if` / `invalidated_if` bind those keys**
+over higher text-only matches with empty SAG conditions. That keeps the
+demo flip from being shadowed by compiled lookalike skills.
+
 ### Known limitations
 
 - **Concurrency:** skill reinforcement now uses an atomic
   aggregation-pipeline update (`$inc` on a matched document), so
   concurrent intercepts on the same skill no longer drop increments.
   It still needs load testing at production scale.
-- **Contradiction resolution:** when multiple skills match one
-  decision, the highest-scoring match wins with no arbitration
-  between conflicting recommendations. In our own research across
-  five reference memory systems (gbrain, Hermes Agent, Claude Code,
-  Codex, Cursor), none of them solve this either — it's an open
-  problem in the field, and it's our next milestone.
+- **Contradiction resolution:** when metadata does not bind SAG keys,
+  the highest text/embedding score still wins. Full multi-skill
+  arbitration remains an open research problem.
 - **Data governance:** compiled skills currently store raw event
   content verbatim, with no PII redaction or sensitivity
   classification. Any production deployment would need this before
   handling real customer data.
+
+### Honest scope boundary
+
+- **Ingestion from fragmented sources:** Company Brain compiles
+  events agents explicitly submit (`POST /events`, MCP
+  `compile_experience`). It does not yet ingest from Slack, email,
+  tickets, or code review threads automatically. Unified ingestion
+  across fragmented sources is an industry-wide unsolved problem —
+  Y Combinator's adjacent RFS on connective infrastructure describes
+  the same gap; this build does not claim to have solved it.
+- **Typed recommendation vs. literal execution:** SAG and intercept
+  return structured guidance (`recommended_action`, `avoid_actions`).
+  They do not emit literal code patches or tool calls on their own.
+  As AE Studio's agent-memory work distinguishes, durable memory
+  must eventually drive **code or tool calls, not prose** — that
+  execution layer is out of scope for this submission.
+
+SAG is proven across three departments with three independent
+example data sources — Support (refund vs. purchase recency),
+Product (rollout vs. traffic percentage), Engineering (export
+behavior vs. chunk size) — via the seeded demo skills in
+`backend/demo/seed_data.py`.
+
+### Roadmap (explicitly not in this submission)
+
+Outcome-based trust recalibration — a skill demoted from
+`auto_execute` based on confirmed real-world outcomes, not just
+precondition drift — is the natural next axis of self-correction.
+Scoped out of this submission for time; SAG remains the shipped,
+fully-verified differentiator.
 
 ### Security fix: org-scoped reinforcement and intercept logging
 
 A prior implementation of `check_decision` called `store.reinforce_skill()`
 and `store.log_intercept()` without passing the authenticated `org_id`. This
 caused every reinforcement and every intercept log entry to be written against
-the `default` org, regardless of which Clerk organization or API key made the
-request — a real multi-tenancy leak. The current code passes `org_id` through
-the entire interceptor path, so skills, reinforcement counts, and intercept
-logs stay scoped to the calling org.
+the `default` org, regardless of which API key made the request — a real
+multi-tenancy leak. The current code passes `org_id` through the entire
+interceptor path, so skills, reinforcement counts, and intercept logs stay
+scoped to the calling org. The hackathon UI is open (no login); agents still
+authenticate with `X-Brain-Api-Key`.
 
 ## Stack
 
@@ -109,21 +175,36 @@ each seeded skill.
 
 ## Smoke test
 
+Use header `X-Brain-Api-Key` for agent keys (not `Authorization: Bearer cb_live_…`).
+
 ```bash
-# health
+# health (public)
 curl localhost:8000/health
 
-# read seeded skills
-curl localhost:8000/brain/skills
+# bootstrap a local key for the default org (one-time)
+python integrations/python-client/bootstrap_api_key.py
 
-# the engineering pre-flight intercept demo
-curl -X POST localhost:8000/agents/engineering/run \
-  -H 'content-type: application/json' \
-  -d '{"user_message":"PR adds a synchronous CSV export endpoint at /export/csv. Returns the file inline. Should be fine for our 30MB exports."}'
+# production-shaped SAG workflows (W1–W5)
+export BRAIN_BASE_URL=http://127.0.0.1:8000
+export BRAIN_API_KEY=cb_live_...   # from bootstrap
+python integrations/python-client/connect_to_brain.py
 
-# follow the SSE stream while you do the above (separate terminal)
-curl -N localhost:8000/stream
+# follow the SSE stream while you exercise the UI (separate terminal)
+curl -N "localhost:8000/stream?token=$BRAIN_API_KEY"
 ```
+
+## Docker (ECS mimic — local last step)
+
+Full stack (Mongo + API + nginx serving the built frontend):
+
+```bash
+# set QWEN_API_KEY in .env first
+docker compose --profile full up --build -d
+curl http://localhost/api/health
+```
+
+This mirrors the ECS layout (nginx → uvicorn + static UI). Real Alibaba ECS
+is optional after this is green.
 
 ## API
 
@@ -137,7 +218,7 @@ curl -N localhost:8000/stream
 | GET    | `/brain/skills/{skill_id}`    | full skill detail                                                   |
 | GET    | `/brain/intercepts`           | intercept audit log                                                 |
 | GET    | `/settings/metrics`           | governance hits, est. tokens saved, intercept breakdown             |
-| POST   | `/settings/seed-demo-data`    | idempotent org-scoped seed of the demo skill set (Clerk JWT or API key) |
+| POST   | `/settings/seed-demo-data`    | idempotent org-scoped seed of the demo skill set (open UI or API key) |
 | POST   | `/agents/{kind}/run`          | run support / engineering / product agent (Chat Completions + MCP)  |
 | GET    | `/sessions/{user_id}`         | sessions for a user (cross-session demo)                            |
 | GET    | `/sessions/by-id/{id}`        | one session                                                         |

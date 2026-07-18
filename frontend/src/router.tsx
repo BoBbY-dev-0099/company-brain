@@ -1,7 +1,5 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom"
 import Landing from "./pages/Landing"
-import SignIn from "./pages/SignIn"
-import SignUp from "./pages/SignUp"
 import Onboard from "./pages/Onboard"
 import Dashboard from "./pages/Dashboard"
 import Brain from "./pages/Brain"
@@ -11,22 +9,19 @@ import Events from "./pages/Events"
 import Settings from "./pages/Settings"
 import ApiKeys from "./pages/ApiKeys"
 import AppShell from "./components/layout/AppShell"
-import ProtectedRoute from "./components/auth/ProtectedRoute"
 
 const router = createBrowserRouter([
   { path: "/", element: <Landing /> },
-  { path: "/sign-in", element: <SignIn /> },
-  { path: "/sign-in/*", element: <SignIn /> },
-  { path: "/sign-up", element: <SignUp /> },
-  { path: "/sign-up/*", element: <SignUp /> },
+  { path: "/sign-in", element: <Navigate to="/app/dashboard" replace /> },
+  { path: "/sign-in/*", element: <Navigate to="/app/dashboard" replace /> },
+  { path: "/sign-up", element: <Navigate to="/app/dashboard" replace /> },
+  { path: "/sign-up/*", element: <Navigate to="/app/dashboard" replace /> },
   {
     path: "/app",
     element: (
-      <ProtectedRoute>
-        <AppShell>
-          <Outlet />
-        </AppShell>
-      </ProtectedRoute>
+      <AppShell>
+        <Outlet />
+      </AppShell>
     ),
     children: [
       { index: true, element: <Navigate to="dashboard" replace /> },

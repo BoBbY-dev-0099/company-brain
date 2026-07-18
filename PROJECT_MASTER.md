@@ -127,7 +127,7 @@ Today's agent "memory" layers retrieve similar past text. None of them ask:
 | Propagator | `backend/core/propagator.py` | SSE fan-out |
 | MCP | `backend/mcp/server.py`, `tools.py` | External agent plug-in surface |
 | Frontend | `frontend/src/` | Human ops UI + SAG demo buttons |
-| Auth | `backend/middleware/clerk_auth.py` | Clerk JWT + API keys → org_id |
+| Auth | `backend/middleware/auth.py` | Open demo org + API keys → org_id |
 
 ---
 
@@ -451,11 +451,12 @@ From the Qwen Cloud Global AI Hackathon build session:
 
 ## 13. Demo script (record this)
 
-**Target: 2–3 minutes. No slides. Live UI + one API call.**
+**Target: 2–3 minutes. No slides. Live UI + production-shaped connectors.**
 
 ### Setup (before camera)
 - Backend running, `embedding_healthy: true`
-- Signed in as Clerk user with seeded org (8 skills)
+- Seeded org (8 skills + embeddings); `BRAIN_API_KEY` via `integrations/python-client/bootstrap_api_key.py`
+- Optional: `python integrations/python-client/connect_to_brain.py` already green
 - Brain Explorer open at `/app/brain`
 
 ### Script
@@ -464,15 +465,18 @@ From the Qwen Cloud Global AI Hackathon build session:
 |------|--------|-----|
 | 0:00 | Show Brain UI, 8 skills | *"This is Company Brain — shared memory for agent fleets. Not a chatbot. Infrastructure."* |
 | 0:20 | Select `data-export-large-file-timeout` | *"Every event compiles into a versioned skill with preconditions."* |
-| 0:40 | Click **Simulate: Large Chunk Config (25MB)** | *"Same decision text. Chunk is 25MB. Skill applies. Auto-execute."* |
+| 0:40 | Click **Simulate: Large Chunk Config (25MB)** (or run W1 connector) | *"Same decision text. Chunk is 25MB. Skill applies. Auto-execute."* |
 | 1:00 | Card flips ACTIVE via SSE | *"No refresh — SSE propagates to every connected agent."* |
 | 1:15 | Click **Simulate: Small Chunk Config (8MB)** | *"Same skill. Same text. Only the live config changed."* |
 | 1:30 | Card flips SUSPENDED, reason visible | *"Precondition failed. Suspended — not deleted, not silently ignored."* |
-| 1:45 | Open **Intercepts** or Brain → **Decisions** tab | *"Full audit trail. Org-scoped. Suspension evidence visible."* |
-| 2:00 | Brain → **Attestation** tab | *"MCP tool manifest + mock TEE envelope for enterprise path."* |
-| 2:15 | **Agents** → Run Engineering with chunk=8 | *"Pre-flight SAG before the LLM call — not after."* |
-| 2:30 | **Settings** → governance hits | *"Measurable efficiency — hits × 2k tokens saved."* |
-| 2:45 | Close | *"No other memory layer we researched does this. They retrieve. We verify."* |
+| 1:40 | Terminal: W2 refund + W3 rollout connectors | *"Same gate across Support and Product — billing recency and rollout percent."* |
+| 1:50 | Open **Intercepts** | *"Full audit trail. Org-scoped. Suspension evidence visible."* |
+| 2:05 | Brain → **Attestation** tab | *"MCP tool manifest + mock TEE envelope for enterprise path."* |
+| 2:20 | W4 compile or Events form (optional) | *"Agents submit experience; the brain accumulates skills."* |
+| 2:35 | **Settings** → governance hits | *"Measurable efficiency — hits × 2k tokens saved."* |
+| 2:45 | Close | *"They retrieve. We verify."* |
+
+Production-shaped clients live in [`integrations/`](integrations/) — GitHub PR, billing refund, feature-flag rollout, Zendesk resolve, product session.
 
 ---
 
@@ -558,6 +562,32 @@ These are not band-aids — textbook patterns for the failure modes they address
 | ECS not re-verified post-all commits | Demo risk | Record against one URL consistently |
 | Mongo integration tests | Dev only | pytest-asyncio loop scope issue; unit tests pass |
 | TEE attestation | Demo only | Mock envelope — real TDX path documented for enterprise |
+| Fragmented-source ingestion | Out of scope | Agents must POST events; no Slack/email/PR auto-ingest |
+| Literal code/tool execution | Out of scope | Intercept returns guidance, not patches (AE Studio distinction) |
+| Live third-party API keys | Out of scope | Production-shaped connectors in [`integrations/`](integrations/) (fixtures → REST); `connect_to_brain.py` verified locally |
+
+### Honest scope boundary (submission framing)
+
+- **Ingestion from fragmented sources:** events must be submitted explicitly.
+  Unified ingestion across Slack, email, tickets, and PR threads is
+  industry-wide unsolved — YC's connective-infrastructure RFS describes
+  the same gap; this build does not claim to solve it.
+- **Typed recommendation vs. literal execution:** intercept/SAG returns
+  structured guidance, not code patches or tool calls. Durable memory
+  must eventually drive code or tool calls, not prose (AE Studio) — that
+  execution layer is out of scope here.
+
+SAG is proven across three departments with three independent example
+data sources — Support (refund vs. purchase recency), Product (rollout
+vs. traffic percentage), Engineering (export behavior vs. chunk size) —
+via seeded demo skills in `backend/demo/seed_data.py`.
+
+### Roadmap (explicitly not in this submission)
+
+Outcome-based trust recalibration — a skill demoted from `auto_execute`
+based on confirmed real-world outcomes, not just precondition drift — is
+the natural next axis of self-correction. Scoped out of this submission
+for time; SAG remains the shipped, fully-verified differentiator.
 
 ---
 

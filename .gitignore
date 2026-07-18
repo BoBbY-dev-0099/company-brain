@@ -49,6 +49,17 @@ event_rerun.json
 *.log
 nul
 
+# --- Local E2E dumps / agent run artifacts (not for public repo) ---
+e2e-artifacts/
+eng_*.json
+eng_agent_responses.json
+mcp_responses.txt
+PRE_RECORDING_*
+E2E_CODEX_BROWSER_REPORT.md
+E2E_VISUAL_BROWSER_REPORT.md
+CLERK_REMOVAL_REPORT.md
+docs/CODEX_SUBMISSION_ASSETS_REPORT.md
+
 # --- OS ---
 .DS_Store
 Thumbs.db

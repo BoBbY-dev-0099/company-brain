@@ -1,11 +1,7 @@
 import { Link } from "react-router-dom"
-import { useAuth, useUser } from "@clerk/clerk-react"
-import { ArrowRight, BarChart3, Brain, ShieldAlert, Sparkles, Zap } from "lucide-react"
+import { ArrowRight, Brain, ShieldAlert, Sparkles, Zap } from "lucide-react"
 
 export default function Landing() {
-  const { isSignedIn, signOut } = useAuth()
-  const { user } = useUser()
-
   return (
     <div className="min-h-screen bg-[#050505] text-[#e4e4e7]">
       <header className="border-b border-[#1f1f22] bg-[#050505]/80 backdrop-blur fixed w-full z-10">
@@ -15,117 +11,98 @@ export default function Landing() {
             <span className="font-semibold">Company Brain</span>
           </div>
           <nav className="flex items-center gap-4 text-sm">
-            <a href="#features" className="text-[#a1a1aa] hover:text-[#e4e4e7]">Features</a>
-            <a href="#open-source" className="text-[#a1a1aa] hover:text-[#e4e4e7]">Open Source</a>
-            {isSignedIn ? (
-              <>
-                <Link to="/app/dashboard" className="text-[#22c55e] hover:underline">
-                  Dashboard
-                </Link>
-                <button
-                  onClick={() => signOut()}
-                  className="text-[#a1a1aa] hover:text-[#e4e4e7]"
-                >
-                  Sign Out {user?.firstName ? `(${user.firstName})` : ""}
-                </button>
-              </>
-            ) : (
-              <Link to="/sign-in" className="text-[#22c55e] hover:underline">Sign In</Link>
-            )}
+            <a href="#demo" className="text-[#a1a1aa] hover:text-[#e4e4e7]">
+              30s demo
+            </a>
+            <Link to="/app/brain" className="text-[#22c55e] hover:underline">
+              Open App
+            </Link>
           </nav>
         </div>
       </header>
 
-      <section className="pt-32 pb-20 px-4 text-center max-w-3xl mx-auto">
-        <h1 className="text-4xl md:text-5xl font-bold mb-6">
-          The operating memory primitive for agent fleets
-        </h1>
-        <p className="text-lg text-[#a1a1aa] mb-8">
-          Company Brain compiles every agent interaction into versioned, decaying skills,
-          then pre-flight intercepts risky decisions before your LLM calls.
+      <section className="pt-28 pb-16 px-4 max-w-4xl mx-auto">
+        <p className="text-[#22c55e] text-sm font-mono mb-4">
+          Qwen Cloud Hackathon 2026 · MemoryAgent
         </p>
-        <div className="flex items-center justify-center gap-4">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+          Company Brain
+        </h1>
+        <p className="text-xl md:text-2xl text-[#e4e4e7] mb-4 font-medium">
+          Most agents remember. This one knows when to{" "}
+          <span className="text-[#f59e0b]">stop trusting</span> what it remembers.
+        </p>
+        <p className="text-base text-[#a1a1aa] mb-8 max-w-2xl">
+          A memory-and-governance layer for agent fleets: compile experience into
+          versioned skills, intercept decisions before the LLM acts, and suspend
+          skills when live config proves them stale — no second LLM call.
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
           <Link
-            to="/sign-up"
+            to="/app/brain"
             className="bg-[#22c55e] hover:bg-[#16a34a] text-[#050505] font-medium rounded px-6 py-3 flex items-center gap-2"
           >
-            Get Started <ArrowRight className="w-4 h-4" />
+            Run the 30s demo <ArrowRight className="w-4 h-4" />
           </Link>
-          <a
-            href="#features"
+          <Link
+            to="/app/dashboard"
             className="border border-[#1f1f22] hover:border-[#22c55e] text-[#e4e4e7] rounded px-6 py-3"
           >
-            Live Demo
-          </a>
+            Dashboard
+          </Link>
         </div>
       </section>
 
-      <section id="features" className="py-20 px-4 max-w-6xl mx-auto">
-        <h2 className="text-2xl font-semibold text-center mb-12">What Company Brain Does</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-[#111114] border border-[#1f1f22] rounded p-6 space-y-3">
-            <Brain className="w-8 h-8 text-[#22c55e]" />
-            <h3 className="font-semibold">Compile to Skills</h3>
-            <p className="text-sm text-[#a1a1aa]">
-              Every agent event is compiled into a versioned skill via Qwen 3,
-              complete with embeddings for semantic retrieval.
-            </p>
-          </div>
-          <div className="bg-[#111114] border border-[#1f1f22] rounded p-6 space-y-3">
-            <ShieldAlert className="w-8 h-8 text-[#22c55e]" />
-            <h3 className="font-semibold">Pre-flight Intercept</h3>
-            <p className="text-sm text-[#a1a1aa]">
-              Before the LLM is called, the brain checks if a prior skill
-              should block, warn, or auto-execute the decision.
-            </p>
-          </div>
-          <div className="bg-[#111114] border border-[#1f1f22] rounded p-6 space-y-3">
-            <Zap className="w-8 h-8 text-[#22c55e]" />
-            <h3 className="font-semibold">Decay & Reinforce</h3>
-            <p className="text-sm text-[#a1a1aa]">
-              Skills decay over time, but every non-clear interception
-              reinforces confidence. Cross-session memory persists.
-            </p>
-          </div>
-          <div className="bg-[#111114] border border-[#1f1f22] rounded p-6 space-y-3">
-            <BarChart3 className="w-8 h-8 text-[#22c55e]" />
-            <h3 className="font-semibold">Real-time Dashboard</h3>
-            <p className="text-sm text-[#a1a1aa]">
-              Monitor skills, agents, intercepts, and events in real-time
-              via SSE live feed and metrics cards.
-            </p>
-          </div>
-          <div className="bg-[#111114] border border-[#1f1f22] rounded p-6 space-y-3">
-            <Sparkles className="w-8 h-8 text-[#22c55e]" />
-            <h3 className="font-semibold">TEE Attestation</h3>
-            <p className="text-sm text-[#a1a1aa]">
-              Enterprise deployments can run inside Intel TDX enclaves
-              with remote attestation for trusted execution.
-            </p>
-          </div>
-          <div className="bg-[#111114] border border-[#1f1f22] rounded p-6 space-y-3">
-            <Brain className="w-8 h-8 text-[#22c55e]" />
-            <h3 className="font-semibold">Multi-tenant SaaS</h3>
-            <p className="text-sm text-[#a1a1aa]">
-              Clerk auth, org-scoped data, agent API keys, and a
-              production React frontend with onboarding wizard.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="open-source" className="py-20 px-4 max-w-3xl mx-auto text-center">
-        <h2 className="text-2xl font-semibold mb-4">Open Source</h2>
-        <p className="text-[#a1a1aa] mb-6">
-          Built during the Qwen Cloud Global AI Hackathon 2026 (MemoryAgent track).
-          MIT licensed — fork it, run it, extend it.
-        </p>
+      <section id="demo" className="py-12 px-4 max-w-4xl mx-auto border-t border-[#1f1f22]">
+        <h2 className="text-xl font-semibold mb-4">First 30 seconds (judges)</h2>
+        <ol className="space-y-3 text-[#a1a1aa] text-sm md:text-base list-decimal list-inside">
+          <li>
+            Open <span className="text-[#e4e4e7]">Brain</span> → click{" "}
+            <span className="text-[#f59e0b]">① Config = 8MB</span> → skill{" "}
+            <code className="text-[#22c55e]">data-export-large-file-timeout</code>{" "}
+            becomes <span className="text-[#f59e0b]">suspended</span>.
+          </li>
+          <li>
+            Click <span className="text-[#22c55e]">② Config = 25MB</span> → same
+            skill returns <span className="text-[#22c55e]">auto_execute</span>.
+          </li>
+          <li>
+            Same memory, different live metadata — that is the Semantic
+            Applicability Gate (SAG).
+          </li>
+        </ol>
         <Link
-          to="/sign-up"
-          className="bg-[#22c55e] hover:bg-[#16a34a] text-[#050505] font-medium rounded px-6 py-3 inline-flex items-center gap-2"
+          to="/app/brain"
+          className="inline-flex mt-6 text-[#22c55e] hover:underline items-center gap-1 text-sm"
         >
-          Get Started <ArrowRight className="w-4 h-4" />
+          Go to Brain <ArrowRight className="w-3 h-3" />
         </Link>
+      </section>
+
+      <section className="py-16 px-4 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="border border-[#1f1f22] rounded p-6 space-y-2">
+            <Brain className="w-7 h-7 text-[#22c55e]" />
+            <h3 className="font-semibold">Compile</h3>
+            <p className="text-sm text-[#a1a1aa]">
+              Qwen turns agent events into versioned skills with embeddings.
+            </p>
+          </div>
+          <div className="border border-[#1f1f22] rounded p-6 space-y-2">
+            <ShieldAlert className="w-7 h-7 text-[#22c55e]" />
+            <h3 className="font-semibold">Intercept + SAG</h3>
+            <p className="text-sm text-[#a1a1aa]">
+              Pre-flight check vs live metadata before block / warn / auto-execute.
+            </p>
+          </div>
+          <div className="border border-[#1f1f22] rounded p-6 space-y-2">
+            <Zap className="w-7 h-7 text-[#22c55e]" />
+            <h3 className="font-semibold">Plug in via MCP</h3>
+            <p className="text-sm text-[#a1a1aa]">
+              Any fleet calls REST or MCP — demo agents are just three examples.
+            </p>
+          </div>
+        </div>
       </section>
 
       <footer className="border-t border-[#1f1f22] py-8 text-center text-sm text-[#7c7c8a]">

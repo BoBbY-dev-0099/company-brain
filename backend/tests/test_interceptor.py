@@ -159,6 +159,61 @@ async def test_high_confidence_skill_clears_relevance_gate():
         assert result.confidence is not None
 
 
+async def test_sag_conditioned_skill_beats_text_only_lookalike():
+    """When live metadata keys match a skill's SAG conditions, prefer that skill
+    over a higher text-score skill with empty applies_if / invalidated_if.
+    """
+    sag_skill = _skill(
+        keywords=["data export", "timeout", "chunk"],
+        entity_types=["api_endpoint"],
+        context_signals=["sync_request"],
+        confidence=0.94,
+        auto=True,
+        invalidated_if=[
+            ApplicabilityCondition(
+                key="export_chunk_size_mb",
+                operator=ApplicabilityOperator.lte,
+                value=10,
+            )
+        ],
+    )
+    sag_skill.skill_id = "data-export-large-file-timeout"
+
+    # Stronger text match, but no SAG conditions — must lose when metadata binds.
+    shadow = _skill(
+        keywords=["data export", "timeout", "chunk", "sync export", "gateway", "large file"],
+        entity_types=["api_endpoint"],
+        context_signals=["sync_request"],
+        confidence=1.0,
+        auto=True,
+    )
+    shadow.skill_id = "block-sync-export-chunk-size-over-5mb"
+
+    with patch("backend.core.interceptor.store.get_all_active_skills",
+               return_value=[shadow, sag_skill]), \
+         patch("backend.core.interceptor.store.log_intercept"), \
+         patch("backend.core.interceptor.store.save_skill",
+               return_value=sag_skill), \
+         patch("backend.core.interceptor.store.reinforce_skill",
+               return_value=None), \
+         patch("backend.core.interceptor.propagator.broadcast"), \
+         patch("backend.core.interceptor.generate_embedding",
+               return_value=None):
+        req = DecisionCheckRequest(
+            agent_id="eng-01",
+            decision_text=(
+                "Increase data export chunk size to improve throughput "
+                "on the api_endpoint during a sync_request gateway timeout"
+            ),
+            decision_type="pr_review",
+            metadata={"export_chunk_size_mb": 8},
+        )
+        result = await check_decision(req)
+        assert result.matched_skill is not None
+        assert result.matched_skill.skill_id == "data-export-large-file-timeout"
+        assert result.result == InterceptResult.suspended
+
+
 async def test_suspended_skill_does_not_reinforce_or_auto_execute():
     """
     When a matched skill's invalidated_if condition holds, the interceptor

@@ -26,10 +26,8 @@ class Settings(BaseSettings):
 
     BRAIN_API_KEY: str = os.getenv("BRAIN_API_KEY", "")
 
-    CLERK_PUBLISHABLE_KEY: str = ""
-    CLERK_SECRET_KEY: str = ""
-    CLERK_JWKS_URL: str = "https://api.clerk.com/v1/jwks"
-    CLERK_WEBHOOK_SECRET: str = ""
+    # Open UI / hackathon demo org (keep separate from polluted local `default`).
+    DEMO_ORG_ID: str = os.getenv("DEMO_ORG_ID", "integrations-demo")
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000

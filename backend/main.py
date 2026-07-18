@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
-import hashlib
-import hmac
 import json
 import logging
 import uuid
@@ -34,16 +31,15 @@ from backend.core.schema import (
     InterceptResult,
     RawEvent,
     SessionMemory,
+    SSEEvent,
     SSEEventType,
 )
-from pydantic import BaseModel
 from backend.demo import seed_data
 from backend.mcp import tools as brain_tools
 from backend.mcp.server import mcp_server
-from backend.middleware.clerk_auth import (
+from backend.middleware.auth import (
     auth_middleware,
     resolve_org_from_token,
-    _verify_clerk_jwt,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -58,11 +54,21 @@ class CreateApiKeyRequest(BaseModel):
     permissions: Optional[str] = None
 
 
+class LiveConfigUpdateRequest(BaseModel):
+    export_chunk_size_mb: Optional[int] = None
+    metadata: Optional[dict[str, Any]] = None
+
+
+class MockGithubWebhookRequest(BaseModel):
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
 class SeedDemoDataResponse(BaseModel):
     seeded: bool
     org_id: str
     skill_count: int = Field(default=0)
     reason: Optional[str] = None
+    embeddings_backfilled: int = Field(default=0)
 
 
 async def _ttl_sweeper() -> None:
@@ -100,20 +106,39 @@ async def _keepalive_loop() -> None:
             logger.warning("keepalive error: %s", exc)
 
 
+async def _backfill_org_embeddings(org_id: str) -> int:
+    """Backfill Qwen embeddings for org skills missing vectors."""
+    if not settings.QWEN_API_KEY:
+        return 0
+    try:
+        filled = await store.backfill_embeddings_for_org(org_id=org_id)
+        logger.info("Backfilled %d embeddings for org %s", filled, org_id)
+        return filled
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Seed embedding backfill failed for org %s: %s", org_id, exc)
+        return 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _ttl_task, _keepalive_task
 
     await store.init_db()
-    seeded = await seed_data.seed_if_empty()
+    # Seed the clean demo org used by open UI (not the polluted local `default`).
+    # Order inside seed_for_org / seed_demo_stage: Skill → Config=25 → Horror intercept.
+    seeded = await seed_data.seed_for_org(settings.DEMO_ORG_ID)
     logger.info("Seed result: %s", seeded)
-
-    if settings.QWEN_API_KEY and seeded.get("skills_inserted", 0) > 0:
-        try:
-            filled = await compiler.backfill_seed_embeddings(org_id=seeded.get("org_id", "default"))
-            logger.info("Backfilled %d seed embeddings", filled)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Seed embedding backfill failed: %s", exc)
+    try:
+        stage = await seed_data.seed_demo_stage(settings.DEMO_ORG_ID)
+        logger.info("Demo stage: %s", stage)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Demo stage seed failed: %s", exc)
+    try:
+        filled = await _backfill_org_embeddings(settings.DEMO_ORG_ID)
+        if filled:
+            logger.info("Backfilled %d embeddings for demo org %s", filled, settings.DEMO_ORG_ID)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Demo org embedding backfill failed: %s", exc)
 
     embedding_status = await check_embedding_health()
     if not embedding_status["healthy"]:
@@ -165,6 +190,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.middleware("http")(auth_middleware)
 
+# Register this concrete endpoint before the /mcp sub-application. Starlette
+# dispatches in registration order, so placing it after the mount makes the
+# sub-application consume /mcp/attestation and respond 404.
+@app.get("/mcp/attestation")
+async def get_attestation(request: Request) -> dict[str, Any]:
+    _get_org_id(request)
+    return brain_tools.attestation()
+
 # Mount the FastMCP server. FastMCP exposes /sse and /messages relative to the
 # mount point; mounting at /mcp gives /mcp/sse externally (matches MCP_SERVER_URL).
 app.mount("/mcp", mcp_server.sse_app())
@@ -173,7 +206,7 @@ app.mount("/mcp", mcp_server.sse_app())
 # ---------- helpers ----------
 
 def _get_org_id(request: Request) -> str:
-    return getattr(request.state, "org_id", "default") or "default"
+    return getattr(request.state, "org_id", None) or settings.DEMO_ORG_ID
 
 
 # ---------- health ----------
@@ -282,10 +315,10 @@ async def list_events(request: Request, limit: int = 50) -> dict[str, Any]:
 
 @app.post("/agents/support/run", response_model=AgentRunResponse)
 async def run_support(request: Request, req: AgentRunRequest) -> AgentRunResponse:
-    _get_org_id(request)
+    org_id = _get_org_id(request)
     if not settings.QWEN_API_KEY:
         raise HTTPException(status_code=503, detail="QWEN_API_KEY not configured")
-    result = await support_agent.run(req.user_message, metadata=req.metadata)
+    result = await support_agent.run(req.user_message, metadata=req.metadata, org_id=org_id)
     return AgentRunResponse(
         agent_id=support_agent.get_agent().agent_id,
         response=result.response,
@@ -299,10 +332,12 @@ async def run_support(request: Request, req: AgentRunRequest) -> AgentRunRespons
 
 @app.post("/agents/engineering/run", response_model=AgentRunResponse)
 async def run_engineering(request: Request, req: AgentRunRequest) -> AgentRunResponse:
-    _get_org_id(request)
+    org_id = _get_org_id(request)
     if not settings.QWEN_API_KEY:
         raise HTTPException(status_code=503, detail="QWEN_API_KEY not configured")
-    result = await engineering_agent.run(req.user_message, metadata=req.metadata)
+    result = await engineering_agent.run(
+        req.user_message, metadata=req.metadata, org_id=org_id
+    )
     return AgentRunResponse(
         agent_id=engineering_agent.get_agent().agent_id,
         response=result.response,
@@ -316,7 +351,7 @@ async def run_engineering(request: Request, req: AgentRunRequest) -> AgentRunRes
 
 @app.post("/agents/product/run", response_model=AgentRunResponse)
 async def run_product(request: Request, req: AgentRunRequest) -> AgentRunResponse:
-    _get_org_id(request)
+    org_id = _get_org_id(request)
     if not settings.QWEN_API_KEY:
         raise HTTPException(status_code=503, detail="QWEN_API_KEY not configured")
     result, session_id = await product_agent.run(
@@ -324,6 +359,7 @@ async def run_product(request: Request, req: AgentRunRequest) -> AgentRunRespons
         user_id=req.user_id,
         session_id=req.session_id,
         metadata=req.metadata,
+        org_id=org_id,
     )
     return AgentRunResponse(
         agent_id=product_agent.get_agent().agent_id,
@@ -366,31 +402,16 @@ async def list_user_sessions(request: Request, user_id: str) -> dict[str, Any]:
     }
 
 
-# ---------- mock attestation ----------
-
-@app.get("/mcp/attestation")
-async def get_attestation(request: Request) -> dict[str, Any]:
-    _get_org_id(request)
-    return brain_tools.attestation()
-
-
 # ---------- SSE stream ----------
 
 @app.get("/stream")
-async def stream(request: Request, token: Optional[str] = None, jwt: Optional[str] = None) -> EventSourceResponse:
-    # Resolve org_id from auth middleware, API key token, or Clerk JWT query param.
+async def stream(request: Request, token: Optional[str] = None) -> EventSourceResponse:
+    # Resolve org_id from API key query token, else open demo org.
     org_id = getattr(request.state, "org_id", None)
     if not org_id and token:
         org_id = await resolve_org_from_token(token)
-    if not org_id and jwt:
-        try:
-            claims = await _verify_clerk_jwt(jwt)
-            user_id = claims.get("sub", "")
-            org_id = claims.get("org_id") or claims.get("org_slug") or user_id or "default"
-        except Exception:  # noqa: BLE001
-            return JSONResponse({"error": "Invalid JWT"}, status_code=401)
     if not org_id:
-        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+        org_id = settings.DEMO_ORG_ID
 
     sub_id, queue = propagator.add_subscriber(org_id=org_id)
 
@@ -478,75 +499,136 @@ async def revoke_api_key_route(request: Request, key_id: str) -> dict[str, Any]:
     return {"revoked": True}
 
 
+async def _apply_live_config(
+    org_id: str,
+    metadata_patch: dict[str, Any],
+    *,
+    run_sag: bool = True,
+) -> dict[str, Any]:
+    """Persist live config, broadcast SSE, optionally run SAG check (never crash)."""
+    config = await store.set_live_config(org_id, metadata_patch)
+    await propagator.broadcast(
+        SSEEvent(
+            type=SSEEventType.CONFIG_UPDATED,
+            payload={
+                "org_id": org_id,
+                "metadata": config.get("metadata"),
+            },
+        ),
+        org_id=org_id,
+    )
+
+    sag: dict[str, Any] | None = None
+    if run_sag:
+        chunk = (config.get("metadata") or {}).get("export_chunk_size_mb")
+        skill = await store.get_skill("data-export-large-file-timeout", org_id=org_id)
+        if skill is None:
+            sag = None
+        else:
+            try:
+                check_req = DecisionCheckRequest(
+                    agent_id="engineering-agent-1",
+                    decision_text=(
+                        "Increase data export chunk size to improve throughput "
+                        "on large CSV exports"
+                    ),
+                    domain="engineering",
+                    metadata={"export_chunk_size_mb": chunk} if chunk is not None else {},
+                    org_id=org_id,
+                )
+                resp = await interceptor.check_decision(check_req)
+                sag = {
+                    "result": resp.result.value if resp.result else None,
+                    "applicability_status": resp.applicability_status,
+                    "skill_id": resp.matched_skill.skill_id if resp.matched_skill else None,
+                    "reason": resp.rationale,
+                    "suspension_reason": resp.suspension_reason,
+                    "confidence": resp.confidence,
+                }
+                if resp.matched_skill is not None and resp.result != InterceptResult.CLEAR:
+                    await propagator.broadcast_intercept(
+                        agent_id=check_req.agent_id,
+                        skill=resp.matched_skill,
+                        result=resp.result,
+                        confidence=resp.confidence,
+                        org_id=org_id,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("live-config SAG check failed (safe null): %s", exc)
+                sag = None
+
+    return {
+        "org_id": org_id,
+        "metadata": config.get("metadata"),
+        "updated_at": config.get("updated_at"),
+        "sag": sag,
+    }
+
+
+@app.get("/settings/live-config")
+async def get_live_config_route(request: Request) -> dict[str, Any]:
+    org_id = _get_org_id(request)
+    config = await store.get_live_config(org_id)
+    return {
+        "org_id": org_id,
+        "metadata": config.get("metadata"),
+        "updated_at": config.get("updated_at"),
+    }
+
+
+@app.post("/settings/live-config")
+async def post_live_config_route(
+    request: Request, body: LiveConfigUpdateRequest
+) -> dict[str, Any]:
+    org_id = _get_org_id(request)
+    patch: dict[str, Any] = dict(body.metadata or {})
+    if body.export_chunk_size_mb is not None:
+        patch["export_chunk_size_mb"] = body.export_chunk_size_mb
+    if not patch:
+        raise HTTPException(status_code=422, detail="Provide export_chunk_size_mb or metadata")
+    return await _apply_live_config(org_id, patch, run_sag=True)
+
+
+@app.post("/integrations/mock-webhook/github")
+async def mock_github_webhook(
+    request: Request, body: MockGithubWebhookRequest
+) -> dict[str, Any]:
+    """Stub: external system pushes live config (e.g. export chunk size)."""
+    org_id = _get_org_id(request)
+    cfg = body.config or {}
+    if not cfg:
+        raise HTTPException(status_code=422, detail="config object required")
+    result = await _apply_live_config(org_id, cfg, run_sag=True)
+    return {"ok": True, "source": "mock-webhook/github", **result}
+
+
 @app.post("/settings/seed-demo-data", response_model=SeedDemoDataResponse)
 async def seed_demo_data_route(request: Request) -> SeedDemoDataResponse:
-    """Idempotent org-scoped demo seed for the current authenticated user/org.
+    """Idempotent org-scoped demo seed for the current org (open demo or API key).
 
-    Requires a valid Clerk JWT or API key; uses the same org_id resolution as
-    every other endpoint. Reuses the full SAG-enabled demo seed.
+    Uses the same org_id resolution as every other endpoint. Reuses the full
+    SAG-enabled demo seed and backfills embeddings so SAG/intercept works
+    immediately on fresh orgs.
     """
     org_id = _get_org_id(request)
     existing = await store.get_skill_count(active_only=False, org_id=org_id)
     if existing > 0:
+        backfilled = await _backfill_org_embeddings(org_id)
         return SeedDemoDataResponse(
             seeded=False,
             org_id=org_id,
             skill_count=existing,
             reason="already seeded",
+            embeddings_backfilled=backfilled,
         )
     result = await store.seed_demo_data(org_id=org_id)
+    backfilled = await _backfill_org_embeddings(org_id)
     return SeedDemoDataResponse(
         seeded=True,
         org_id=org_id,
         skill_count=result.get("skills_inserted", 0),
+        embeddings_backfilled=backfilled,
     )
-
-
-# ---------- clerk webhook ----------
-
-@app.post("/clerk/webhook")
-async def clerk_webhook(request: Request) -> dict[str, Any]:
-    """Handle Clerk webhooks for org provisioning."""
-    body = await request.body()
-    svix_id = request.headers.get("svix-id")
-    svix_timestamp = request.headers.get("svix-timestamp")
-    svix_signature = request.headers.get("svix-signature")
-
-    if not all([svix_id, svix_timestamp, svix_signature]):
-        raise HTTPException(status_code=400, detail="Missing Svix headers")
-
-    if not settings.CLERK_WEBHOOK_SECRET:
-        raise HTTPException(status_code=500, detail="CLERK_WEBHOOK_SECRET not configured")
-
-    signed_content = f"{svix_id}.{svix_timestamp}.{body.decode()}"
-    secret_bytes = base64.b64decode(settings.CLERK_WEBHOOK_SECRET.split("_")[1])
-    expected_signature = base64.b64encode(
-        hmac.new(secret_bytes, signed_content.encode(), hashlib.sha256).digest()
-    ).decode()
-
-    signatures = [sig.split(",")[1] for sig in svix_signature.split(" ")]
-    if expected_signature not in signatures:
-        raise HTTPException(status_code=401, detail="Invalid signature")
-
-    # Check timestamp (5-minute window)
-    import time
-    current_time = int(time.time())
-    if current_time - int(svix_timestamp) > 300:
-        raise HTTPException(status_code=400, detail="Timestamp too old")
-
-    payload = json.loads(body)
-    event_type = payload.get("type", "")
-
-    if event_type == "organization.created":
-        org_data = payload.get("data", {})
-        org_id = org_data.get("id", "")
-        org_name = org_data.get("name", "")
-        if org_id:
-            await store.register_agent(f"org-{org_id}", "organization")
-            logger.info("Clerk webhook: created org %s (%s)", org_id, org_name)
-            return {"status": "org_created", "org_id": org_id}
-
-    return {"status": "ignored", "type": event_type}
 
 
 # ---------- root ----------
@@ -564,6 +646,5 @@ async def root() -> dict[str, Any]:
             "/sessions/{user_id}", "/stream",
             "/mcp/sse", "/mcp/attestation",
             "/settings/api-keys", "/settings/metrics", "/settings/seed-demo-data",
-            "/clerk/webhook",
         ],
     }

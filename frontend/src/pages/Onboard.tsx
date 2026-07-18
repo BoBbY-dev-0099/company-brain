@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle, Copy, Key, Zap } from "lucide-react"
-import { useAuth } from "@clerk/clerk-react"
 import ApiKeyCreation from "../components/layout/ApiKeyCreation"
 import { apiPost } from "../lib/api"
 
@@ -9,7 +8,6 @@ type OnboardStep = "welcome" | "api-key" | "done"
 
 export default function Onboard() {
   const navigate = useNavigate()
-  const { userId } = useAuth()
   const [step, setStep] = useState<OnboardStep>("welcome")
   const [apiKey, setApiKey] = useState<string>("")
   const [copied, setCopied] = useState(false)
@@ -120,7 +118,7 @@ export default function Onboard() {
       >
         Go to Dashboard
       </button>
-      <div className="text-xs text-[#7c7c8a] font-mono">User: {userId || "--"}</div>
+      <div className="text-xs text-[#7c7c8a] font-mono">Org: integrations-demo (open demo)</div>
     </div>
   )
 }

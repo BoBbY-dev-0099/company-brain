@@ -67,6 +67,7 @@ class SSEEventType(str, Enum):
     DECISION_INTERCEPTED = "decision_intercepted"
     AGENT_ACTION = "agent_action"
     AGENT_REGISTERED = "agent_registered"
+    CONFIG_UPDATED = "config_updated"
     KEEPALIVE = "keepalive"
 
 

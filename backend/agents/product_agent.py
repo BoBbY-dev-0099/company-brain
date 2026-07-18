@@ -63,13 +63,14 @@ def get_agent() -> ProductAgent:
 async def _build_cross_session_context(
     user_id: str,
     current_session_id: str | None,
+    org_id: str = "default",
 ) -> str:
-    sessions = await store.get_sessions_for_user(user_id, limit=10)
+    sessions = await store.get_sessions_for_user(user_id, limit=10, org_id=org_id)
     other = [s for s in sessions if s.session_id != current_session_id]
     if not other:
         return ""
 
-    skill_count = await store.get_skill_count(active_only=True)
+    skill_count = await store.get_skill_count(active_only=True, org_id=org_id)
 
     last = other[0]
     if not last.unresolved_intents and not last.key_decisions:
@@ -94,36 +95,45 @@ async def run(
     user_id: str = "demo-user",
     session_id: str | None = None,
     metadata: dict[str, Any] | None = None,
+    org_id: str | None = None,
 ) -> tuple[AgentRunResult, str]:
+    from backend.config import settings
+
     agent = get_agent()
+    resolved_org = org_id or settings.DEMO_ORG_ID
     session_id = session_id or f"session-{uuid.uuid4().hex[:6]}"
 
-    agent._cross_session_preamble = await _build_cross_session_context(user_id, session_id)
+    agent._cross_session_preamble = await _build_cross_session_context(
+        user_id, session_id, org_id=resolved_org
+    )
 
     await propagator.broadcast_agent_action(
         agent_id=agent.agent_id,
         action_type="qa_received",
         content=user_message[:200],
         metadata={"session_id": session_id},
+        org_id=resolved_org,
     )
 
-    result = await agent.run(user_message)
+    result = await agent.run(user_message, org_id=resolved_org)
 
     # Persist session memory for the next turn.
-    existing = await store.get_session(session_id)
+    existing = await store.get_session(session_id, org_id=resolved_org)
     if existing is None:
         existing = SessionMemory(
             session_id=session_id,
             user_id=user_id,
             agent_id=agent.agent_id,
+            org_id=resolved_org,
         )
     existing.turn_count += 1
+    existing.org_id = resolved_org
     existing.brain_skills_used = list(dict.fromkeys(existing.brain_skills_used + result.skills_used))
     if user_message and len(existing.unresolved_intents) < 5:
         existing.unresolved_intents.append(user_message[:120])
         existing.unresolved_intents = existing.unresolved_intents[-5:]
     existing.last_updated = utc_now()
-    await store.save_session(existing)
+    await store.save_session(existing, org_id=resolved_org)
 
     await propagator.broadcast_agent_action(
         agent_id=agent.agent_id,
@@ -134,6 +144,7 @@ async def run(
             "skills_used": result.skills_used,
             "iterations": result.iterations,
         },
+        org_id=resolved_org,
     )
 
     return result, session_id

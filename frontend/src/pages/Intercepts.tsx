@@ -26,12 +26,15 @@ export default function Intercepts() {
         <h1 className="text-2xl font-semibold">Decision Intercepts</h1>
         <div className="text-sm text-[#7c7c8a]">{intercepts.length} logged</div>
       </div>
+      <p className="text-sm text-[#7c7c8a]">
+        Each row: SAG decision · agent · skill · timestamp · reason. Toggle Brain live config to append a fresh audit entry.
+      </p>
 
       <div className="bg-[#111114] border border-[#1f1f22] rounded p-4">
         <InterceptList
           intercepts={intercepts}
           loading={loading}
-          emptyMessage="No intercepts logged yet. Trigger a decision check to see results here."
+          emptyMessage="No intercepts logged yet. Switch Brain live config to 8MB to see SAG suspension."
         />
       </div>
     </div>

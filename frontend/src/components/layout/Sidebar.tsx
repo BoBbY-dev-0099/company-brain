@@ -1,8 +1,6 @@
 import { useLocation, Link } from "react-router-dom"
-import { useAuth, UserButton } from "@clerk/clerk-react"
 import {
   Brain,
-  LogOut,
   ShieldAlert,
   Users,
   Zap,
@@ -15,7 +13,6 @@ import BrainHealthStatus from "./BrainHealthStatus"
 
 export default function Sidebar() {
   const location = useLocation()
-  const { userId, signOut } = useAuth()
 
   const links = [
     { to: "/app/dashboard", label: "Dashboard", icon: Zap },
@@ -62,17 +59,10 @@ export default function Sidebar() {
       </div>
       <div className="space-y-3">
         <BrainHealthStatus />
-        <div className="flex items-center gap-2 text-[#7c7c8a] text-xs border-t border-[#1f1f22] pt-3">
-          <UserButton afterSignOutUrl="/" />
-          <span className="font-mono">{userId ? `${userId.slice(0, 6)}..` : "--"}</span>
+        <div className="text-[#7c7c8a] text-xs border-t border-[#1f1f22] pt-3 space-y-1">
+          <div className="font-mono">org: integrations-demo</div>
+          <div>open mode · no login</div>
         </div>
-        <button
-          onClick={() => signOut()}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded text-xs font-medium text-[#a1a1aa] hover:text-[#e4e4e7] hover:bg-[#1f1f22] transition-colors"
-        >
-          <LogOut className="w-3 h-3" />
-          Sign Out
-        </button>
       </div>
     </aside>
   )

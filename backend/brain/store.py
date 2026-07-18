@@ -253,6 +253,58 @@ async def get_recent_events(org_id: str = "default", limit: int = 50) -> list[di
     return out
 
 
+_DEFAULT_LIVE_METADATA: dict[str, Any] = {"export_chunk_size_mb": 25}
+
+
+async def get_live_config(org_id: str = "default") -> dict[str, Any]:
+    """Return org live metadata (demo system state). Creates default if missing."""
+    db = get_db()
+    doc = await db.org_configs.find_one({"org_id": org_id})
+    if not doc:
+        now = utc_now()
+        metadata = dict(_DEFAULT_LIVE_METADATA)
+        await db.org_configs.insert_one({
+            "org_id": org_id,
+            "metadata": metadata,
+            "updated_at": now,
+            "created_at": now,
+        })
+        return {"org_id": org_id, "metadata": metadata, "updated_at": now}
+    return {
+        "org_id": org_id,
+        "metadata": dict(doc.get("metadata") or _DEFAULT_LIVE_METADATA),
+        "updated_at": doc.get("updated_at"),
+    }
+
+
+async def set_live_config(org_id: str, metadata: dict[str, Any]) -> dict[str, Any]:
+    """Merge metadata into org live config and return the full document view."""
+    db = get_db()
+    now = utc_now()
+    existing = await get_live_config(org_id)
+    merged = {**(existing.get("metadata") or {}), **metadata}
+    await db.org_configs.update_one(
+        {"org_id": org_id},
+        {
+            "$set": {"metadata": merged, "updated_at": now, "org_id": org_id},
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+    return {"org_id": org_id, "metadata": merged, "updated_at": now}
+
+
+async def horror_intercept_exists(org_id: str) -> bool:
+    db = get_db()
+    doc = await db.intercept_log.find_one({
+        "org_id": org_id,
+        "matched_skill": "data-export-large-file-timeout",
+        "result": "suspended",
+        "decision_text": {"$regex": "horror-story", "$options": "i"},
+    })
+    return doc is not None
+
+
 async def get_recent_intercepts(org_id: str = "default", limit: int = 50) -> list[dict[str, Any]]:
     db = get_db()
     cursor = (
@@ -316,7 +368,7 @@ async def register_agent(agent_id: str, agent_type: str, org_id: str = "default"
 async def seed_demo_data(org_id: str = "default") -> dict[str, Any]:
     """Idempotent org-scoped demo seed used by the API endpoint.
 
-    Returns a clean result dict; does not backfill embeddings (same as CLI).
+    Returns a clean result dict. Callers should backfill embeddings after seed.
     """
     from backend.demo import seed_data
 

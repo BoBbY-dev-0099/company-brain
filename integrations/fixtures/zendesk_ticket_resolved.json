@@ -1,0 +1,10 @@
+{
+  "system": "zendesk_shaped",
+  "event": "ticket.solved",
+  "ticket_id": "ZD-44821",
+  "agent_id": "support-agent-1",
+  "subject": "Mobile app keeps logging users out after overnight idle",
+  "content": "Ticket ZD-44821 resolved. Root cause: mobile clients with >5 minute device clock skew silently fail JWT refresh and loop on 401. Fix: detect skew client-side and prompt to enable automatic date/time before rotating credentials. Do not force logout as first response.",
+  "outcome": "resolved_with_clock_skew_playbook",
+  "event_type": "ticket_resolved"
+}
