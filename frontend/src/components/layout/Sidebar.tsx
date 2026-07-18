@@ -29,13 +29,13 @@ export default function Sidebar() {
   useEffect(() => { setOpen(false) }, [location.pathname])
 
   const primaryLinks: NavigationItem[] = [
-    { to: "/app/inbox", label: "Decision Queue", icon: ShieldCheck },
+    { to: "/", label: "Judge launchpad", icon: ShieldCheck },
     { to: "/app/connect", label: "Connect", icon: PlugZap },
   ]
   const technicalLinks: NavigationItem[] = [
     { to: "/app/dashboard", label: "System dashboard", icon: Zap },
     { to: "/app/brain", label: "Brain", icon: Brain },
-    { to: "/app/intercepts", label: "Audit history", icon: ShieldAlert },
+    { to: "/app/audit", label: "Workflow audit", icon: ShieldAlert },
     { to: "/app/agents", label: "Agents", icon: Users },
     { to: "/app/events", label: "Events", icon: Megaphone },
     { to: "/app/api-keys", label: "API Keys", icon: Key },

@@ -3,16 +3,15 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #050505;
-  color: #e4e4e7;
-  font-family: 'Inter', system-ui, sans-serif;
-  overflow: hidden;
+  background: #f5f1e8;
+  color: #17212b;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }

@@ -1,7 +1,6 @@
 import axios from "axios"
 import type {
   DemoReadiness,
-  EvidenceRecord,
   IntegrationCatalog,
   WorkflowOutcome,
   WorkflowRun,
@@ -34,8 +33,37 @@ export type WorkflowSourcesResponse = { sources: WorkflowSource[] }
 export type WorkflowRunRequest = {
   template_id: string
   fixture?: boolean
-  evidence?: EvidenceRecord[]
+  evidence?: WorkflowEvidenceInput[]
   live_context?: Record<string, unknown>
+}
+
+export type WorkflowEvidenceInput = {
+  source_type: string
+  source_name?: string
+  external_id?: string
+  url?: string
+  occurred_at?: string
+  excerpt: string
+  availability?: string
+  metadata?: Record<string, unknown>
+}
+
+export type DemoModule = {
+  id: string
+  kind: "playground" | "simulation"
+  title: string
+  route: string
+  summary: string
+  status: string
+  primary_action: string
+  template_id?: string
+  fixture?: boolean
+}
+
+export type DemoSession = {
+  mode: "judge_sandbox"
+  expires_at: string
+  retention: string
 }
 export type WorkflowOutcomeRequest = {
   approved: boolean
@@ -52,6 +80,14 @@ export function getWorkflowTemplates() {
 
 export function createWorkflowRun(body: WorkflowRunRequest) {
   return apiPost<WorkflowRun | { run: WorkflowRun }>("/workflow-runs", body)
+}
+
+export function getDemoModules() {
+  return apiGet<{ version: string; modules: DemoModule[] }>("/demo/modules")
+}
+
+export function createDemoSession() {
+  return apiPost<DemoSession>("/demo/session", {})
 }
 
 export function getWorkflowRun(runId: string) {

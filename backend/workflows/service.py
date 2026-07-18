@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.brain import store as brain_store
@@ -258,6 +258,21 @@ class WorkflowService:
                         return f"{suffix} changed from {value!r} to {metadata[current_key]!r}."
         return None
 
+    @staticmethod
+    def _recommended_action(template: WorkflowTemplate, verdict: WorkflowVerdict) -> str:
+        """Keep the human action aligned with the deterministic verdict."""
+        if verdict == WorkflowVerdict.SUSPENDED:
+            return template.recommended_action
+        if verdict == WorkflowVerdict.REVIEW_REQUIRED:
+            return (
+                "Do not proceed until the missing or stale evidence is refreshed. "
+                f"Route the evidence to the {template.owner_role} for review."
+            )
+        return (
+            "Current evidence and live conditions satisfy the safety rule. "
+            f"Require the {template.owner_role} to review the cited evidence and explicitly approve before proceeding."
+        )
+
     async def _compiled_memory(
         self,
         *,
@@ -266,6 +281,7 @@ class WorkflowService:
         org_id: str,
         run_id: str,
         is_fixture: bool,
+        is_judge_sandbox: bool,
     ) -> tuple[MemoryReference | None, DecisionInference]:
         """Best-effort Qwen compile; never lets a compile failure change SAG."""
         fallback = DecisionInference(
@@ -302,7 +318,7 @@ class WorkflowService:
             skill_id: str | None = None
             # Fixture compilation is intentionally ephemeral: it must never add
             # skills, confidence, or duplicate canonical judge-demo records.
-            if not is_fixture:
+            if not is_fixture and not is_judge_sandbox:
                 try:
                     saved = await brain_store.save_skill(skill, org_id=org_id)
                     skill_id = saved.skill_id
@@ -315,7 +331,7 @@ class WorkflowService:
                     memory_type=template.memory_type,
                     summary=skill.summary or skill.name,
                     skill_id=skill_id,
-                    is_ephemeral=is_fixture or not persisted,
+                    is_ephemeral=is_fixture or is_judge_sandbox or not persisted,
                     provenance={
                         "compiler": "qwen",
                         "source_event_id": event.event_id,
@@ -394,9 +410,15 @@ class WorkflowService:
         org_id: str,
         persist: bool = True,
         compile_memory: bool = True,
+        is_judge_sandbox: bool = False,
     ) -> WorkflowRun:
         template = self.get_template(body.template_id)
         now = workflow_now()
+        expires_at = (
+            now + timedelta(seconds=settings.JUDGE_SANDBOX_TTL_SECONDS)
+            if is_judge_sandbox
+            else None
+        )
         is_fixture = body.fixture
         input_evidence = body.evidence or (template.demo_fixture.evidence if is_fixture else [])
         live_context = dict(body.live_context or (template.demo_fixture.live_context if is_fixture else {}))
@@ -407,6 +429,8 @@ class WorkflowService:
             is_fixture=is_fixture,
             now=now,
         )
+        if expires_at:
+            evidence = [item.model_copy(update={"expires_at": expires_at}) for item in evidence]
         run_id = f"workflow-{uuid.uuid4().hex}"
         missing = self._missing_requirements(
             template=template,
@@ -476,6 +500,7 @@ class WorkflowService:
                 org_id=org_id,
                 run_id=run_id,
                 is_fixture=is_fixture,
+                is_judge_sandbox=is_judge_sandbox,
             )
         else:
             compiled_memory = None
@@ -510,7 +535,7 @@ class WorkflowService:
             verdict=verdict,
             status=status,
             owner=template.owner_role,
-            recommended_next_action=template.recommended_action,
+            recommended_next_action=self._recommended_action(template, verdict),
             human_approval_required=template.human_approval_required,
         )
         run = WorkflowRun(
@@ -520,6 +545,8 @@ class WorkflowService:
             scenario_version=DEMO_SCENARIO_VERSION,
             org_id=org_id,
             is_demo_fixture=is_fixture,
+            is_judge_sandbox=is_judge_sandbox,
+            expires_at=expires_at,
             live_context=live_context,
             decision_brief=brief,
             created_at=now,
@@ -570,6 +597,7 @@ class WorkflowService:
         skill_id = self._compiled_skill_id(run)
         can_reinforce = (
             not run.is_demo_fixture
+            and not run.is_judge_sandbox
             and body.approved
             and body.outcome == "confirmed_effective"
             and bool(body.actor)

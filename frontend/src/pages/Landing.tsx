@@ -1,41 +1,63 @@
+import { useEffect, useState } from "react"
+import { ArrowRight, Boxes, CircleAlert, FlaskConical, ShieldCheck, Sparkles } from "lucide-react"
 import { Link } from "react-router-dom"
-import { ArrowRight, Bot, FileSearch, ShieldCheck, Sparkles, UserRound } from "lucide-react"
+import { getDemoModules, type DemoModule } from "../lib/api"
+
+const iconByModule: Record<string, typeof Sparkles> = {
+  workflow: FlaskConical,
+  "release-safety": ShieldCheck,
+  "money-safety": CircleAlert,
+  "rollout-safety": Boxes,
+}
+
+function moduleTone(module: DemoModule): string {
+  if (module.kind === "playground") return "border-[#2f5eeb]/30 bg-[#e7edff] text-[#2148c7]"
+  if (module.id === "money-safety") return "border-[#c77a17]/30 bg-[#fff0d6] text-[#9a590b]"
+  if (module.id === "rollout-safety") return "border-[#8c3e82]/25 bg-[#f7e7f2] text-[#6f2b67]"
+  return "border-[#b84036]/25 bg-[#fce9e6] text-[#96332b]"
+}
 
 export default function Landing() {
+  const [modules, setModules] = useState<DemoModule[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void getDemoModules()
+      .then((payload) => setModules(payload.modules))
+      .catch(() => setError("The judge modules are unavailable. Please retry the server connection."))
+  }, [])
+
   return (
-    <div className="min-h-screen bg-[#050505] text-[#e4e4e7]">
-      <header className="fixed z-10 w-full border-b border-[#1f1f22] bg-[#050505]/85 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-2 text-[#22c55e]"><Sparkles className="h-5 w-5" /><span className="font-semibold">Company Brain</span></div>
-          <nav className="flex items-center gap-4 text-sm"><Link to="/app/connect" className="text-[#a1a1aa] hover:text-[#e4e4e7]">How it connects</Link><Link to="/app/inbox" className="font-medium text-[#86efac] hover:underline">Decision Queue</Link></nav>
+    <div className="min-h-screen bg-[#f5f1e8] text-[#17212b]">
+      <header className="border-b border-[#d9d3c8] bg-[#f5f1e8]/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+          <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight text-[#17212b]"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#17212b] text-[#f5f1e8]"><Sparkles className="h-4 w-4" /></span>Company Brain</Link>
+          <Link to="/app/connect" className="text-sm font-medium text-[#39506a] hover:text-[#17212b]">Technical proof</Link>
         </div>
       </header>
 
-      <main>
-        <section className="mx-auto max-w-5xl px-4 pb-16 pt-28 md:pb-24 md:pt-36">
-          <p className="mb-4 text-sm font-mono text-[#86efac]">Qwen Cloud Hackathon 2026 / Governed operational memory</p>
-          <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-tight text-[#fafafa] md:text-6xl">Company Brain stops unsafe company actions when reality changes.</h1>
-          <p className="mt-6 max-w-3xl text-lg leading-8 text-[#b4b4bb] md:text-xl">It turns source-backed evidence into governed memory, checks that memory against live context, and brings the right person in before a release, refund, or rollout proceeds.</p>
-          <div className="mt-8 flex flex-wrap items-center gap-3"><Link to="/app/inbox" className="inline-flex items-center gap-2 rounded bg-[#22c55e] px-5 py-3 font-semibold text-[#050505] hover:bg-[#4ade80]">See why a release was stopped <ArrowRight className="h-4 w-4" /></Link><Link to="/app/connect" className="rounded border border-[#2a2a30] bg-[#111114] px-5 py-3 font-medium text-[#e4e4e7] hover:border-[#22c55e]/50">How it connects</Link></div>
-          <p className="mt-5 text-xs text-[#7c7c8a]">Qwen compiles evidence into memory. SAG checks the live condition deterministically. Humans approve every external action.</p>
+      <main className="mx-auto max-w-6xl px-5 pb-14 pt-12 md:pt-20">
+        <section className="max-w-3xl">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2f5eeb]">Governed operational memory</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.045em] text-[#17212b] md:text-6xl">Stop unsafe actions when reality changes.</h1>
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-[#52606d]">Choose a real operational decision. Company Brain checks evidence, Qwen memory, and live conditions before a human acts.</p>
         </section>
 
-        <section className="border-y border-[#1f1f22] bg-[#09090b]">
-          <div className="mx-auto max-w-5xl px-4 py-12 md:py-16"><div className="max-w-2xl"><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#86efac]">Judge route</p><h2 className="mt-2 text-2xl font-semibold text-[#f4f4f5]">One clear story in the first 90 seconds</h2></div><div className="mt-8 grid gap-4 md:grid-cols-3"><JourneyStep number="1" icon={<FileSearch className="h-5 w-5" />} title="See the evidence" text="A merged PR and live runtime signal make a previously safe release assumption false." /><JourneyStep number="2" icon={<ShieldCheck className="h-5 w-5" />} title="See why it stopped" text="Qwen memory is separated from source facts, then SAG shows the deterministic safety verdict." /><JourneyStep number="3" icon={<UserRound className="h-5 w-5" />} title="See who owns it" text="The next action goes to a named human owner. Sandbox outcomes stay isolated from canonical memory." /></div></div>
-        </section>
+        {error ? <div className="mt-10 rounded-2xl border border-[#b84036]/30 bg-[#fce9e6] p-5 text-sm text-[#96332b]">{error}</div> : (
+          <section aria-label="Judge modules" className="mt-10 grid gap-4 md:grid-cols-2">
+            {modules.length === 0 ? Array.from({ length: 4 }).map((_, index) => <div key={index} className="min-h-56 animate-pulse rounded-3xl border border-[#ddd6cb] bg-white/60 p-6" />) : modules.map((module) => {
+              const Icon = iconByModule[module.id] ?? Sparkles
+              return <Link key={module.id} to={module.route} className="group flex min-h-60 flex-col rounded-3xl border border-[#ddd6cb] bg-[#fffcf7] p-6 shadow-[0_18px_55px_rgba(52,45,35,0.08)] transition hover:-translate-y-1 hover:border-[#a6b5d5] hover:shadow-[0_22px_60px_rgba(47,94,235,0.12)]">
+                <div className="flex items-start justify-between gap-4"><span className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${moduleTone(module)}`}><Icon className="h-5 w-5" /></span><span className="rounded-full border border-[#ded7cb] bg-[#f8f5ef] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#687383]">{module.status.replaceAll("_", " ")}</span></div>
+                <div className="mt-7"><h2 className="text-2xl font-semibold tracking-tight text-[#17212b]">{module.title}</h2><p className="mt-2 max-w-md text-sm leading-6 text-[#586575]">{module.summary}</p></div>
+                <span className="mt-auto inline-flex items-center gap-2 pt-8 text-sm font-semibold text-[#2148c7]">{module.primary_action}<ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span>
+              </Link>
+            })}
+          </section>
+        )}
 
-        <section className="mx-auto max-w-5xl px-4 py-16 md:py-20"><div className="grid gap-8 md:grid-cols-[0.9fr_1.1fr]"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#86efac]">Built for existing operations</p><h2 className="mt-2 text-2xl font-semibold text-[#f4f4f5]">A governed checkpoint, not another agent silo.</h2><p className="mt-3 text-sm leading-6 text-[#a1a1aa]">Companies can connect evidence, call a workflow contract, or let an agent ask for a DecisionBrief through MCP. The product is explicit about which paths are connected, ready, fixtures, or previews.</p><Link to="/app/connect" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#86efac] hover:underline">Explore connection boundaries <ArrowRight className="h-4 w-4" /></Link></div><div className="rounded-2xl border border-[#1f1f22] bg-[#111114] p-5"><div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr]"><MiniFlow icon={<FileSearch className="h-4 w-4" />} label="Company source" /><ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#686871] sm:block" /><MiniFlow icon={<Bot className="h-4 w-4" />} label="Agent or workflow" /></div><div className="my-3 border-l border-dashed border-[#2a2a30] pl-4 text-xs leading-5 text-[#a1a1aa]"><span className="font-semibold text-[#86efac]">Company Brain</span><br />Evidence freshness, Qwen memory, deterministic SAG, and a human-owned decision brief.</div><div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr]"><MiniFlow icon={<ShieldCheck className="h-4 w-4" />} label="Safe recommendation" /><ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#686871] sm:block" /><MiniFlow icon={<UserRound className="h-4 w-4" />} label="Human confirmation" /></div></div></div></section>
+        <p className="mt-8 text-xs text-[#6b7280]">Qwen compiles evidence into an ephemeral memory candidate. Deterministic SAG checks live context. Every external action remains human-approved.</p>
       </main>
-
-      <footer className="border-t border-[#1f1f22] py-8 text-center text-sm text-[#7c7c8a]">Company Brain / Qwen Cloud Hackathon 2026</footer>
     </div>
   )
-}
-
-function JourneyStep({ number, icon, title, text }: { number: string; icon: React.ReactNode; title: string; text: string }) {
-  return <article className="rounded-xl border border-[#1f1f22] bg-[#111114] p-5"><div className="flex items-center gap-3"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#22c55e]/10 text-xs font-semibold text-[#86efac]">{number}</span><span className="text-[#86efac]">{icon}</span></div><h3 className="mt-4 font-semibold text-[#f4f4f5]">{title}</h3><p className="mt-2 text-sm leading-6 text-[#a1a1aa]">{text}</p></article>
-}
-
-function MiniFlow({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return <div className="flex items-center justify-center gap-2 rounded-lg border border-[#1f1f22] bg-[#09090b] px-3 py-3 text-xs font-medium text-[#c4c4ca]"><span className="text-[#86efac]">{icon}</span>{label}</div>
 }

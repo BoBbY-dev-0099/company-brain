@@ -92,6 +92,7 @@ class EvidenceRecord(EvidenceInput):
     scenario_version: str
     org_id: str = "default"
     is_demo_fixture: bool = False
+    expires_at: datetime | None = None
     normalized_at: datetime = Field(default_factory=workflow_now)
     freshness: EvidenceFreshness = EvidenceFreshness.UNKNOWN
 
@@ -210,6 +211,8 @@ class WorkflowRun(BaseModel):
     scenario_version: str
     org_id: str
     is_demo_fixture: bool = False
+    is_judge_sandbox: bool = False
+    expires_at: datetime | None = None
     live_context: dict[str, Any] = Field(default_factory=dict)
     decision_brief: DecisionBrief
     outcomes: list[WorkflowOutcome] = Field(default_factory=list)

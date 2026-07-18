@@ -194,6 +194,8 @@ export type WorkflowRun = {
   outcomes?: WorkflowOutcome[]
   fixture?: boolean
   is_demo_fixture?: boolean
+  is_judge_sandbox?: boolean
+  expires_at?: string | number
   mode?: string
   created_at?: string | number
   updated_at?: string | number

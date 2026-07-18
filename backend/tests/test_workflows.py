@@ -96,6 +96,7 @@ async def test_each_template_accepts_valid_evidence_but_requires_human_approval(
     assert run.decision_brief.status == WorkflowRunStatus.AWAITING_HUMAN_APPROVAL
     assert run.decision_brief.human_approval_required is True
     assert run.decision_brief.missing_evidence == []
+    assert "explicitly approve before proceeding" in run.decision_brief.recommended_next_action
 
 
 @pytest.mark.asyncio
@@ -111,6 +112,7 @@ async def test_each_template_returns_review_not_a_fabricated_decision_when_evide
     assert run.decision_brief.status == WorkflowRunStatus.REVIEW_REQUIRED
     assert any(item.field == "evidence" for item in run.decision_brief.missing_evidence)
     assert run.decision_brief.sag_trace["status"] == "not_evaluated"
+    assert "Do not proceed" in run.decision_brief.recommended_next_action
 
 
 @pytest.mark.asyncio

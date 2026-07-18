@@ -8,6 +8,7 @@ and API imports before FastAPI's Mongo lifespan has started.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Protocol
 
 from motor.motor_asyncio import AsyncIOMotorDatabase
@@ -32,6 +33,8 @@ class WorkflowRepository(Protocol):
         limit: int = 50,
     ) -> list[EvidenceRecord]: ...
 
+    async def purge_expired(self, *, now: datetime | None = None) -> None: ...
+
 
 class InMemoryWorkflowRepository:
     """Process-local store with the same org isolation as the Mongo adapter."""
@@ -49,6 +52,9 @@ class InMemoryWorkflowRepository:
     async def get_run(self, run_id: str, org_id: str) -> WorkflowRun | None:
         async with self._lock:
             run = self._runs.get((org_id, run_id))
+            if run and run.expires_at and run.expires_at <= datetime.now(timezone.utc):
+                self._runs.pop((org_id, run_id), None)
+                return None
             return run.model_copy(deep=True) if run else None
 
     async def save_sources(self, sources: list[EvidenceRecord]) -> None:
@@ -67,10 +73,24 @@ class InMemoryWorkflowRepository:
             values = [
                 source.model_copy(deep=True)
                 for (source_org, source_template, _), source in self._sources.items()
-                if source_org == org_id and (template_id is None or source_template == template_id)
+                if source_org == org_id
+                and (template_id is None or source_template == template_id)
+                and (source.expires_at is None or source.expires_at > datetime.now(timezone.utc))
             ]
         values.sort(key=lambda source: source.occurred_at or source.normalized_at, reverse=True)
         return values[:limit]
+
+    async def purge_expired(self, *, now: datetime | None = None) -> None:
+        current = now or datetime.now(timezone.utc)
+        async with self._lock:
+            self._runs = {
+                key: run for key, run in self._runs.items()
+                if run.expires_at is None or run.expires_at > current
+            }
+            self._sources = {
+                key: source for key, source in self._sources.items()
+                if source.expires_at is None or source.expires_at > current
+            }
 
 
 class MongoWorkflowRepository:
@@ -93,6 +113,7 @@ class MongoWorkflowRepository:
             await self._db.workflow_runs.create_index(
                 [("org_id", ASCENDING), ("updated_at", DESCENDING)]
             )
+            await self._db.workflow_runs.create_index("expires_at", expireAfterSeconds=0)
             await self._db.workflow_sources.create_index(
                 [("evidence_id", ASCENDING), ("org_id", ASCENDING), ("template_id", ASCENDING)],
                 unique=True,
@@ -100,6 +121,7 @@ class MongoWorkflowRepository:
             await self._db.workflow_sources.create_index(
                 [("org_id", ASCENDING), ("occurred_at", DESCENDING)]
             )
+            await self._db.workflow_sources.create_index("expires_at", expireAfterSeconds=0)
             self._indexes_ready = True
 
     async def save_run(self, run: WorkflowRun) -> WorkflowRun:
@@ -113,7 +135,12 @@ class MongoWorkflowRepository:
 
     async def get_run(self, run_id: str, org_id: str) -> WorkflowRun | None:
         await self._ensure_indexes()
-        doc = await self._db.workflow_runs.find_one({"run_id": run_id, "org_id": org_id})
+        now = datetime.now(timezone.utc)
+        doc = await self._db.workflow_runs.find_one({
+            "run_id": run_id,
+            "org_id": org_id,
+            "$or": [{"expires_at": None}, {"expires_at": {"$gt": now}}, {"expires_at": {"$exists": False}}],
+        })
         if not doc:
             return None
         doc.pop("_id", None)
@@ -142,7 +169,11 @@ class MongoWorkflowRepository:
         limit: int = 50,
     ) -> list[EvidenceRecord]:
         await self._ensure_indexes()
-        query: dict[str, str] = {"org_id": org_id}
+        now = datetime.now(timezone.utc)
+        query: dict = {
+            "org_id": org_id,
+            "$or": [{"expires_at": None}, {"expires_at": {"$gt": now}}, {"expires_at": {"$exists": False}}],
+        }
         if template_id:
             query["template_id"] = template_id
         cursor = self._db.workflow_sources.find(query).sort("occurred_at", DESCENDING).limit(limit)
@@ -151,6 +182,12 @@ class MongoWorkflowRepository:
             doc.pop("_id", None)
             output.append(EvidenceRecord.model_validate(doc))
         return output
+
+    async def purge_expired(self, *, now: datetime | None = None) -> None:
+        await self._ensure_indexes()
+        current = now or datetime.now(timezone.utc)
+        await self._db.workflow_runs.delete_many({"expires_at": {"$lte": current}})
+        await self._db.workflow_sources.delete_many({"expires_at": {"$lte": current}})
 
 
 _fallback_repository = InMemoryWorkflowRepository()

@@ -2,7 +2,7 @@
 
 ## System summary
 
-Company Brain is a persistent operating-memory and governance layer for AI agents. Resolved experiences enter as raw events and are compiled by Qwen into versioned, scoped skills; agents and external MCP clients can recall those skills or run a pre-flight decision check before acting. The generalized workflow engine also turns source-backed evidence into a shared `DecisionBrief`, checks its live context with deterministic SAG, and routes a recommended action to a human owner. The React Operational Risk Inbox is the primary judge route; Brain and Agents remain technical proof. MongoDB stores organization-scoped memory and configuration; Qwen Cloud DashScope supplies generation and embeddings.
+Company Brain is a persistent operating-memory and governance layer for AI agents. Resolved experiences enter as raw events and are compiled by Qwen into versioned, scoped skills; agents and external MCP clients can recall those skills or run a pre-flight decision check before acting. The generalized workflow engine also turns source-backed evidence into a shared `DecisionBrief`, checks its live context with deterministic SAG, and routes a recommended action to a human owner. The React four-module Launchpad is the primary judge route; Brain and Agents remain technical proof. MongoDB stores organization-scoped memory and configuration; Qwen Cloud DashScope supplies generation and embeddings.
 
 ## Main system diagram
 
@@ -57,7 +57,7 @@ SAG is not an additional LLM decision: after the relevance gate picks the approp
 
 | Area | Repository paths | Responsibility |
 |---|---|---|
-| Frontend pages | `frontend/src/pages/{Operations,Dashboard,Brain,Intercepts,Agents,Events,Settings,ApiKeys,Landing,Onboard}.tsx` | Operational Risk Inbox plus technical proof pages for the brain, live SAG configuration, audit history, agent runs, events, metrics, and API keys. |
+| Frontend pages | `frontend/src/pages/{Landing,Simulation,WorkflowPlayground,Operations,...}.tsx` | Four-module Judge Launchpad plus technical proof pages for the brain, workflow audit, live SAG configuration, agent runs, events, metrics, and API keys. |
 | API and stream | `backend/main.py`, `backend/routers/workflows.py` | FastAPI lifespan, workflow API/readiness endpoints, `GET /stream`, `/settings/live-config`, agent routes, and the mounted MCP server. |
 | Workflow engine | `backend/workflows/` | Code-owned templates normalize evidence, attach memory provenance, evaluate live context, and return a human-gated DecisionBrief. |
 | Interceptor | `backend/core/interceptor.py` | Selects relevant skills with keyword plus optional cosine similarity, applies result thresholds, persists audit records, and broadcasts updates. |

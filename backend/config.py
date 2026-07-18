@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     JUDGE_DEMO_ORG_ID: str = os.getenv("JUDGE_DEMO_ORG_ID", "judge-demo-v1")
     SANDBOX_ORG_ID: str = os.getenv("SANDBOX_ORG_ID", "sandbox")
     DEMO_SCENARIO_VERSION: str = os.getenv("DEMO_SCENARIO_VERSION", "judge-demo-v1")
+    # The public judge playground receives an opaque, signed browser session.
+    # It is deliberately separate from API-key organizations and expires quickly.
+    JUDGE_SANDBOX_SECRET: str = os.getenv("JUDGE_SANDBOX_SECRET", "local-judge-sandbox-secret")
+    JUDGE_SANDBOX_TTL_SECONDS: int = int(os.getenv("JUDGE_SANDBOX_TTL_SECONDS", "3600"))
     BUILD_SHA: str = os.getenv("BUILD_SHA", "unknown")
 
     HOST: str = "0.0.0.0"

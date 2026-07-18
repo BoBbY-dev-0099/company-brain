@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from backend.brain.store import get_db
 from backend.config import settings
 from backend.demo.state import is_canonical_demo_org
+from backend.demo.judge_session import COOKIE_NAME, parse_judge_session
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,11 @@ _PUBLIC_PATHS = {
 }
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_JUDGE_SANDBOX_PATHS = {"/workflow-runs", "/workflow-sources"}
+
+
+def _judge_session_path(path: str) -> bool:
+    return path in _JUDGE_SANDBOX_PATHS or path.startswith("/workflow-runs/")
 
 
 def _canonical_fixture_write_blocked(request: Request) -> bool:
@@ -92,8 +98,9 @@ async def auth_middleware(request: Request, call_next: Any) -> Any:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     # Hackathon open mode — UI shares the clean demo org.
-    request.state.org_id = settings.DEMO_ORG_ID
-    request.state.auth_type = "open"
+    judge_session = parse_judge_session(request.cookies.get(COOKIE_NAME)) if _judge_session_path(path) else None
+    request.state.org_id = judge_session.org_id if judge_session else settings.DEMO_ORG_ID
+    request.state.auth_type = "judge_sandbox" if judge_session else "open"
     request.state.user_id = "demo"
     if _canonical_fixture_write_blocked(request):
         return JSONResponse(

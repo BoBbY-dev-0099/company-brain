@@ -69,4 +69,4 @@ for attempt in $(seq 1 15); do
     sleep 2
 done
 
-echo "TLS enabled: https://${DOMAIN}/app/inbox"
+echo "TLS enabled: https://${DOMAIN}/"

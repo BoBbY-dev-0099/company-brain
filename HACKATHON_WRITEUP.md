@@ -3,7 +3,7 @@
 **Track:** MemoryAgent · Qwen Cloud Global AI Hackathon 2026
 **One line:** Company Brain turns changing operational evidence into governed memory, checks it against live context, and routes a safe next step to a human owner.
 
-**Judge route:** `/app/inbox` after deployment.
+**Judge route:** `/` after deployment.
 **Deployment evidence:** [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) is intentionally pending until a verified Alibaba Cloud ECS/SAS deployment is captured.
 
 ## The problem
@@ -18,7 +18,7 @@ Company Brain makes that break visible before an action happens.
 
 ## What judges see first
 
-The Operational Risk Inbox shows three reusable workflow templates, not three disconnected agents:
+The four-module Launchpad gives judges one guided workflow sandbox plus three reusable workflow simulations, not four disconnected agents:
 
 | Template | Evidence that changes the answer | Safe result |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ The Operational Risk Inbox shows three reusable workflow templates, not three di
 | Money Safety | A support request conflicts with an enterprise contract or refund policy. | Pause the automatic refund; assign support operations. |
 | Rollout Safety | Current error rate and an open incident invalidate a feature-flag expansion. | Hold expansion; assign the rollout owner. |
 
-Every card is server-evaluated and exposes the same `DecisionBrief`:
+Every simulation is server-evaluated and exposes the same `DecisionBrief`:
 
 `facts · Qwen inference · missing evidence · source excerpts/freshness · prior memory · SAG trace · verdict · owner · recommended next action`
 
@@ -49,6 +49,8 @@ The stable API surface is:
 
 ```text
 GET  /workflow-templates
+GET  /demo/modules
+POST /demo/session
 POST /workflow-runs
 GET  /workflow-runs/{id}
 POST /workflow-runs/{id}/outcome
@@ -63,14 +65,14 @@ GET  /demo/readiness
 - Release Safety implements a real signed GitHub merged-PR webhook when its secret, token, and repository allowlist are configured. The webhook persists raw evidence, compiled skill, audit record, SSE propagation, and a linked `release-safety` workflow run before returning success. A PR with no runtime telemetry honestly returns `review_required`.
 - Money Safety and Rollout Safety use the identical contract as visibly labelled canonical demo fixtures, not claimed live connectors.
 - The `/app/connect` page and server-defined `GET /integration-catalog` distinguish a configured source, a stable REST contract, a fixture, and a preview rather than implying a connector marketplace.
-- `judge-demo-v1` is immutable. The open UI writes to `sandbox`; fixture replays never add a canonical skill or confidence increment.
+- `judge-demo-v1` is immutable. The public playground receives an opaque, browser-scoped temporary sandbox; fixture replays never add a canonical skill or confidence increment.
 - A skill can only gain confidence or become `auto_execute`-eligible after a persisted **human-confirmed** outcome. All workflow actions remain human-approved.
 
 ## Under-three-minute video script
 
-1. Open `/app/inbox`. In one glance, show the three cards: blocker, owner, recommendation, source freshness, and server verdict.
-2. Open **Release Safety** → **Why this decision?**. Show the GitHub PR and runtime evidence, the remembered 25 MiB rule, the changed value of 8 MiB, and the deterministic SAG trace. Record a human decision; explain that the fixture does not train canonical memory.
-3. Quickly open **Money Safety** and **Rollout Safety** to prove they use the same evidence → memory → live context → action contract.
+1. Open `/`. In one glance, show the guided workflow sandbox and the three real-world simulations.
+2. Open **Release Safety** and click **Simulate decision**. Show the four live stages: evidence, Qwen memory, SAG, and human action. Expand Audit proof for the GitHub PR, runtime evidence, remembered 25 MiB rule, changed value of 8 MiB, and deterministic SAG trace.
+3. Record a sandbox-only human outcome, then open **Money Safety** and **Rollout Safety** to prove the same evidence-to-memory-to-live-context contract generalizes.
 4. Open **Brain** only as technical proof: the underlying SAG trace, skill/audit history, and Qwen-backed memory layer are still available.
 5. Show `/api/demo/readiness` on the deployed host: build SHA, Qwen configuration, scenario version, and canonical counts. Then show the redacted Alibaba Workbench Overview screenshot.
 
@@ -98,8 +100,8 @@ The repository contains the Docker/ECS deployment path and a runtime build-SHA r
 
 | Asset | Path |
 | --- | --- |
-| Judge-facing workflow UI | `/app/inbox` |
+| Judge-facing workflow UI | `/` |
 | Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Deployment proof packet | [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) |
 | Submission checklist | [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) |
-| Source code | `backend/workflows/`, `backend/routers/workflows.py`, `frontend/src/pages/Operations.tsx` |
+| Source code | `backend/workflows/`, `backend/routers/workflows.py`, `frontend/src/pages/Simulation.tsx` |

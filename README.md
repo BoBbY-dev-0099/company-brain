@@ -7,7 +7,7 @@ Operating Memory Primitive for agent fleets — Qwen Cloud Global AI Hackathon 2
 
 > **Most agents remember. Company Brain knows when to stop trusting what it remembers.**
 
-**Judges / 30s demo:** open **Operations** (`/app/inbox`) and inspect one server-owned workflow card: evidence → Qwen memory → live context → SAG verdict → human owner.
+**Judges / 30s demo:** open the **four-module Launchpad** (`/`), then run Release Safety: evidence → Qwen memory → live context → SAG verdict → human owner. The other two simulations prove the same engine generalizes; Build your workflow is a private, temporary sandbox.
 The open UI writes to the disposable `sandbox` org; the versioned `judge-demo-v1` fixture is immutable.
 **Writeup:** [`HACKATHON_WRITEUP.md`](HACKATHON_WRITEUP.md) · **Deployment evidence:** [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) · **License:** [MIT](LICENSE)
 
@@ -115,8 +115,8 @@ Company Brain is not a chatbot and not an agent platform. It is a
 6. **Propagate** via SSE to the operator UI
 
 Three demo agents (support, engineering, product) remain technical proof. The
-primary product route is the reusable Operational Risk Inbox; production
-systems call the same APIs (see `integrations/`).
+primary product route is the four-module Judge Launchpad; production systems
+call the same APIs (see `integrations/`).
 
 ## Operational workflow engine
 
@@ -348,7 +348,8 @@ steps in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
 
 | Page | Path | Purpose |
 |------|------|---------|
-| Operations | `/app/inbox` | Primary judge route: evidence, memory, SAG decision, human action |
+| Judge Launchpad | `/` | Primary judge route: one guided sandbox and three real workflow simulations |
+| Workflow audit | `/app/audit` | Technical proof: detailed evidence, memory, SAG, and outcomes |
 | Connect | `/app/connect` | Truthful source, workflow, and agent connection boundaries |
 | Brain | `/app/brain` | Skills, SAG demo, decision history, TEE attestation |
 | Agents | `/app/agents` | Run demo agents with metadata |

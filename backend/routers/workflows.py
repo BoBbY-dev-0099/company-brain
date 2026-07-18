@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request, status
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from backend.config import settings
+from backend.demo.judge_session import COOKIE_NAME, issue_judge_session, is_judge_sandbox_org
 from backend.demo.state import assert_demo_org_mutable
 from backend.workflows.models import (
     WorkflowOutcomeRequest,
@@ -25,6 +28,64 @@ service = WorkflowService()
 
 def _org(request: Request) -> str:
     return getattr(request.state, "org_id", None) or settings.DEMO_ORG_ID
+
+
+def _judge_sandbox(request: Request) -> bool:
+    return getattr(request.state, "auth_type", None) == "judge_sandbox" and is_judge_sandbox_org(_org(request))
+
+
+@router.get("/demo/modules")
+async def demo_modules() -> dict:
+    """The concise, server-owned catalog rendered by the public judge route."""
+    templates = service.list_templates()
+    return {
+        "version": "judge-launchpad-v1",
+        "modules": [
+            {
+                "id": "workflow",
+                "kind": "playground",
+                "title": "Build your workflow",
+                "route": "/play/workflow",
+                "summary": "Try Company Brain with safe sample evidence.",
+                "status": "sandbox",
+                "primary_action": "Build a decision",
+            },
+            *[
+                {
+                    "id": template.template_id,
+                    "kind": "simulation",
+                    "title": template.title,
+                    "route": f"/play/{template.template_id}",
+                    "summary": template.demo_fixture.title,
+                    "status": "ready_to_simulate",
+                    "primary_action": "Simulate decision",
+                    "template_id": template.template_id,
+                    "fixture": True,
+                }
+                for template in templates
+            ],
+        ],
+    }
+
+
+@router.post("/demo/session")
+async def create_demo_session(response: Response) -> dict:
+    """Issue an opaque browser-only sandbox session; never accepts org input."""
+    token, session = issue_judge_session()
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        max_age=settings.JUDGE_SANDBOX_TTL_SECONDS,
+        httponly=True,
+        secure=settings.PUBLIC_BASE_URL.startswith("https://"),
+        samesite="lax",
+        path="/",
+    )
+    return {
+        "mode": "judge_sandbox",
+        "expires_at": datetime.fromtimestamp(session.expires_at, tz=timezone.utc),
+        "retention": "Private to this browser for 60 minutes. No credentials or canonical memory are used.",
+    }
 
 
 @router.get("/workflow-templates")
@@ -57,7 +118,11 @@ async def create_workflow_run(request: Request, body: WorkflowRunRequest) -> Wor
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     try:
-        return await service.run_workflow(body, org_id=org_id)
+        return await service.run_workflow(
+            body,
+            org_id=org_id,
+            is_judge_sandbox=_judge_sandbox(request),
+        )
     except WorkflowTemplateNotFoundError as exc:
         raise HTTPException(status_code=404, detail="workflow template not found") from exc
 

@@ -62,7 +62,7 @@ authenticated remote-MCP configuration only after issuance succeeds.
 Run these from a machine outside the ECS host after issuance:
 
 ```bash
-curl -fsSI https://brain.veriflowai.me/app/inbox
+curl -fsSI https://brain.veriflowai.me/
 curl -fsS https://brain.veriflowai.me/api/health
 curl -fsS https://brain.veriflowai.me/api/demo/readiness
 curl -fsS https://brain.veriflowai.me/api/integration-catalog
@@ -85,8 +85,8 @@ return `410`; it is not a valid production connector.
    visible; redact account identifiers, IP addresses, SSH keys, and API keys.
 2. **Runtime proof:** one sequence showing `docker compose ... ps`, the local
    readiness response, and its build SHA.
-3. **Public judge route:** `https://brain.veriflowai.me/app/inbox` in a fresh
-   browser session, showing one backend-derived Decision Queue item and its
+3. **Public judge route:** `https://brain.veriflowai.me/` in a fresh
+   browser session, showing the four-module Launchpad, one backend-derived simulation, and its
    five-step explanation.
 4. **HTTPS/MCP proof:** a redacted `curl -I` or browser security view for the
    hostname plus the integration catalog response. Never show API keys.

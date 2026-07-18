@@ -53,6 +53,19 @@ if [ ! -f .env ]; then
   fi
 fi
 
+# Public browser sessions are signed and scoped to a temporary judge sandbox.
+# Never leave the development fallback secret active on an ECS deployment.
+if ! grep -q '^JUDGE_SANDBOX_SECRET=' .env || \
+   grep -q '^JUDGE_SANDBOX_SECRET=\(change-me-before-deploy\|local-judge-sandbox-secret\)$' .env; then
+  JUDGE_SANDBOX_SECRET_VALUE="$(openssl rand -hex 32)"
+  if grep -q '^JUDGE_SANDBOX_SECRET=' .env; then
+    sed -i "s|^JUDGE_SANDBOX_SECRET=.*|JUDGE_SANDBOX_SECRET=${JUDGE_SANDBOX_SECRET_VALUE}|" .env
+  else
+    printf '\nJUDGE_SANDBOX_SECRET=%s\nJUDGE_SANDBOX_TTL_SECONDS=3600\n' "$JUDGE_SANDBOX_SECRET_VALUE" >> .env
+  fi
+  unset JUDGE_SANDBOX_SECRET_VALUE
+fi
+
 mkdir -p secrets
 chmod 700 secrets || true
 
