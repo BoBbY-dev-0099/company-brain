@@ -5,12 +5,14 @@ import Operations from "./pages/Operations"
 import Connect from "./pages/Connect"
 import Simulation from "./pages/Simulation"
 import WorkflowPlayground from "./pages/WorkflowPlayground"
+import IntegrationLab from "./pages/IntegrationLab"
 import MemoryLedger from "./pages/MemoryLedger"
 import AppShell from "./components/layout/AppShell"
 
 const router = createBrowserRouter([
   { path: "/", element: <Landing /> },
   { path: "/play/workflow", element: <WorkflowPlayground /> },
+  { path: "/play/integration-lab", element: <IntegrationLab /> },
   { path: "/play/:templateId", element: <Simulation /> },
   { path: "/sign-in", element: <Navigate to="/app/inbox" replace /> },
   { path: "/sign-in/*", element: <Navigate to="/app/inbox" replace /> },

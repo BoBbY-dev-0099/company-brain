@@ -45,6 +45,7 @@ _JUDGE_SANDBOX_PATHS = {
     "/reality-memory",
     "/reality-overview",
     "/reality/replay/incident",
+    "/demo-company/run",
 }
 
 

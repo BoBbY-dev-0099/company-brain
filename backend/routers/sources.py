@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, HttpUrl
 from backend.config import settings
 from backend.brain import store as brain_store
 from backend.demo.judge_session import is_judge_sandbox_org
+from backend.demo.integration_lab import run_northstar_lab
 from backend.sources.adapters import (
     fetch_verified_web_evidence,
     redact_slack_payload,
@@ -314,3 +315,20 @@ async def replay_incident(request: Request) -> dict[str, Any]:
             "live_context": {"worker_memory_mb": 8, "runbook_validated": False, "deployment_window_open": True},
         },
     }
+
+
+@router.post("/demo-company/run")
+async def run_demo_company(request: Request) -> dict[str, Any]:
+    """Run the Northstar synthetic company through real source processing.
+
+    A browser must first create a judge sandbox session. This prevents fixture
+    clicks from changing the open demo organization, canonical counts, skills,
+    or another visitor's source/memory ledger.
+    """
+    org_id = _org(request)
+    if not is_judge_sandbox_org(org_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Start a private sandbox before running the synthetic company lab.",
+        )
+    return await run_northstar_lab(org_id=org_id)

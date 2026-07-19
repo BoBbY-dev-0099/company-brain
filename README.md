@@ -113,6 +113,16 @@ npm.cmd run build
 
 The source test suite covers Slack HMAC/replay and channel restrictions, Drive content-version ingestion, verified-web SSRF rejection, sandbox expiry, temporal memory boundaries, workflow safety, and MCP scopes. The public rehearsal must also confirm that the visual trace renders the server response after every stage; it must never fabricate a verdict or Qwen completion in the browser.
 
+## Synthetic company integration lab
+
+`/play/integration-lab` creates **Northstar Logistics**, a browser-private,
+expiring fixture company. It runs a synthetic Slack incident, Drive runbook v2
+then v3, and a merged GitHub PR through the real source ledger and Qwen memory
+pipeline before calling MCP `evaluate_workflow`. It also exposes the real
+signature/replay, duplicate-delivery, temporal-supersession, and private-web
+guard results. It is deliberately labelled fixture evidence and contacts no
+real Slack workspace, Drive folder, or GitHub repository.
+
 ## Useful endpoints
 
 | Method | Path | Purpose |

@@ -252,3 +252,15 @@ export function getRealityOverview() {
 export function replayIncident() {
   return apiPost<IncidentReplay>("/reality/replay/incident", {})
 }
+
+export type DemoCompanyLab = {
+  company: { name: string; workspace: string; repository: string; drive_folder: string; mode: string }
+  mode: string
+  events: SourceEvent[]
+  edge_checks: Array<{ id: string; label: string; passed: boolean; detail: string }>
+  workflow: IncidentReplay["workflow"]
+}
+
+export function runDemoCompanyLab() {
+  return apiPost<DemoCompanyLab>("/demo-company/run", {})
+}
