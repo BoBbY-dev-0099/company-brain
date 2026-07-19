@@ -212,6 +212,7 @@ class WorkflowRun(BaseModel):
     org_id: str
     is_demo_fixture: bool = False
     is_judge_sandbox: bool = False
+    execution_origin: str = "rest"
     expires_at: datetime | None = None
     live_context: dict[str, Any] = Field(default_factory=dict)
     decision_brief: DecisionBrief

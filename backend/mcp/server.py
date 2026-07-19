@@ -18,6 +18,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import ValidationError
 
 from backend.config import settings
+from backend.demo.judge_session import is_judge_sandbox_org
 from backend.demo.state import assert_demo_org_mutable
 from backend.mcp import tools
 from backend.mcp.auth import (
@@ -157,7 +158,12 @@ def create_mcp_server(
 
             raise ToolError(f"Invalid workflow input: {exc.errors(include_url=False)}") from exc
         try:
-            run = await workflow_service.run_workflow(request, org_id=principal.org_id)
+            run = await workflow_service.run_workflow(
+                request,
+                org_id=principal.org_id,
+                is_judge_sandbox=is_judge_sandbox_org(principal.org_id),
+                execution_origin="mcp",
+            )
         except WorkflowTemplateNotFoundError as exc:
             from mcp.server.fastmcp.exceptions import ToolError
 

@@ -251,6 +251,7 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
             mcp_auth.MCP_WORKFLOW_SCOPE,
         ),
         "key-org-b": _principal("org-b", mcp_auth.MCP_READ_SCOPE),
+        "key-judge": _principal("judge-sandbox:mcp", mcp_auth.MCP_WORKFLOW_SCOPE),
     }
 
     async def fake_authenticate(api_key: str):
@@ -342,7 +343,30 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
                 },
             ),
         )
-        assert _tool_result(evaluated)["org_id"] == "org-a"
+        evaluated_result = _tool_result(evaluated)
+        assert evaluated_result["org_id"] == "org-a"
+        assert evaluated_result["execution_origin"] == "mcp"
+
+        sandbox_evaluated = client.post(
+            "/mcp/",
+            headers=_headers("key-judge"),
+            json=_jsonrpc(
+                "tools/call",
+                8,
+                {
+                    "name": "evaluate_workflow",
+                    "arguments": {
+                        "template_id": "release-safety",
+                        "evidence": _valid_release_evidence(),
+                        "live_context": _release_context(),
+                    },
+                },
+            ),
+        )
+        sandbox_result = _tool_result(sandbox_evaluated)
+        assert sandbox_result["org_id"] == "judge-sandbox:mcp"
+        assert sandbox_result["is_judge_sandbox"] is True
+        assert sandbox_result["execution_origin"] == "mcp"
 
         recall_b = client.post(
             "/mcp/",

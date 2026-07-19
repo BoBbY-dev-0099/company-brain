@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from backend.brain import store as brain_store
 from backend.config import settings
 from backend.demo.judge_session import COOKIE_NAME, issue_judge_session, is_judge_sandbox_org
 from backend.demo.state import assert_demo_org_mutable
@@ -88,6 +89,37 @@ async def create_demo_session(response: Response) -> dict:
     }
 
 
+@router.post("/demo/mcp-session")
+async def create_demo_mcp_session(request: Request) -> dict:
+    """Issue a disposable MCP key for the current browser-private sandbox.
+
+    The raw key is intentionally returned only to the browser that holds the
+    signed judge cookie.  It carries only read/workflow scopes, expires with
+    that sandbox, and never grants access to canonical fixture data.
+    """
+    if not _judge_sandbox(request):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Start a private judge sandbox session before creating an MCP connection.",
+        )
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.JUDGE_SANDBOX_TTL_SECONDS)
+    created = await brain_store.create_api_key(
+        org_id=_org(request),
+        name="judge-workflow-mcp",
+        permissions="mcp:read mcp:workflow",
+        expires_at=expires_at,
+    )
+    public_base = settings.PUBLIC_BASE_URL.rstrip("/")
+    return {
+        "mode": "judge_sandbox_mcp",
+        "mcp_endpoint": f"{public_base}/mcp/" if public_base else "/mcp/",
+        "api_key": created["api_key"],
+        "permissions": created["permissions"],
+        "expires_at": created["expires_at"],
+        "retention": "This disposable key is private to the current sandbox and expires automatically.",
+    }
+
+
 @router.get("/workflow-templates")
 async def list_workflow_templates() -> dict:
     templates = service.list_templates()
@@ -125,6 +157,13 @@ async def create_workflow_run(request: Request, body: WorkflowRunRequest) -> Wor
         )
     except WorkflowTemplateNotFoundError as exc:
         raise HTTPException(status_code=404, detail="workflow template not found") from exc
+
+
+@router.get("/workflow-runs")
+async def list_workflow_runs(request: Request, limit: int = 20) -> dict:
+    safe_limit = max(1, min(limit, 50))
+    runs = await service.list_runs(org_id=_org(request), limit=safe_limit)
+    return {"runs": [run.model_dump(mode="json") for run in runs]}
 
 
 @router.get("/workflow-runs/{run_id}", response_model=WorkflowRun)

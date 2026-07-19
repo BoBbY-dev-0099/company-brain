@@ -85,6 +85,45 @@ def test_browser_session_scopes_runs_without_a_caller_org_override(monkeypatch):
     assert created.status_code == 201
     assert created.json()["org_id"].startswith("judge-sandbox:")
     assert created.json()["is_judge_sandbox"] is True
+    history = client.get("/workflow-runs")
+    assert history.status_code == 200
+    assert [run["run_id"] for run in history.json()["runs"]] == [created.json()["run_id"]]
+
+
+def test_judge_mcp_key_is_disposable_scoped_and_bound_to_browser_org(monkeypatch):
+    from backend.middleware.auth import auth_middleware
+    from backend.routers import workflows
+
+    captured: dict[str, object] = {}
+
+    async def fake_create_api_key(org_id, name, permissions, expires_at=None):
+        captured.update({"org_id": org_id, "name": name, "permissions": permissions, "expires_at": expires_at})
+        return {
+            "key_id": "judge-mcp-key",
+            "api_key": "cbk_disposable",
+            "org_id": org_id,
+            "name": name,
+            "permissions": permissions,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        }
+
+    monkeypatch.setattr(workflows.brain_store, "create_api_key", fake_create_api_key)
+    app = FastAPI()
+    app.middleware("http")(auth_middleware)
+    app.include_router(workflows.router)
+    client = TestClient(app)
+
+    assert client.post("/demo/mcp-session").status_code == 409
+    assert client.post("/demo/session").status_code == 200
+    created = client.post("/demo/mcp-session")
+    assert created.status_code == 200
+    body = created.json()
+    assert body["api_key"] == "cbk_disposable"
+    assert body["permissions"] == "mcp:read mcp:workflow"
+    assert body["mcp_endpoint"].endswith("/mcp/")
+    assert str(captured["org_id"]).startswith("judge-sandbox:")
+    assert captured["permissions"] == "mcp:read mcp:workflow"
+    assert captured["expires_at"] is not None
 
 
 @pytest.mark.asyncio

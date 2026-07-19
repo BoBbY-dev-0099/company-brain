@@ -65,6 +65,14 @@ export type DemoSession = {
   expires_at: string
   retention: string
 }
+export type DemoMcpSession = {
+  mode: "judge_sandbox_mcp"
+  mcp_endpoint: string
+  api_key: string
+  permissions: string
+  expires_at: string
+  retention: string
+}
 export type WorkflowOutcomeRequest = {
   approved: boolean
   outcome: string
@@ -90,8 +98,16 @@ export function createDemoSession() {
   return apiPost<DemoSession>("/demo/session", {})
 }
 
+export function createDemoMcpSession() {
+  return apiPost<DemoMcpSession>("/demo/mcp-session", {})
+}
+
 export function getWorkflowRun(runId: string) {
   return apiGet<WorkflowRun | { run: WorkflowRun }>(`/workflow-runs/${encodeURIComponent(runId)}`)
+}
+
+export function getWorkflowRuns(limit = 20) {
+  return apiGet<{ runs: WorkflowRun[] }>("/workflow-runs?limit=" + encodeURIComponent(String(limit)))
 }
 
 export function postWorkflowOutcome(runId: string, body: WorkflowOutcomeRequest) {

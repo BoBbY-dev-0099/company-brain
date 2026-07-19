@@ -9,6 +9,7 @@ Priority:
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -35,7 +36,7 @@ _PUBLIC_PATHS = {
 }
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_JUDGE_SANDBOX_PATHS = {"/workflow-runs", "/workflow-sources"}
+_JUDGE_SANDBOX_PATHS = {"/demo/mcp-session", "/workflow-runs", "/workflow-sources"}
 
 
 def _judge_session_path(path: str) -> bool:
@@ -56,9 +57,15 @@ async def _verify_agent_api_key(api_key: str) -> tuple[str, str]:
     Returns (org_id, api_key_id) if valid, raises HTTPException(401) otherwise.
     """
     db = get_db()
+    now = datetime.now(timezone.utc)
     doc = await db["api_keys"].find_one({
         "api_key": api_key,
         "revoked_at": None,
+        "$or": [
+            {"expires_at": None},
+            {"expires_at": {"$gt": now}},
+            {"expires_at": {"$exists": False}},
+        ],
     })
     if not doc:
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")

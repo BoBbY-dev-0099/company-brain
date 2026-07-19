@@ -1,0 +1,29 @@
+{
+  "template_id": "release-safety",
+  "evidence": [
+    {
+      "source_type": "github_pull_request",
+      "source_name": "GitHub",
+      "external_id": "acme/service#842",
+      "occurred_at": "2026-07-19T09:00:00Z",
+      "excerpt": "Merged PR #842 changes EXPORT_WORKER_MEMORY_MB from 25 to 8.",
+      "metadata": {
+        "changed_field": "worker_memory_mb",
+        "previous_value": 25,
+        "current_value": 8
+      }
+    },
+    {
+      "source_type": "runtime_metric",
+      "source_name": "Runtime telemetry",
+      "external_id": "export-worker-memory",
+      "occurred_at": "2026-07-19T09:01:00Z",
+      "excerpt": "export-worker effective memory limit is 8 MiB after the deploy."
+    }
+  ],
+  "live_context": {
+    "worker_memory_mb": 8,
+    "runbook_validated": false,
+    "deployment_window_open": true
+  }
+}

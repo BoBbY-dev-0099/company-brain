@@ -94,6 +94,7 @@ async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     await db["api_keys"].create_index([("key_id", ASCENDING)], unique=True)
     await db["api_keys"].create_index([("api_key", ASCENDING)], unique=True)
     await db["api_keys"].create_index([("org_id", ASCENDING)])
+    await db["api_keys"].create_index("expires_at", expireAfterSeconds=0)
 
     await db.tdx_quotes.create_index([("org_id", ASCENDING), ("created_at", DESCENDING)])
     await db.tdx_quotes.create_index([("skill_id", ASCENDING), ("created_at", DESCENDING)])
@@ -686,6 +687,7 @@ async def create_api_key(
     org_id: str,
     name: str,
     permissions: str = "read:skills read:events",
+    expires_at: datetime | None = None,
 ) -> dict[str, Any]:
     db = get_db()
     key_id = uuid.uuid4().hex[:12]
@@ -699,6 +701,7 @@ async def create_api_key(
         "permissions": permissions,
         "created_at": utc_now(),
         "revoked_at": None,
+        "expires_at": expires_at,
     }
     await db["api_keys"].insert_one(doc)
     return {
@@ -707,6 +710,7 @@ async def create_api_key(
         "api_key": api_key,
         "permissions": permissions,
         "created_at": doc["created_at"].isoformat() if isinstance(doc["created_at"], datetime) else doc["created_at"],
+        "expires_at": expires_at.isoformat() if isinstance(expires_at, datetime) else None,
     }
 
 

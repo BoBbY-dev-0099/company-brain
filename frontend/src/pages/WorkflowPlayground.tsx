@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowRight, Bot, Check, CircleDot, FileInput, Github, Headphones, LoaderCircle, Radio, RotateCcw, ServerCog, ShieldCheck, UserRound } from "lucide-react"
-import { createDemoSession, createWorkflowRun, getWorkflowTemplates, postWorkflowOutcome, type WorkflowEvidenceInput } from "../lib/api"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { ArrowRight, Bot, Check, CircleDot, FileInput, Github, Headphones, LoaderCircle, Radio, RotateCcw, ServerCog, ShieldCheck, TerminalSquare, UserRound } from "lucide-react"
+import { createDemoMcpSession, createDemoSession, getWorkflowRuns, getWorkflowTemplates, postWorkflowOutcome, type DemoMcpSession, type WorkflowEvidenceInput } from "../lib/api"
+import { evaluateWorkflowThroughMcp, type McpLog } from "../lib/mcp"
 import type { WorkflowRun, WorkflowTemplate } from "../types/schema"
 import { AuditProof, DecisionTrace, PageFrame, asRun, briefFor, inferenceText, verdictLabel, verdictTone } from "./Simulation"
 
@@ -45,6 +46,10 @@ export default function WorkflowPlayground() {
   const [note, setNote] = useState("I reviewed this sandbox decision and own the next action.")
   const [confirmed, setConfirmed] = useState(false)
   const [confirming, setConfirming] = useState(false)
+  const [mcpSession, setMcpSession] = useState<DemoMcpSession | null>(null)
+  const [mcpLogs, setMcpLogs] = useState<McpLog[]>([])
+  const [mcpRuns, setMcpRuns] = useState<WorkflowRun[]>([])
+  const [preparingMcp, setPreparingMcp] = useState(false)
   const sessionReady = useRef(false)
 
   useEffect(() => {
@@ -63,11 +68,26 @@ export default function WorkflowPlayground() {
   const selected = useMemo(() => templates.find((template) => templateId(template) === selectedId) ?? null, [selectedId, templates])
   const brief = briefFor(run)
 
-  const chooseTemplate = (nextId: string) => {
-    const next = templates.find((template) => templateId(template) === nextId)
-    if (!next) return
-    const sample = readFixture(next)
-    setSelectedId(nextId)
+  const refreshMcpRuns = useCallback(async () => {
+    try {
+      const payload = await getWorkflowRuns(20)
+      setMcpRuns((payload.runs ?? []).map(asRun).filter((item): item is WorkflowRun => Boolean(item && item.execution_origin === "mcp")))
+    } catch {
+      // A temporary session may have expired; the next explicit MCP action
+      // surfaces a clear server error instead of fabricating run history.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mcpSession) return
+    void refreshMcpRuns()
+    const timer = window.setInterval(() => void refreshMcpRuns(), 4000)
+    return () => window.clearInterval(timer)
+  }, [mcpSession, refreshMcpRuns])
+
+  const reset = () => {
+    if (!selected) return
+    const sample = readFixture(selected)
     setEvidence(sample.evidence)
     setLiveContext(sample.live)
     setRun(null)
@@ -75,7 +95,26 @@ export default function WorkflowPlayground() {
     setError(null)
   }
 
-  const reset = () => selected && chooseTemplate(templateId(selected))
+  const prepareMcp = async (): Promise<DemoMcpSession> => {
+    if (mcpSession) return mcpSession
+    setPreparingMcp(true)
+    setError(null)
+    try {
+      if (!sessionReady.current) {
+        await createDemoSession()
+        sessionReady.current = true
+      }
+      const created = await createDemoMcpSession()
+      setMcpSession(created)
+      return created
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Unable to create the temporary MCP connection."
+      setError(message)
+      throw new Error(message)
+    } finally {
+      setPreparingMcp(false)
+    }
+  }
 
   const evaluate = async () => {
     if (!selected) return
@@ -84,22 +123,24 @@ export default function WorkflowPlayground() {
     setConfirmed(false)
     setError(null)
     try {
-      if (!sessionReady.current) {
-        await createDemoSession()
-        sessionReady.current = true
-      }
+      const connection = await prepareMcp()
       const context = Object.fromEntries(liveSchema(selected).map((field) => {
         const value = liveContext[field.name]
         return [field.name, field.value_type === "number" ? Number(value) : value]
       }))
-      const response = await createWorkflowRun({
-        template_id: templateId(selected),
+      setMcpLogs([])
+      const response = await evaluateWorkflowThroughMcp({
+        endpoint: connection.mcp_endpoint,
+        apiKey: connection.api_key,
+        templateId: templateId(selected),
         evidence: evidence.map(({ key: _key, ...item }) => item),
-        live_context: context,
+        liveContext: context,
+        onLog: (entry) => setMcpLogs((current) => [...current, entry]),
       })
       const evaluated = asRun(response)
       if (!evaluated) throw new Error("The workflow engine did not return an auditable DecisionBrief.")
       setRun(evaluated)
+      void refreshMcpRuns()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to evaluate this sandbox workflow.")
     } finally {
@@ -126,13 +167,14 @@ export default function WorkflowPlayground() {
   return <PageFrame>
     <div className="max-w-4xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2f5eeb]">Workflow connection lab</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em] text-[#17212b]">Connect Company Brain to a workflow.</h1><p className="mt-3 max-w-3xl text-base leading-7 text-[#586575]">Choose a safe synthetic company workflow, run its event through Company Brain, and inspect the real evidence → Qwen memory → SAG → human decision path.</p></div>
     {!loading && selected && <ConnectionMap template={selected} evidenceCount={evidence.length} />}
+    {!loading && selected && <McpConnectionPanel session={mcpSession} logs={mcpLogs} runs={mcpRuns} preparing={preparingMcp} onPrepare={() => void prepareMcp()} />}
     {error && <div className="mt-7 rounded-2xl border border-[#bc3f34]/30 bg-[#fce9e6] p-4 text-sm text-[#96332b]">{error}</div>}
     <section className="mt-8 rounded-3xl border border-[#d8d0c2] bg-[#fffcf7] p-5 shadow-[0_18px_55px_rgba(52,45,35,0.07)] md:p-7">
       {loading || !selected ? <div className="h-72 animate-pulse rounded-2xl bg-[#f3eee4]" /> : <>
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><label className="block max-w-sm text-xs font-bold uppercase tracking-[0.13em] text-[#627083]">Decision template<select value={selectedId} onChange={(event) => chooseTemplate(event.target.value)} className="mt-2 w-full rounded-xl border border-[#d9d2c6] bg-white px-3 py-3 text-sm font-medium normal-case tracking-normal text-[#17212b] outline-none focus:border-[#2f5eeb]">{templates.map((template) => <option key={templateId(template)} value={templateId(template)}>{template.title}</option>)}</select></label><button type="button" onClick={reset} className="inline-flex items-center gap-2 text-sm font-semibold text-[#39506a] hover:text-[#17212b]"><RotateCcw className="h-4 w-4" />Reset sample</button></div>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-xs font-bold uppercase tracking-[0.13em] text-[#627083]">Connected MCP workflow</p><h2 className="mt-2 text-lg font-semibold text-[#17212b]">{selected.title ?? "Release Safety"}</h2><p className="mt-1 text-sm text-[#627083]">The public lab runs one real release workflow through evaluate_workflow over MCP.</p></div><button type="button" onClick={reset} className="inline-flex items-center gap-2 text-sm font-semibold text-[#39506a] hover:text-[#17212b]"><RotateCcw className="h-4 w-4" />Reset sample</button></div>
         <div className="mt-8 grid gap-7 lg:grid-cols-[1.15fr_0.85fr]"><div><SectionHeading label="1" title="Evidence" subtitle="Edit the source excerpts. No credentials are accepted." /> <div className="mt-4 space-y-3">{evidence.map((item, index) => <article key={item.key} className="rounded-2xl border border-[#e1d9cd] bg-[#faf7f0] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#667488]">{item.source_name ?? item.source_type}</p><label className="mt-3 block text-xs font-semibold text-[#263544]">Reference<input value={item.external_id ?? ""} onChange={(event) => setEvidence((current) => current.map((entry, position) => position === index ? { ...entry, external_id: event.target.value } : entry))} className="mt-1.5 w-full rounded-lg border border-[#d9d2c6] bg-white px-3 py-2 text-sm font-normal outline-none focus:border-[#2f5eeb]" /></label><label className="mt-3 block text-xs font-semibold text-[#263544]">What changed<textarea value={item.excerpt} onChange={(event) => setEvidence((current) => current.map((entry, position) => position === index ? { ...entry, excerpt: event.target.value } : entry))} className="mt-1.5 min-h-20 w-full rounded-lg border border-[#d9d2c6] bg-white px-3 py-2 text-sm font-normal leading-6 outline-none focus:border-[#2f5eeb]" /></label></article>)}</div></div>
           <div><SectionHeading label="2" title="Live context" subtitle="The deterministic safety rule evaluates these current values." /> <div className="mt-4 space-y-3">{liveSchema(selected).map((field) => <label key={field.name} className="block rounded-2xl border border-[#e1d9cd] bg-[#faf7f0] p-4"><span className="text-sm font-semibold text-[#263544]">{field.name.replaceAll("_", " ")}</span><span className="mt-1 block text-xs leading-5 text-[#6b7784]">{field.description}</span>{field.value_type === "boolean" ? <select value={String(liveContext[field.name])} onChange={(event) => setLiveContext((current) => ({ ...current, [field.name]: event.target.value === "true" }))} className="mt-3 w-full rounded-lg border border-[#d9d2c6] bg-white px-3 py-2 text-sm outline-none focus:border-[#2f5eeb]"><option value="true">True</option><option value="false">False</option></select> : <input type="number" value={String(liveContext[field.name] ?? "")} onChange={(event) => setLiveContext((current) => ({ ...current, [field.name]: event.target.value }))} className="mt-3 w-full rounded-lg border border-[#d9d2c6] bg-white px-3 py-2 text-sm outline-none focus:border-[#2f5eeb]" />}</label>)}</div></div></div>
-        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[#e5ddd0] pt-6"><button type="button" onClick={() => void evaluate()} disabled={running} className="inline-flex items-center gap-2 rounded-xl bg-[#17212b] px-5 py-3 text-sm font-semibold text-[#fffdf7] hover:bg-[#293846] disabled:opacity-50">{running ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}{running ? "Evaluating with Qwen + SAG" : "Evaluate with Company Brain"}</button><span className="text-xs text-[#6b7280]">Private sandbox · expires after 60 minutes · never changes canonical memory</span></div>
+        <div className="mt-8 flex flex-wrap items-center gap-3 border-t border-[#e5ddd0] pt-6"><button type="button" onClick={() => void evaluate()} disabled={running} className="inline-flex items-center gap-2 rounded-xl bg-[#17212b] px-5 py-3 text-sm font-semibold text-[#fffdf7] hover:bg-[#293846] disabled:opacity-50">{running ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}{running ? "Calling MCP evaluate_workflow" : "Run real workflow through MCP"}</button><span className="text-xs text-[#6b7280]">Authenticated Streamable HTTP · private sandbox · no external action</span></div>
       </>}
     </section>
     {brief && <DecisionTrace run={run} brief={brief} />}
@@ -194,4 +236,20 @@ function ConnectionNode({ icon, title, detail, active = false }: { icon: React.R
 
 function ConnectionStage({ number, title, detail }: { number: string; title: string; detail: string }) {
   return <div className="rounded-xl border border-[#d9e2f0] bg-white/70 p-3"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#60708a]">{number}</p><p className="mt-3 text-xs font-semibold text-[#263544]">{title}</p><p className="mt-1 text-[11px] leading-4 text-[#64748b]">{detail}</p></div>
+}
+
+function McpConnectionPanel({ session, logs, runs, preparing, onPrepare }: { session: DemoMcpSession | null; logs: McpLog[]; runs: WorkflowRun[]; preparing: boolean; onPrepare: () => void }) {
+  return <section className="mt-6 rounded-3xl border border-[#d7e4df] bg-[#f1faf6] p-5 md:p-6">
+    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#1d7660]">Live MCP integration</p><h2 className="mt-2 text-xl font-semibold text-[#17212b]">Use the same connection from a real workflow.</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-[#41685d]">This page calls the authenticated remote MCP endpoint directly. The real-workflow folder uses the same JSON-RPC transport and temporary sandbox key.</p></div>{session ? <span className="inline-flex w-fit items-center gap-2 rounded-full border border-[#b9d9cc] bg-white px-3 py-1.5 text-xs font-semibold text-[#1d604f]"><Check className="h-3.5 w-3.5" />MCP connection ready</span> : <button type="button" onClick={onPrepare} disabled={preparing} className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#1d604f] px-4 py-3 text-sm font-semibold text-white hover:bg-[#174d40] disabled:opacity-50">{preparing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <TerminalSquare className="h-4 w-4" />}{preparing ? "Preparing connection" : "Create temporary MCP connection"}</button>}</div>
+    {session ? <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]"><div className="rounded-2xl border border-[#cce3da] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#52766a]">Copy into real-workflow/.env</p><div className="mt-3 space-y-2 rounded-xl bg-[#17212b] p-3 font-mono text-[11px] leading-5 text-[#d9e8e1]"><p>BRAIN_MCP_URL={session.mcp_endpoint}</p><p className="break-all">BRAIN_API_KEY={session.api_key}</p></div><p className="mt-3 text-xs leading-5 text-[#52766a]">Scoped to {session.permissions}; expires at {new Date(session.expires_at).toLocaleTimeString()}. It can evaluate workflows but cannot record human outcomes or execute company actions.</p></div><div className="rounded-2xl border border-[#cce3da] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#52766a]">Run it locally</p><ol className="mt-3 space-y-2 text-sm leading-5 text-[#2c5146]"><li>1. Open the real-workflow folder.</li><li>2. Install its requirements.</li><li>3. Run python run_release_workflow.py.</li></ol><p className="mt-3 text-xs leading-5 text-[#52766a]">This page polls the same sandbox organization and lists MCP runs below.</p></div></div> : <p className="mt-4 text-sm leading-6 text-[#41685d]">Create a disposable connection first. No long-lived or shared API key is exposed to the public judge route.</p>}
+    {(logs.length > 0 || runs.length > 0) && <div className="mt-5 grid gap-4 lg:grid-cols-2"><McpLogList logs={logs} /><McpRunList runs={runs} /></div>}
+  </section>
+}
+
+function McpLogList({ logs }: { logs: McpLog[] }) {
+  return <div className="rounded-2xl border border-[#cce3da] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#52766a]">This page's MCP calls</p>{logs.length === 0 ? <p className="mt-3 text-sm text-[#52766a]">Run the workflow to see initialize, tools/list, and evaluate_workflow responses.</p> : <div className="mt-3 space-y-2">{logs.map((log, index) => <div key={log.step + String(index)} className="rounded-xl border border-[#e0eee7] bg-[#f8fcfa] p-3"><div className="flex items-center justify-between gap-3"><p className="font-mono text-xs font-semibold text-[#1d604f]">{log.step}</p><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6b847b]">{log.status}</span></div><p className="mt-1 text-xs leading-5 text-[#45665c]">{log.detail}</p></div>)}</div>}</div>
+}
+
+function McpRunList({ runs }: { runs: WorkflowRun[] }) {
+  return <div className="rounded-2xl border border-[#cce3da] bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#52766a]">MCP execution log</p>{runs.length === 0 ? <p className="mt-3 text-sm text-[#52766a]">External workflow runs using this temporary key will appear here.</p> : <div className="mt-3 space-y-2">{runs.slice(0, 4).map((item) => { const brief = briefFor(item); const memories = brief?.memory_refs ?? []; return <div key={item.id} className="rounded-xl border border-[#e0eee7] bg-[#f8fcfa] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="font-mono text-[11px] font-semibold text-[#1d604f]">{item.id}</p><span className="rounded-full border border-[#b9d9cc] bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1d604f]">{verdictLabel(brief?.verdict)}</span></div><p className="mt-2 text-xs text-[#45665c]">Owner: {brief?.owner ?? "not reported"}</p>{memories.map((memory, index) => <p key={memory.memory_id ?? String(index)} className="mt-2 rounded-lg border border-[#e0eee7] bg-white px-2 py-2 text-[11px] leading-4 text-[#45665c]"><span className="font-semibold text-[#1d604f]">{String(memory.provenance?.kind ?? "memory").replaceAll("_", " ")}</span>: {memory.summary ?? "No summary returned"}</p>)}</div> })}</div>}</div>
 }

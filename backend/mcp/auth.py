@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp.server.fastmcp import Context
@@ -98,10 +99,16 @@ async def authenticate_mcp_api_key(api_key: str) -> MCPPrincipal | None:
     if not api_key or not api_key.strip():
         return None
     db = get_db()
+    now = datetime.now(timezone.utc)
     doc = await db["api_keys"].find_one(
         {
             "api_key": api_key.strip(),
             "revoked_at": None,
+            "$or": [
+                {"expires_at": None},
+                {"expires_at": {"$gt": now}},
+                {"expires_at": {"$exists": False}},
+            ],
         }
     )
     if not doc:

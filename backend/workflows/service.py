@@ -411,6 +411,7 @@ class WorkflowService:
         persist: bool = True,
         compile_memory: bool = True,
         is_judge_sandbox: bool = False,
+        execution_origin: str = "rest",
     ) -> WorkflowRun:
         template = self.get_template(body.template_id)
         now = workflow_now()
@@ -546,6 +547,7 @@ class WorkflowService:
             org_id=org_id,
             is_demo_fixture=is_fixture,
             is_judge_sandbox=is_judge_sandbox,
+            execution_origin=execution_origin,
             expires_at=expires_at,
             live_context=live_context,
             decision_brief=brief,
@@ -577,6 +579,9 @@ class WorkflowService:
         if run is None:
             raise WorkflowNotFoundError(run_id)
         return run
+
+    async def list_runs(self, *, org_id: str, limit: int = 20) -> list[WorkflowRun]:
+        return await self.repository.list_runs(org_id=org_id, limit=limit)
 
     def _compiled_skill_id(self, run: WorkflowRun) -> str | None:
         for memory in run.decision_brief.memory_refs:

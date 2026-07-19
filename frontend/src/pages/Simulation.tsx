@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleAlert, Clock3, Database, FileSearch, LoaderCircle, ShieldCheck, Sparkles, UserRound } from "lucide-react"
 import { Link, useParams } from "react-router-dom"
 import { createDemoSession, createWorkflowRun, getWorkflowTemplates, postWorkflowOutcome } from "../lib/api"
-import type { DecisionBrief, WorkflowRun, WorkflowTemplate } from "../types/schema"
+import type { DecisionBrief, MemoryReference, WorkflowRun, WorkflowTemplate } from "../types/schema"
 
 type StageStatus = "idle" | "active" | "complete" | "fallback"
 
@@ -228,7 +228,11 @@ function DecisionTrace({ brief, run }: { brief: DecisionBrief; run: WorkflowRun 
       </TraceLayer>
 
       <TraceLayer number="02" icon={<Database className="h-4 w-4" />} title={qwenRan ? "Qwen compiles cited memory" : "Deterministic fallback"} from="Normalized evidence" to={qwenRan ? "Auditable memory candidate" : "Fallback statement"} tone="violet">
-        <div className="rounded-xl border border-[#e0d8ec] bg-white p-3"><p className="text-sm leading-6 text-[#364256]">{inferenceText(brief)}</p>{compiledMemory?.summary && <p className="mt-3 border-t border-[#ece8f2] pt-3 text-xs leading-5 text-[#596778]"><span className="font-bold uppercase tracking-[0.12em] text-[#6a578b]">Memory candidate</span><br />{compiledMemory.summary}</p>}</div>
+        <div className="rounded-xl border border-[#e0d8ec] bg-white p-3"><p className="text-sm leading-6 text-[#364256]">{inferenceText(brief)}</p>
+          {priorMemory?.summary && <MemoryCard label="Memory already present" memory={priorMemory} tone="prior" />}
+          {compiledMemory?.summary && <MemoryCard label={qwenRan ? "Memory created for this run" : "Fallback memory statement"} memory={compiledMemory} tone="compiled" />}
+          {memories.length > 0 && <details className="mt-3 rounded-lg border border-[#e8e0f0] bg-[#fcfbff] px-3 py-2"><summary className="cursor-pointer text-xs font-semibold text-[#594a70]">Check all memory records ({memories.length})</summary><div className="mt-3 space-y-2">{memories.map((memory, index) => <MemoryCard key={memory.memory_id ?? memory.id ?? String(index)} label={memoryLabel(memory)} memory={memory} tone="record" />)}</div></details>}
+        </div>
         <TracePass text={qwenRan && sourceIds.length > 0 ? "Qwen provenance links this memory to: " + sourceIds.join(", ") + "." : qwenRan ? "No durable memory was added; this sandbox result remains ephemeral." : "Qwen was unavailable, so the backend returned its stated deterministic fallback instead of claiming a compiled memory."} />
       </TraceLayer>
 
@@ -244,6 +248,18 @@ function DecisionTrace({ brief, run }: { brief: DecisionBrief; run: WorkflowRun 
       </TraceLayer>
     </div>
   </section>
+}
+
+function memoryLabel(memory: MemoryReference): string {
+  const kind = String(asRecord(memory.provenance).kind ?? memory.name ?? "memory")
+  return kind.replaceAll("_", " ")
+}
+
+function MemoryCard({ label, memory, tone }: { label: string; memory: MemoryReference; tone: "prior" | "compiled" | "record" }) {
+  const provenance = asRecord(memory.provenance)
+  const sourceIds = Array.isArray(provenance.source_evidence_ids) ? provenance.source_evidence_ids.map(valueText) : []
+  const toneClass = tone === "prior" ? "border-[#d8d2e6] bg-[#f8f6fc]" : tone === "compiled" ? "border-[#e3d9ef] bg-[#fcf9ff]" : "border-[#e8e0f0] bg-white"
+  return <div className={"mt-3 rounded-lg border px-3 py-2.5 text-xs leading-5 text-[#596778] " + toneClass}><p className="font-bold uppercase tracking-[0.12em] text-[#6a578b]">{label}</p><p className="mt-1 text-[#3e4755]">{memory.summary ?? "No memory summary returned."}</p><p className="mt-1 text-[10px] text-[#6f7785]">{memory.is_ephemeral ? "Ephemeral sandbox memory" : "Governed memory reference"}{sourceIds.length > 0 ? " · Sources: " + sourceIds.join(", ") : ""}</p></div>
 }
 
 function TraceLayer({ number, icon, title, from, to, tone, children }: { number: string; icon: React.ReactNode; title: string; from: string; to: string; tone: "blue" | "violet" | "amber" | "green"; children: React.ReactNode }) {

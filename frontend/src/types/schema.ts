@@ -197,6 +197,7 @@ export type WorkflowRun = {
   fixture?: boolean
   is_demo_fixture?: boolean
   is_judge_sandbox?: boolean
+  execution_origin?: string
   expires_at?: string | number
   live_context?: Record<string, unknown>
   mode?: string

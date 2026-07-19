@@ -23,6 +23,8 @@ class WorkflowRepository(Protocol):
 
     async def get_run(self, run_id: str, org_id: str) -> WorkflowRun | None: ...
 
+    async def list_runs(self, *, org_id: str, limit: int = 20) -> list[WorkflowRun]: ...
+
     async def save_sources(self, sources: list[EvidenceRecord]) -> None: ...
 
     async def list_sources(
@@ -56,6 +58,17 @@ class InMemoryWorkflowRepository:
                 self._runs.pop((org_id, run_id), None)
                 return None
             return run.model_copy(deep=True) if run else None
+
+    async def list_runs(self, *, org_id: str, limit: int = 20) -> list[WorkflowRun]:
+        async with self._lock:
+            values = [
+                run.model_copy(deep=True)
+                for (run_org, _), run in self._runs.items()
+                if run_org == org_id
+                and (run.expires_at is None or run.expires_at > datetime.now(timezone.utc))
+            ]
+        values.sort(key=lambda run: run.updated_at, reverse=True)
+        return values[:limit]
 
     async def save_sources(self, sources: list[EvidenceRecord]) -> None:
         async with self._lock:
@@ -145,6 +158,19 @@ class MongoWorkflowRepository:
             return None
         doc.pop("_id", None)
         return WorkflowRun.model_validate(doc)
+
+    async def list_runs(self, *, org_id: str, limit: int = 20) -> list[WorkflowRun]:
+        await self._ensure_indexes()
+        now = datetime.now(timezone.utc)
+        cursor = self._db.workflow_runs.find({
+            "org_id": org_id,
+            "$or": [{"expires_at": None}, {"expires_at": {"$gt": now}}, {"expires_at": {"$exists": False}}],
+        }).sort("updated_at", DESCENDING).limit(limit)
+        output: list[WorkflowRun] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            output.append(WorkflowRun.model_validate(doc))
+        return output
 
     async def save_sources(self, sources: list[EvidenceRecord]) -> None:
         if not sources:
