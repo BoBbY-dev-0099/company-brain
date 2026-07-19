@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from backend.demo.nexaflow_lab import SCENARIOS, run_nexaflow_scenario, scenario_catalog
+from backend.middleware.auth import _judge_session_path
 from backend.sources.models import IngestionStage, RealityMemory
 from backend.sources.service import source_service
 
@@ -21,6 +22,10 @@ def test_nexaflow_catalog_contains_the_four_honest_memory_scenarios():
     ]
     assert "No confirmed" in SCENARIOS["absence-of-evidence"]["answer"]["headline"]
     assert SCENARIOS["sla-conflict"]["answer"]["status"] == "conflict_detected"
+
+
+def test_nexaflow_run_route_consumes_the_browser_judge_session():
+    assert _judge_session_path("/demo-company/nexaflow/agent-handoff") is True
 
 
 @pytest.mark.asyncio

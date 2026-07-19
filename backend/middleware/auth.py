@@ -50,7 +50,11 @@ _JUDGE_SANDBOX_PATHS = {
 
 
 def _judge_session_path(path: str) -> bool:
-    return path in _JUDGE_SANDBOX_PATHS or path.startswith("/workflow-runs/")
+    return (
+        path in _JUDGE_SANDBOX_PATHS
+        or path.startswith("/workflow-runs/")
+        or path.startswith("/demo-company/nexaflow/")
+    )
 
 
 def _canonical_fixture_write_blocked(request: Request) -> bool:
