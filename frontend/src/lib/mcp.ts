@@ -1,7 +1,8 @@
 import type { WorkflowRun } from "../types/schema"
+import type { RealityMemory } from "./api"
 
 export type McpLog = {
-  step: "initialize" | "tools_list" | "evaluate_workflow"
+  step: "initialize" | "tools_list" | "evaluate_workflow" | "inspect_memory"
   status: "running" | "complete" | "error"
   detail: string
 }
@@ -91,4 +92,54 @@ export async function evaluateWorkflowThroughMcp(input: McpCall): Promise<Workfl
     detail: "Received " + String(run.decision_brief?.verdict ?? "a governed verdict") + " from the MCP workflow tool.",
   })
   return run
+}
+
+type McpMemoryCall = {
+  endpoint: string
+  apiKey: string
+  query: string
+  onLog: (entry: McpLog) => void
+}
+
+/** Read source-backed Reality Memory through the same authenticated MCP transport.
+ * This deliberately has no mutation or external-action authority. */
+export async function inspectMemoryThroughMcp(input: McpMemoryCall): Promise<RealityMemory[]> {
+  input.onLog({ step: "initialize", status: "running", detail: "Opening authenticated Streamable HTTP MCP connection." })
+  const initialized = await rpc(input.endpoint, input.apiKey, 1, "initialize", {
+    protocolVersion: "2025-03-26",
+    capabilities: {},
+    clientInfo: { name: "company-brain-nexaflow-lab", version: "1.0.0" },
+  })
+  const server = initialized.result?.serverInfo
+  input.onLog({
+    step: "initialize",
+    status: "complete",
+    detail: "Connected to " + (server?.name ?? "Company Brain") + (server?.version ? " " + server.version : "") + ".",
+  })
+
+  input.onLog({ step: "tools_list", status: "running", detail: "Reading the server-published tool list." })
+  const listed = await rpc(input.endpoint, input.apiKey, 2, "tools/list", {})
+  const toolNames = (listed.result?.tools ?? []).map((tool) => tool.name).filter(Boolean)
+  if (!toolNames.includes("inspect_memory")) throw new Error("The MCP server did not publish inspect_memory.")
+  input.onLog({ step: "tools_list", status: "complete", detail: "Tool available: inspect_memory." })
+
+  input.onLog({ step: "inspect_memory", status: "running", detail: "Asking MCP for active and superseded source-backed memory." })
+  const inspected = await rpc(input.endpoint, input.apiKey, 3, "tools/call", {
+    name: "inspect_memory",
+    arguments: { query: input.query, include_superseded: true, top_k: 10 },
+  })
+  if (inspected.result?.isError) {
+    const text = inspected.result.content?.[0]?.text ?? "MCP memory inspection failed."
+    throw new Error(text)
+  }
+  const text = inspected.result?.content?.[0]?.text
+  if (!text) throw new Error("MCP inspect_memory returned no memory response.")
+  const payload = JSON.parse(text) as { memories?: RealityMemory[] }
+  const memories = Array.isArray(payload.memories) ? payload.memories : []
+  input.onLog({
+    step: "inspect_memory",
+    status: "complete",
+    detail: `MCP returned ${memories.length} source-backed memory record${memories.length === 1 ? "" : "s"}.`,
+  })
+  return memories
 }

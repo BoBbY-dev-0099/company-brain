@@ -15,6 +15,7 @@ from backend.config import settings
 from backend.brain import store as brain_store
 from backend.demo.judge_session import is_judge_sandbox_org
 from backend.demo.integration_lab import run_northstar_lab
+from backend.demo.nexaflow_lab import run_nexaflow_scenario, scenario_catalog
 from backend.sources.adapters import (
     fetch_verified_web_evidence,
     redact_slack_payload,
@@ -332,3 +333,33 @@ async def run_demo_company(request: Request) -> dict[str, Any]:
             detail="Start a private sandbox before running the synthetic company lab.",
         )
     return await run_northstar_lab(org_id=org_id)
+
+
+@router.get("/demo-company/nexaflow/scenarios")
+async def get_nexaflow_scenarios() -> dict[str, Any]:
+    """Publish the server-owned, fixture-labelled NexaFlow test scenarios."""
+    return {
+        "company": "NexaFlow Logistics",
+        "mode": "synthetic_company_fixture",
+        "scenarios": scenario_catalog(),
+        "boundary": (
+            "These are browser-private fixture records. They exercise Slack, Drive, "
+            "GitHub, and verified-web-shaped evidence without contacting a real workspace, "
+            "CRM, profile provider, or external company."
+        ),
+    }
+
+
+@router.post("/demo-company/nexaflow/{scenario_id}")
+async def run_nexaflow_demo_scenario(request: Request, scenario_id: str) -> dict[str, Any]:
+    """Run one temporal-memory scenario in the current browser-private sandbox."""
+    org_id = _org(request)
+    if not is_judge_sandbox_org(org_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Start a private sandbox before running a NexaFlow scenario.",
+        )
+    try:
+        return await run_nexaflow_scenario(scenario_id=scenario_id, org_id=org_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NexaFlow scenario not found") from exc

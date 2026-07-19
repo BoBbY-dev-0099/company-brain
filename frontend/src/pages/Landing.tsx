@@ -146,7 +146,7 @@ export default function Landing() {
     <header className="border-b border-[#d9d3c8] bg-[#f5f1e8]/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#17212b] text-[#fffdf8]"><Sparkles className="h-4 w-4" /></span>Company Brain</Link>
-        <nav className="flex items-center gap-4 text-sm font-medium text-[#506070]"><Link to="/play/workflow" className="hover:text-[#17212b]">Workflow Lab</Link><Link to="/app/connect" className="hover:text-[#17212b]">Integration Studio</Link></nav>
+        <nav className="flex items-center gap-4 text-sm font-medium text-[#506070]"><Link to="/play/nexaflow" className="hover:text-[#17212b]">NexaFlow Lab</Link><Link to="/play/workflow" className="hover:text-[#17212b]">Workflow Lab</Link><Link to="/app/connect" className="hover:text-[#17212b]">Integration Studio</Link></nav>
       </div>
     </header>
 
@@ -192,7 +192,7 @@ export default function Landing() {
         {(events.length > 0 || memories.length > 0 || brief) && <AuditProof events={events} memories={memories} brief={brief} />}
       </section>
 
-      <section className="mt-10"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#718096]">Same engine, other consequences</p><div className="mt-4 grid gap-3 md:grid-cols-3"><CaseCard title="Release Safety" detail="Changed runtime evidence suspends a deployment." to="/play/release-safety" /><CaseCard title="Money Safety" detail="Contract evidence blocks an unsafe refund." to="/play/money-safety" /><CaseCard title="Rollout Safety" detail="Reliability evidence holds a feature expansion." to="/play/rollout-safety" /></div></section>
+      <section className="mt-10"><p className="text-xs font-bold uppercase tracking-[0.15em] text-[#718096]">Same engine, other consequences</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><CaseCard title="NexaFlow Reality Lab" detail="Prove temporal conflict, stale ownership, agent handoff, and honest uncertainty." to="/play/nexaflow" /><CaseCard title="Release Safety" detail="Changed runtime evidence suspends a deployment." to="/play/release-safety" /><CaseCard title="Money Safety" detail="Contract evidence blocks an unsafe refund." to="/play/money-safety" /><CaseCard title="Rollout Safety" detail="Reliability evidence holds a feature expansion." to="/play/rollout-safety" /></div></section>
     </main>
   </div>
 }

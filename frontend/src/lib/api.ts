@@ -264,3 +264,38 @@ export type DemoCompanyLab = {
 export function runDemoCompanyLab() {
   return apiPost<DemoCompanyLab>("/demo-company/run", {})
 }
+
+export type NexaFlowScenario = {
+  id: string
+  title: string
+  question: string
+  summary: string
+}
+
+export type NexaFlowAnswer = {
+  status: string
+  headline: string
+  confidence: string
+  response: string
+  recommended_action: string
+  missing_evidence: string[]
+  generated_by: string
+  qwen_boundary: string
+}
+
+export type NexaFlowLab = {
+  company: { name: string; workspace: string; repository: string; mode: string }
+  mode: string
+  scenario: NexaFlowScenario & { agent_query: string }
+  events: SourceEvent[]
+  memories: RealityMemory[]
+  answer: NexaFlowAnswer
+}
+
+export function getNexaFlowScenarios() {
+  return apiGet<{ company: string; mode: string; scenarios: NexaFlowScenario[]; boundary: string }>("/demo-company/nexaflow/scenarios")
+}
+
+export function runNexaFlowScenario(scenarioId: string) {
+  return apiPost<NexaFlowLab>(`/demo-company/nexaflow/${encodeURIComponent(scenarioId)}`, {})
+}

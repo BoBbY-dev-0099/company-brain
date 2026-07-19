@@ -123,6 +123,32 @@ signature/replay, duplicate-delivery, temporal-supersession, and private-web
 guard results. It is deliberately labelled fixture evidence and contacts no
 real Slack workspace, Drive folder, or GitHub repository.
 
+## NexaFlow temporal-memory lab
+
+`/play/nexaflow` is the companion synthetic-company lab built around four
+operational questions that a real company must answer carefully:
+
+- **Conflicting enterprise SLA:** a historical policy conflicts with a newer
+  sales announcement, so Company Brain flags the old value instead of silently
+  treating it as current.
+- **Stale decision-maker:** a historical account contact is superseded by newer
+  departure and handoff evidence; the earlier record remains auditable.
+- **Sales to Customer Success handoff:** a Sales handoff and a later GitHub
+  latency fix update the context read by the next agent through MCP
+  `inspect_memory`.
+- **No confirmed commitment:** generic material and an unsigned template do
+  not prove an Acme-specific promise, so the system identifies the missing
+  executed-contract or written-commitment evidence.
+
+Every scenario uses a private, expiring browser sandbox and passes fixture
+records through the normal immutable source ledger and Qwen Reality Memory
+compiler. The final conclusion is deterministic and evidence-bound: Qwen is
+never presented as having established an unsupported commitment. Fixture CRM
+and public-profile records are clearly labelled as such; this does not claim a
+live CRM or profile-provider connector. The lab also does not claim Qwen
+vision/audio processing or an edge cache, because those capabilities are not
+implemented in this submission.
+
 ## Useful endpoints
 
 | Method | Path | Purpose |
@@ -131,6 +157,8 @@ real Slack workspace, Drive folder, or GitHub repository.
 | `GET` | `/source-connections` | Server-derived source health and allowed scope. |
 | `GET` | `/source-events` | Immutable normalized evidence for the scoped organization. |
 | `GET` | `/reality-memory` | Active and superseded source-backed memory. |
+| `GET` | `/demo-company/nexaflow/scenarios` | Server-owned NexaFlow fixture scenario catalog. |
+| `POST` | `/demo-company/nexaflow/{scenario_id}` | Run one private NexaFlow source-to-memory scenario. |
 | `POST` | `/integrations/slack/events` | Signed Slack event intake. |
 | `POST` | `/integrations/google-drive/sync` | Scoped, API-key authenticated Drive sync. |
 | `POST` | `/integrations/web/fetch` | Scoped, API-key authenticated verified URL fetch. |
