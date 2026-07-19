@@ -72,6 +72,11 @@ services:
       AUDIT_PUBLIC_KEY_PATH: /opt/company-brain/secrets/audit_public.pem
     volumes:
       - audit_secrets:/opt/company-brain/secrets
+    # The worker is a long-running poller, not an HTTP server. Disable the
+    # API image's inherited curl healthcheck so Compose does not mark a healthy
+    # polling process unhealthy for intentionally not listening on port 8000.
+    healthcheck:
+      disable: true
     depends_on:
       mongodb:
         condition: service_healthy
