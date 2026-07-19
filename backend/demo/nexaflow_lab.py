@@ -80,7 +80,7 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "title": "Stale decision-maker",
         "question": "Who is the decision-maker at Acme Corp?",
         "summary": "A stale contact record conflicts with newer departure and ownership evidence. The prior contact must remain auditable but cannot be treated as current.",
-        "agent_query": "Acme decision maker",
+        "agent_query": "Acme Corp",
         "answer": {
             "status": "superseded",
             "headline": "Sarah Chen is the current working owner; John Smith is a historical contact only.",
@@ -124,7 +124,7 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "title": "Sales to Customer Success handoff",
         "question": "Should Customer Success mention the API latency fix to Acme?",
         "summary": "A Sales agent records a customer concern; a later GitHub change revises the operational context. MCP lets the next agent read the same governed memory.",
-        "agent_query": "Acme API latency",
+        "agent_query": "Acme Corp",
         "answer": {
             "status": "context_updated",
             "headline": "Mention the deployed latency fix, but state that customer validation is still pending.",
@@ -159,7 +159,7 @@ SCENARIOS: dict[str, dict[str, Any]] = {
         "title": "No confirmed commitment",
         "question": "Did NexaFlow promise Acme a dedicated account manager?",
         "summary": "Generic marketing and an unsigned template are not evidence of a customer-specific promise. Company Brain must say what is missing rather than invent a commitment.",
-        "agent_query": "Acme dedicated account manager",
+        "agent_query": "Acme Corp",
         "answer": {
             "status": "review_required",
             "headline": "No confirmed Acme-specific dedicated account-manager promise was found.",
