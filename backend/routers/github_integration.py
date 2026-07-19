@@ -281,6 +281,39 @@ async def _complete_intake(
         workflow_status=event_doc.get("workflow_status"),
     ) or event_doc
 
+    # Mirror the already compiled/audited GitHub event into the shared source
+    # ledger.  This adds provenance and Reality Memory without another Qwen
+    # call or a second confidence mutation.
+    try:
+        from backend.sources.service import source_service
+
+        metadata = event.metadata or {}
+        await source_service.record_completed_github(
+            org_id=org_id,
+            external_id=str(metadata.get("github_delivery_id") or event.event_id),
+            excerpt=event.content,
+            occurred_at=event.occurred_at,
+            source_url=metadata.get("html_url"),
+            raw_payload_sha256=str(metadata.get("source_payload_sha256") or ""),
+            metadata=metadata,
+            compiled_skill_id=event_doc.get("skill_compiled"),
+            workflow_run_id=event_doc.get("workflow_run_id"),
+            workflow_status=event_doc.get("workflow_status"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        # Unit-level intake tests deliberately replace the legacy store without
+        # starting Mongo.  A running API always has Mongo from its lifespan;
+        # keep that test seam from changing the established GitHub contract.
+        if isinstance(exc, RuntimeError) and "Mongo not initialised" in str(exc):
+            logger.debug("Skipping source-ledger mirror before Mongo startup")
+            return _response_from_event(event_doc, duplicate=False)
+        logger.exception("GitHub source-ledger persistence failed")
+        await _mark_failed(event, org_id, "source_ledger_failed", exc)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "GITHUB_SOURCE_LEDGER_FAILED", "detail": str(exc)[:400]},
+        ) from exc
+
     return _response_from_event(event_doc, duplicate=False)
 
 

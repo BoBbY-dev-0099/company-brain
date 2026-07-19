@@ -18,14 +18,11 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sse_starlette.sse import EventSourceResponse
 
-from backend.agents import engineering_agent, product_agent, support_agent
 from backend.brain import store
 from backend.config import settings
 from backend.core import compiler, interceptor, propagator
 from backend.core.compiler import check_embedding_health
 from backend.core.schema import (
-    AgentRunRequest,
-    AgentRunResponse,
     DecisionCheckRequest,
     DecisionCheckResponse,
     InterceptResult,
@@ -223,7 +220,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Company Brain",
-    description="MemoryAgent — Operating Memory Primitive (Qwen Cloud Hackathon 2026)",
+    description="Source-backed Reality Memory and governed MCP decisions (Qwen Cloud Hackathon 2026)",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -267,6 +264,7 @@ from backend.routers import benchmark as benchmark_router
 from backend.routers import github_integration as github_router
 from backend.routers import integration_catalog as integration_catalog_router
 from backend.routers import sag as sag_router
+from backend.routers import sources as sources_router
 from backend.routers import workflows as workflows_router
 
 app.include_router(attestation_router.router)
@@ -275,6 +273,7 @@ app.include_router(benchmark_router.router)
 app.include_router(github_router.router)
 app.include_router(integration_catalog_router.router)
 app.include_router(sag_router.router)
+app.include_router(sources_router.router)
 app.include_router(workflows_router.router)
 
 # Register this concrete endpoint before the /mcp sub-application. Starlette
@@ -439,67 +438,6 @@ async def list_events(request: Request, limit: int = 50) -> dict[str, Any]:
     return {"count": len(events), "events": events}
 
 
-# ---------- agents ----------
-
-@app.post("/agents/support/run", response_model=AgentRunResponse)
-async def run_support(request: Request, req: AgentRunRequest) -> AgentRunResponse:
-    org_id = _get_org_id(request)
-    if not settings.QWEN_API_KEY:
-        raise HTTPException(status_code=503, detail="QWEN_API_KEY not configured")
-    result = await support_agent.run(req.user_message, metadata=req.metadata, org_id=org_id)
-    return AgentRunResponse(
-        agent_id=support_agent.get_agent().agent_id,
-        response=result.response,
-        skills_used=result.skills_used,
-        intercepted=result.intercepted,
-        intercept_skill=result.intercept_skill,
-        iterations=result.iterations,
-        session_id=req.session_id,
-    )
-
-
-@app.post("/agents/engineering/run", response_model=AgentRunResponse)
-async def run_engineering(request: Request, req: AgentRunRequest) -> AgentRunResponse:
-    org_id = _get_org_id(request)
-    if not settings.QWEN_API_KEY:
-        raise HTTPException(status_code=503, detail="QWEN_API_KEY not configured")
-    result = await engineering_agent.run(
-        req.user_message, metadata=req.metadata, org_id=org_id
-    )
-    return AgentRunResponse(
-        agent_id=engineering_agent.get_agent().agent_id,
-        response=result.response,
-        skills_used=result.skills_used,
-        intercepted=result.intercepted,
-        intercept_skill=result.intercept_skill,
-        iterations=result.iterations,
-        session_id=req.session_id,
-    )
-
-
-@app.post("/agents/product/run", response_model=AgentRunResponse)
-async def run_product(request: Request, req: AgentRunRequest) -> AgentRunResponse:
-    org_id = _get_org_id(request)
-    if not settings.QWEN_API_KEY:
-        raise HTTPException(status_code=503, detail="QWEN_API_KEY not configured")
-    result, session_id = await product_agent.run(
-        req.user_message,
-        user_id=req.user_id,
-        session_id=req.session_id,
-        metadata=req.metadata,
-        org_id=org_id,
-    )
-    return AgentRunResponse(
-        agent_id=product_agent.get_agent().agent_id,
-        response=result.response,
-        skills_used=result.skills_used,
-        intercepted=result.intercepted,
-        intercept_skill=result.intercept_skill,
-        iterations=result.iterations,
-        session_id=session_id,
-    )
-
-
 # ---------- sessions ----------
 
 @app.post("/sessions", response_model=SessionMemory)
@@ -581,7 +519,6 @@ async def get_metrics(request: Request) -> dict[str, Any]:
     active_skills = await store.get_skill_count(org_id=org_id, active_only=True)
     recent_events = await store.get_recent_events(org_id=org_id, limit=10)
     intercept_stats = await store.get_intercept_stats(org_id=org_id)
-    registered_agent_ids = await store.get_all_agent_ids(org_id=org_id)
     last_event = recent_events[0] if recent_events else None
     return {
         "metrics": {
@@ -597,8 +534,6 @@ async def get_metrics(request: Request) -> dict[str, Any]:
             "avg_confidence": sum(r.get("confidence", 0) for r in recent_events) / max(len(recent_events), 1),
             "avg_intercept_time": None,
             "avg_intercept_time_availability": "not measured",
-            "active_agents": len(registered_agent_ids),
-            "active_agents_definition": "registered agent records for this org; not concurrent activity",
         },
         "last_event": last_event,
         "timestamp": store.utc_now().isoformat(),
@@ -783,11 +718,12 @@ async def root() -> dict[str, Any]:
             "/health", "/events", "/decisions/check",
             "/brain/skills", "/brain/skills/{skill_id}",
             "/brain/intercepts", "/brain/events",
-            "/agents/{support|engineering|product}/run",
             "/sessions/{user_id}", "/stream",
             "/mcp/", "/mcp/attestation",
             "/settings/api-keys", "/settings/metrics", "/settings/seed-demo-data",
             "/workflow-templates", "/workflow-runs/{run_id}", "/workflow-sources",
+            "/source-connections", "/source-events", "/reality-memory", "/reality-overview",
+            "/integrations/slack/events", "/integrations/google-drive/sync", "/integrations/web/fetch",
             "/demo/readiness",
         ],
     }

@@ -89,5 +89,43 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
     GITHUB_REPOS: str = os.getenv("GITHUB_REPOS", "")
 
+    # Source adapters are deliberately least-privilege and configured on the
+    # server.  The public judge UI never receives these values and cannot
+    # create a connection by submitting a credential.
+    SOURCE_ORG_ID: str = os.getenv("SOURCE_ORG_ID", "sandbox")
+
+    # Slack Events API: only verified events from explicitly allowlisted
+    # workspace/channel IDs are accepted.  A bot token is optional and only
+    # required when a future adapter needs to enrich a permitted thread.
+    SLACK_SIGNING_SECRET: str = os.getenv("SLACK_SIGNING_SECRET", "")
+    SLACK_BOT_TOKEN: str = os.getenv("SLACK_BOT_TOKEN", "")
+    SLACK_ALLOWED_TEAM_ID: str = os.getenv("SLACK_ALLOWED_TEAM_ID", "")
+    SLACK_ALLOWED_CHANNEL_IDS: str = os.getenv("SLACK_ALLOWED_CHANNEL_IDS", "")
+    SLACK_EVENT_MAX_AGE_SECONDS: int = int(os.getenv("SLACK_EVENT_MAX_AGE_SECONDS", "300"))
+
+    # Google Drive: a read-only service account is scoped to one explicitly
+    # shared folder.  Either a JSON value or a mounted JSON file may be used;
+    # the latter is preferred for ECS deployment.
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    GOOGLE_SERVICE_ACCOUNT_FILE: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "")
+    GOOGLE_DRIVE_FOLDER_ID: str = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
+    GOOGLE_DRIVE_ALLOWED_MIME_TYPES: str = os.getenv(
+        "GOOGLE_DRIVE_ALLOWED_MIME_TYPES",
+        "application/vnd.google-apps.document,text/plain,application/pdf",
+    )
+    GOOGLE_DRIVE_SYNC_INTERVAL_SECONDS: int = int(os.getenv("GOOGLE_DRIVE_SYNC_INTERVAL_SECONDS", "300"))
+    GOOGLE_DRIVE_MAX_FILE_BYTES: int = int(os.getenv("GOOGLE_DRIVE_MAX_FILE_BYTES", "750000"))
+
+    # Verified web evidence is an authenticated, explicit URL fetch â€” it is
+    # not an open web-search connector.  Hosts must be configured to prevent
+    # the server becoming an SSRF proxy.
+    WEB_EVIDENCE_ALLOWED_HOSTS: str = os.getenv("WEB_EVIDENCE_ALLOWED_HOSTS", "")
+    WEB_EVIDENCE_MAX_BYTES: int = int(os.getenv("WEB_EVIDENCE_MAX_BYTES", "250000"))
+    WEB_EVIDENCE_TIMEOUT_SECONDS: float = float(os.getenv("WEB_EVIDENCE_TIMEOUT_SECONDS", "8"))
+
+    # The separate worker owns durable source-event processing and optional
+    # Drive polling.  The API only accepts authenticated/signed source input.
+    SOURCE_WORKER_POLL_SECONDS: float = float(os.getenv("SOURCE_WORKER_POLL_SECONDS", "2"))
+
 
 settings = Settings()

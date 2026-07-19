@@ -295,6 +295,8 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
         assert tools.status_code == 200
         assert {tool["name"] for tool in tools.json()["result"]["tools"]} == {
             "recall_skills",
+            "inspect_memory",
+            "query_evidence",
             "check_intercept",
             "evaluate_workflow",
             "compile_experience",

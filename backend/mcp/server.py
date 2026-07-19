@@ -103,6 +103,28 @@ def create_mcp_server(
         )
 
     @server.tool()
+    async def inspect_memory(
+        query: str = "",
+        include_superseded: bool = False,
+        top_k: int = 10,
+        ctx: Context = None,
+    ) -> dict:
+        """Inspect source-backed Reality Memory, including temporal lineage when requested."""
+        principal = require_mcp_scope(ctx, MCP_READ_SCOPE)
+        return await tools.inspect_memory(
+            query=query,
+            include_superseded=include_superseded,
+            top_k=top_k,
+            org_id=principal.org_id,
+        )
+
+    @server.tool()
+    async def query_evidence(top_k: int = 10, ctx: Context = None) -> dict:
+        """Return the calling organization's immutable source-evidence summaries."""
+        principal = require_mcp_scope(ctx, MCP_READ_SCOPE)
+        return await tools.query_evidence(top_k=top_k, org_id=principal.org_id)
+
+    @server.tool()
     async def check_intercept(
         agent_id: str,
         decision_text: str,

@@ -96,11 +96,11 @@ async def test_recall_skills_with_match(monkeypatch):
 
 def test_attestation_payload_shape():
     out = brain_tools.attestation()
-    assert out["tee_capable"] is True
-    assert "Intel TDX" in out["platform"]
+    assert out["tee_capable"] is False
+    assert "Standard cloud" in out["platform"]
     assert "narrative" in out
     assert "tools" in out
-    assert len(out["tools"]) == 4
+    assert len(out["tools"]) == 6
     assert out["mcp_endpoint"] == "/mcp/"
     assert "measurement" in out
 

@@ -2,7 +2,7 @@
 
 These are the actual Python functions that back the MCP tools. The MCP server
 (server.py) registers scoped wrappers over authenticated Streamable HTTP.
-In-process agents import these functions directly to avoid transport loopback.
+In-process backend integrations import these functions directly to avoid transport loopback.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from backend.core.schema import (
     InterceptResult,
     RawEvent,
 )
+from backend.sources.store import get_source_repository
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +124,55 @@ async def compile_experience(
     }
 
 
+async def inspect_memory(
+    query: str = "",
+    include_superseded: bool = False,
+    top_k: int = 10,
+    org_id: str = "default",
+) -> dict[str, Any]:
+    """Inspect source-linked Reality Memory without exposing another org."""
+    memories = await get_source_repository().list_memories(
+        org_id,
+        query=query or None,
+        include_superseded=include_superseded,
+        limit=top_k,
+    )
+    return {"memories": [memory.model_dump(mode="json") for memory in memories]}
+
+
+async def query_evidence(
+    top_k: int = 10,
+    org_id: str = "default",
+) -> dict[str, Any]:
+    """Return immutable source-event summaries for an organization."""
+    events = await get_source_repository().list_ingestions(org_id, limit=top_k)
+    return {
+        "evidence": [
+            {
+                "ingestion_id": event.ingestion_id,
+                "provider": event.provider.value,
+                "external_id": event.external_id,
+                "source_type": event.source_type,
+                "source_name": event.source_name,
+                "source_url": event.source_url,
+                "occurred_at": event.occurred_at.isoformat(),
+                "retrieved_at": event.retrieved_at.isoformat(),
+                "excerpt": event.excerpt,
+                "raw_payload_sha256": event.raw_payload_sha256,
+                "freshness": event.freshness,
+                "availability": event.availability,
+                "acl_scope": event.acl_scope,
+                "stage": event.stage.value,
+                "qwen_status": event.qwen_status,
+                "memory_id": event.memory_id,
+            }
+            for event in events
+        ]
+    }
+
+
 def attestation() -> dict[str, Any]:
-    """Mock attestation for the demo. Real TDX path is for enterprise."""
+    """Describe the current audit boundary without inventing an attestation."""
     import hashlib
     from datetime import datetime, timezone
 
@@ -145,21 +193,28 @@ def attestation() -> dict[str, Any]:
             "name": "compile_experience",
             "purpose": "Write resolved experience back to the brain",
         },
+        {
+            "name": "inspect_memory",
+            "purpose": "Inspect current and superseded source-backed Reality Memory",
+        },
+        {
+            "name": "query_evidence",
+            "purpose": "Inspect immutable source-event evidence summaries",
+        },
     ]
-    measurement = hashlib.sha256(b"company-brain-mock-enclave-v1").hexdigest()
+    measurement = hashlib.sha256(b"company-brain-build-metadata-v1").hexdigest()
     return {
-        "tee_capable": True,
-        "platform": "Intel TDX (Alibaba Cloud g8i / gn8v-tee)",
-        "attestation_verified": True,
+        "tee_capable": False,
+        "platform": "Standard cloud host (TDX capability checked at runtime)",
+        "attestation_verified": False,
         "measurement": measurement,
         "issued_at": datetime.now(timezone.utc).isoformat(),
         "mcp_endpoint": "/mcp/",
         "attestation_endpoint": "/mcp/attestation",
         "tools": tools_manifest,
         "narrative": (
-            "Demo runs on standard cloud; TDX path available for enterprise. "
-            "This endpoint returns a mock attestation envelope to demonstrate "
-            "the integration shape — production deployments would attest the "
-            "running enclave's measurement and bind it to the brain's signing key."
+            "This metadata endpoint does not claim a hardware quote. The runtime "
+            "route reports TDX only when the running host verifies it; otherwise "
+            "decision integrity uses the explicit RSA audit fallback."
         ),
     }

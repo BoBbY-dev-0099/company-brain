@@ -36,7 +36,16 @@ _PUBLIC_PATHS = {
 }
 
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_JUDGE_SANDBOX_PATHS = {"/demo/mcp-session", "/workflow-runs", "/workflow-sources"}
+_JUDGE_SANDBOX_PATHS = {
+    "/demo/mcp-session",
+    "/workflow-runs",
+    "/workflow-sources",
+    "/source-connections",
+    "/source-events",
+    "/reality-memory",
+    "/reality-overview",
+    "/reality/replay/incident",
+}
 
 
 def _judge_session_path(path: str) -> bool:

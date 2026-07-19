@@ -130,3 +130,91 @@ export function getDemoReadiness() {
 export function getIntegrationCatalog() {
   return apiGet<IntegrationCatalog>("/integration-catalog")
 }
+
+export type SourceConnection = {
+  provider: string
+  title: string
+  status: string
+  allowed_scope: string[]
+  endpoint?: string
+  last_success_at?: string
+  last_error?: string
+  health?: string
+  configuration?: Record<string, boolean | string | number>
+}
+
+export type SourceEvent = {
+  ingestion_id: string
+  provider: string
+  external_id: string
+  source_type: string
+  source_name: string
+  source_url?: string
+  occurred_at: string
+  retrieved_at?: string
+  excerpt: string
+  raw_payload_sha256: string
+  freshness?: string
+  availability?: string
+  acl_scope?: string[]
+  stage: string
+  qwen_status: string
+  memory_id?: string
+  is_judge_sandbox?: boolean
+}
+
+export type RealityMemory = {
+  memory_id: string
+  claim_key: string
+  subject: string
+  predicate: string
+  scope: string
+  claim: string
+  status: string
+  source_ingestion_ids: string[]
+  qwen_rationale: string
+  qwen_generated: boolean
+  supersedes: string[]
+  superseded_by?: string
+  is_ephemeral?: boolean
+  updated_at: string
+}
+
+export type RealityOverview = {
+  connections: SourceConnection[]
+  events: SourceEvent[]
+  memories: RealityMemory[]
+  mode: string
+}
+
+export type IncidentReplay = {
+  mode: string
+  events: SourceEvent[]
+  workflow: {
+    template_id: string
+    evidence: WorkflowEvidenceInput[]
+    live_context: Record<string, unknown>
+  }
+}
+
+export function getSourceConnections() {
+  return apiGet<{ connections: SourceConnection[] }>("/source-connections")
+}
+
+export function getSourceEvents(limit = 30) {
+  return apiGet<{ events: SourceEvent[] }>(`/source-events?limit=${encodeURIComponent(String(limit))}`)
+}
+
+export function getRealityMemory(query = "", includeSuperseded = true) {
+  return apiGet<{ memories: RealityMemory[] }>(
+    `/reality-memory?include_superseded=${includeSuperseded ? "true" : "false"}&query=${encodeURIComponent(query)}`,
+  )
+}
+
+export function getRealityOverview() {
+  return apiGet<RealityOverview>("/reality-overview")
+}
+
+export function replayIncident() {
+  return apiPost<IncidentReplay>("/reality/replay/incident", {})
+}

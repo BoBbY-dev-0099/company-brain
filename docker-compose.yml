@@ -55,6 +55,27 @@ services:
     expose:
       - "8000"
 
+  worker:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: companybrain-source-worker
+    restart: unless-stopped
+    command: ["python", "-m", "backend.sources.worker"]
+    env_file:
+      - .env
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/companybrain?directConnection=true
+      MONGODB_DB_NAME: companybrain
+      AUDIT_PRIVATE_KEY_PATH: /opt/company-brain/secrets/audit_private.pem
+      AUDIT_PUBLIC_KEY_PATH: /opt/company-brain/secrets/audit_public.pem
+    volumes:
+      - audit_secrets:/opt/company-brain/secrets
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
   nginx:
     profiles: ["full"]
     build:

@@ -1,107 +1,80 @@
-# Company Brain — Operational Memory for Safe Company Actions
+# Company Brain — Reality Memory for Safe Company Actions
 
 **Track:** MemoryAgent · Qwen Cloud Global AI Hackathon 2026
-**One line:** Company Brain turns changing operational evidence into governed memory, checks it against live context, and routes a safe next step to a human owner.
 
-**Judge route:** `/` after deployment.
-**Deployment evidence:** [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) is intentionally pending until a verified Alibaba Cloud ECS/SAS deployment is captured.
+**Live judge route:** `https://brain.veriflowai.me/`
 
 ## The problem
 
-Teams already have the evidence they need to avoid bad actions: a merged PR, a support-policy exception, or an error spike. The failure is that the evidence lives in separate systems while agents act from an older memory.
+Company decisions are often made by agents or automation after reality has changed. A production incident is in Slack, a requirement is in Drive, and the changed configuration is in GitHub. The decision system still remembers an older safe condition and acts with confidence.
 
-That creates a familiar operational mistake:
+Company Brain turns those sources into an evidence-backed, time-aware company memory before a consequential action is recommended.
 
-> “This used to be safe” becomes “do it automatically,” even though live reality changed.
+## What judges can run
 
-Company Brain makes that break visible before an action happens.
+The root route is a **Company Reality Console**. It shows four source tiles, one current-risk statement, and one action: **Run incident-to-release check**.
 
-## What judges see first
+That run uses the real private sandbox pipeline:
 
-The four-module Launchpad gives judges one guided workflow sandbox plus three reusable workflow simulations, not four disconnected agents:
+1. A Slack incident reports export-worker OOM failures.
+2. A Drive runbook states the minimum safe memory condition.
+3. A GitHub merged PR shows the value was changed from 25 MiB to 8 MiB.
+4. Qwen compiles source-backed Reality Memory with provenance.
+5. Deterministic SAG checks the live runtime value and suspends the release.
+6. The `DecisionBrief` names the SRE/release owner and recommended next action.
 
-| Template | Evidence that changes the answer | Safe result |
-| --- | --- | --- |
-| Release Safety | A GitHub PR and runtime evidence lower the worker-memory limit below the runbook assumption. | Suspend the release; assign an engineering owner. |
-| Money Safety | A support request conflicts with an enterprise contract or refund policy. | Pause the automatic refund; assign support operations. |
-| Rollout Safety | Current error rate and an open incident invalidate a feature-flag expansion. | Hold expansion; assign the rollout owner. |
+The console then exposes the actual backend response: source excerpt and hash, source/retrieval time, freshness, Qwen status and rationale, memory lineage, SAG trace, MCP request/result, and human outcome boundary. It never invents a favorable verdict in the browser.
 
-Every simulation is server-evaluated and exposes the same `DecisionBrief`:
+Money Safety and Rollout Safety are compact reuse proofs of the same template engine. `/play/workflow` is a chat-like temporary lab: a judge describes a release, refund, or rollout condition; the browser receives a private MCP key and calls the same `evaluate_workflow` tool without submitting company credentials.
 
-`facts · Qwen inference · missing evidence · source excerpts/freshness · prior memory · SAG trace · verdict · owner · recommended next action`
-
-## How it works
+## Four layers, one governed flow
 
 ```mermaid
 flowchart LR
-  E[Source-backed evidence] --> N[Normalize: source, ID, URL, time, excerpt, freshness]
-  N --> Q[Qwen compiler produces memory with provenance]
-  Q --> M[Prior + compiled memory]
-  M --> S[Deterministic SAG over live context]
-  S --> B[DecisionBrief]
-  B --> H[Human-approved operational action]
-  H --> O[Audited outcome]
+  S[Slack · Drive · GitHub · Verified Web] --> E[Immutable evidence ledger]
+  E --> Q[Qwen Reality Memory]
+  Q --> G[MCP / REST + deterministic SAG]
+  G --> H[Human-confirmed outcome]
+  H --> Q
 ```
 
-`WorkflowTemplate`s are code-owned and versioned for this submission. Each declares source requirements, required evidence fields, live-context schema, deterministic SAG rule, memory type, owner role, action recommendation, fixture, and evaluation cases. This is deliberately not a no-code builder.
-
-The stable API surface is:
-
-```text
-GET  /workflow-templates
-GET  /demo/modules
-POST /demo/session
-POST /workflow-runs
-GET  /workflow-runs/{id}
-POST /workflow-runs/{id}/outcome
-GET  /workflow-sources
-GET  /demo/readiness
-```
-
-## Why this is real rather than a scripted verdict
-
-- The UI renders backend-returned verdicts only. If the backend is unavailable, it says so; it does not manufacture a green/red outcome.
-- `POST /workflow-runs` normalizes the supplied evidence, computes freshness and missing fields, runs Qwen compilation where configured, and evaluates the template's deterministic SAG predicate.
-- Release Safety implements a real signed GitHub merged-PR webhook when its secret, token, and repository allowlist are configured. The webhook persists raw evidence, compiled skill, audit record, SSE propagation, and a linked `release-safety` workflow run before returning success. A PR with no runtime telemetry honestly returns `review_required`.
-- Money Safety and Rollout Safety use the identical contract as visibly labelled canonical demo fixtures, not claimed live connectors.
-- The `/app/connect` page and server-defined `GET /integration-catalog` distinguish a configured source, a stable REST contract, a fixture, and a preview rather than implying a connector marketplace.
-- `judge-demo-v1` is immutable. The public playground receives an opaque, browser-scoped temporary sandbox; fixture replays never add a canonical skill or confidence increment.
-- A skill can only gain confidence or become `auto_execute`-eligible after a persisted **human-confirmed** outcome. All workflow actions remain human-approved.
-
-## Under-three-minute video script
-
-1. Open `/`. In one glance, show the guided workflow sandbox and the three real-world simulations.
-2. Open **Release Safety** and click **Simulate decision**. Show the four live stages: evidence, Qwen memory, SAG, and human action. Expand Audit proof for the GitHub PR, runtime evidence, remembered 25 MiB rule, changed value of 8 MiB, and deterministic SAG trace.
-3. Record a sandbox-only human outcome, then open **Money Safety** and **Rollout Safety** to prove the same evidence-to-memory-to-live-context contract generalizes.
-4. Open **Brain** only as technical proof: the underlying SAG trace, skill/audit history, and Qwen-backed memory layer are still available.
-5. Show `/api/demo/readiness` on the deployed host: build SHA, Qwen configuration, scenario version, and canonical counts. Then show the redacted Alibaba Workbench Overview screenshot.
-
-Suggested narration: *“Company Brain does not merely retrieve a lesson. It proves whether that lesson still applies, names the accountable owner, and preserves the outcome without silently training itself from a demo click.”*
+- **Evidence layer:** source-specific adapters produce immutable normalized records with source ID, URL, SHA-256 payload hash, excerpt, timestamps, freshness, availability, ACL scope, and state.
+- **Reality Memory layer:** Qwen creates claims with source provenance and validity. Contradictory evidence creates an explicit supersession link; it never silently overwrites a claim.
+- **Governance gateway:** MCP and REST return a common `DecisionBrief`. SAG evaluates current evidence and live context deterministically.
+- **Human layer:** recommendations have owners; no company action is callable from MCP. Sandbox outcomes expire and cannot reinforce durable memory.
 
 ## Qwen use
 
-- `qwen-plus` compiles normalized operational evidence into structured, versioned memory.
-- `text-embedding-v3` supports the existing recall layer.
-- The Semantic Applicability Gate is intentionally deterministic after the model step, so an operator can inspect exactly why a recommendation was suspended or requires review.
+`qwen-plus` compiles normalized operational evidence into memory candidates and explanations. `text-embedding-v3` supports semantic recall of the established skills. The safety verdict remains deterministic after the model step so it is auditable and reproducible.
 
-## Governance and scope boundaries
+## Integration reality
 
-- External actions are recommendations only; the product does not execute refunds, deploys, or flag changes.
-- Missing, stale, unavailable, or unsupported evidence returns `review_required`; no answer is invented.
-- API-key permission strings are recorded as metadata in this hackathon build, not a complete RBAC authorization system.
-- TDX hardware quotes are available only on an eligible Alibaba Confidential VM. On other hosts, the UI/API must present the RSA-PSS audit fallback, not claim hardware attestation.
-- Operational counters are observed counts. The token-savings field is explicitly an estimate, not measured cost savings.
+Slack is a signed Events API intake restricted to one configured workspace and `#ops-incidents`. Google Drive is a read-only service account restricted to one explicitly shared folder. GitHub remains a signed, repository-allowlisted merged-PR intake. Verified web evidence is an authenticated, exact-host HTTPS fetcher with SSRF, redirect, MIME, timeout, and size controls.
 
-## Deployment proof
+The interface labels these connections from server configuration: `connected`, `setup_required`, `contract_ready`, `fixture`, or `preview`. It does not claim a connected Slack or Drive source until their server variables are actually configured.
 
-The repository contains the Docker/ECS deployment path and a runtime build-SHA readiness endpoint. The official rules require a repository code-file link that demonstrates Alibaba Cloud services/APIs; the deployment packet names those files and adds supplemental Workbench/runtime captures. Actual Alibaba deployment, public URL, and video publication are external submission steps and must only be marked complete after evidence is attached in [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md).
+The remote MCP endpoint is authenticated Streamable HTTP at `/mcp/`. API-key scopes allow memory reading, safety checking, workflow evaluation, or explicitly permitted compilation. Organization identity always comes from the key—not caller input.
 
-## Links
+## Safety boundaries
 
-| Asset | Path |
-| --- | --- |
-| Judge-facing workflow UI | `/` |
-| Architecture | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| Deployment proof packet | [`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) |
-| Submission checklist | [`docs/SUBMISSION_CHECKLIST.md`](docs/SUBMISSION_CHECKLIST.md) |
-| Source code | `backend/workflows/`, `backend/routers/workflows.py`, `frontend/src/pages/Simulation.tsx` |
+- No deploy, refund, feature-flag, Slack post, or external company action is executable through Company Brain.
+- Browser clients cannot submit source credentials or organization IDs.
+- Public demos are private, expiring sandbox data; canonical evidence and skill confidence are isolated.
+- OAuth 2.1, per-company secret vaults, full RBAC, and a connector marketplace are documented next steps, not shipped claims.
+- TDX is only reported when the current Alibaba host actually verifies it; otherwise the API reports its RSA audit fallback.
+
+## Demo script (under three minutes)
+
+1. Open the Reality Console and identify the current release risk.
+2. Run the incident-to-release check; narrate each source and inspect its memory record.
+3. Show the deterministic SAG mismatch and the human owner in the returned MCP `DecisionBrief`.
+4. Open the Live Workflow Lab and show the same MCP contract.
+5. Click Money Safety and Rollout Safety to show one reusable engine.
+6. Show `/api/demo/readiness` and the redacted Alibaba deployment proof.
+
+## Submission material
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Connection guide](CONNECT.md)
+- [Deployment proof](docs/DEPLOYMENT_PROOF.md)
+- [Pre-submit checklist](docs/SUBMISSION_CHECKLIST.md)

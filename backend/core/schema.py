@@ -115,7 +115,6 @@ class SkillProvenance(BaseModel):
 
 
 class SkillPropagation(BaseModel):
-    agents_notified: list[str] = Field(default_factory=list)
     propagated_at: datetime | None = None
     acknowledgements: dict[str, datetime] = Field(default_factory=dict)
 
@@ -177,24 +176,6 @@ class DecisionCheckResponse(BaseModel):
     integrity: Optional[dict] = None
 
 
-class AgentRunRequest(BaseModel):
-    agent_id: str = ""
-    user_message: str
-    session_id: str | None = None
-    user_id: str = "demo-user"
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class AgentRunResponse(BaseModel):
-    agent_id: str
-    response: str
-    skills_used: list[str] = Field(default_factory=list)
-    intercepted: bool = False
-    intercept_skill: str | None = None
-    iterations: int = 0
-    session_id: str | None = None
-
-
 class SSEEvent(BaseModel):
     type: SSEEventType
     payload: dict[str, Any] = Field(default_factory=dict)
@@ -223,12 +204,3 @@ class InterceptLogEntry(BaseModel):
     occurred_at: datetime = Field(default_factory=utc_now)
     applicability_status: Optional[str] = None
     suspension_reason: Optional[str] = None
-
-
-class AgentRegistration(BaseModel):
-    agent_id: str
-    agent_type: str
-    org_id: str = "default"
-    last_brain_version: int = 0
-    registered_at: datetime = Field(default_factory=utc_now)
-    last_seen_at: datetime = Field(default_factory=utc_now)

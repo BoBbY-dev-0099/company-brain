@@ -525,10 +525,6 @@ async def seed_for_org(org_id: str = "default") -> dict[str, Any]:
     for sess in sessions:
         await store.save_session(sess, org_id=org_id)
 
-    await store.register_agent("support-agent-1", "support", org_id=org_id)
-    await store.register_agent("engineering-agent-1", "engineering", org_id=org_id)
-    await store.register_agent("product-agent-1", "product", org_id=org_id)
-
     stage = await seed_demo_stage(org_id)
     logger.info("Seed: inserted %d skills, %d sessions into org '%s'", len(skills), len(sessions), org_id)
     return {

@@ -1,133 +1,84 @@
 # Connect Company Brain
 
-> Company Brain does not replace a company's agents or systems. It is the
-> governed memory checkpoint they call before consequential actions.
+Company Brain is the evidence and memory checkpoint inside an existing workflow. It does not replace Slack, Drive, GitHub, an agent runtime, or an operator.
 
-The product exposes three deliberate connection boundaries. They are visible
-in the UI at `/app/connect` and returned by the server at
-`GET /integration-catalog` (or `/api/integration-catalog` through nginx).
-The catalog is the source of truth for runtime status; it never exposes
-secrets.
-
-| Boundary | What is available now | Runtime label |
-| --- | --- | --- |
-| Connect evidence | Signed GitHub merged-PR webhook intake | `connected` only when all GitHub settings are configured; otherwise `setup_required` |
-| Connect a workflow | Stable REST contracts for evidence, live context, and a `DecisionBrief` | `contract_ready` |
-| Connect an agent | Authenticated MCP Streamable HTTP at `/mcp/` | `connected` only on configured HTTPS with remote MCP enabled; otherwise `preview` |
-
-`fixture` means a deterministic demo adapter or example, not a live external
-integration. The submission does not claim live Slack, Stripe, Zendesk,
-feature-flag, marketplace, or no-code connectors.
-
-## 1. Connect evidence: GitHub
-
-The implemented source connector accepts a signed merged-pull-request webhook
-at:
-
-```text
-POST https://brain.veriflowai.me/integrations/github/pr
+```mermaid
+flowchart LR
+  S["Company source"] --> E["Evidence adapter"]
+  E --> M["Reality Memory"]
+  M --> C["MCP or REST check"]
+  C --> H["Human-confirmed next step"]
 ```
 
-Before the catalog reports it as `connected`, configure all of the following
-on the server:
+Open **Integration Studio** at `/app/connect`. It reads `GET /integration-catalog` and `GET /source-connections`, so its labels reflect server configuration rather than client-side copy.
 
-```dotenv
-GITHUB_WEBHOOK_SECRET=...
-GITHUB_TOKEN=...
-GITHUB_REPOS=owner/repository,owner/another-repository
-```
+## Source adapters
 
-The handler verifies GitHub's HMAC signature, keeps an explicit repository
-allowlist, persists raw evidence, compiles the Qwen-backed memory, stores a
-signed audit record, emits the event stream update, and creates the linked
-Release Safety run before returning success. A PR with insufficient current
-runtime evidence returns `review_required`; it does not invent telemetry.
+| Source | Endpoint / job | Required configuration | Boundary |
+| --- | --- | --- | --- |
+| Slack | `POST /integrations/slack/events` | Signing secret, team ID, channel IDs | Signed messages from one configured `#ops-incidents` channel only; persisted before acknowledgement; no Slack write. |
+| Google Drive | `POST /integrations/google-drive/sync` or worker poll | Read-only service account JSON/file, shared folder ID | Reads Google Docs, text, and PDFs in one shared folder; no write or sharing change. |
+| GitHub | `POST /integrations/github/pr` | Webhook secret, token, repository allowlist | Signed, merged PRs from allowlisted repositories. |
+| Verified Web | `POST /integrations/web/fetch` | Exact HTTPS host allowlist | API-key protected explicit fetch with SSRF, redirect, MIME, timeout, and size controls. Not web search. |
 
-This is one signed connector, not self-service GitHub App onboarding. A
-GitHub App with installation-scoped tokens is a production roadmap.
+Source events are organization-scoped immutable ledger records. Each has a source/external ID, URL where available, raw payload hash, excerpt, source and retrieval time, freshness, availability, ACL scope, and lifecycle stage.
 
-## 2. Connect a workflow: REST
+## Connect a workflow with REST
 
-An existing service can call the same workflow engine used by the Decision
-Queue. It submits normalized source-backed evidence plus current live context,
-then receives a shared `DecisionBrief` with facts, Qwen inference, missing
-evidence, provenance, freshness, deterministic SAG trace, verdict, owner, and
-recommended next action.
+An existing workflow can submit normalized evidence and live context to a code-owned template. It receives a `DecisionBrief`; it does not receive authority to execute a company action.
 
 ```bash
 NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-
 curl -X POST https://brain.veriflowai.me/workflow-runs \
   -H 'Content-Type: application/json' \
   -H 'X-Brain-Api-Key: cb_live_...' \
   -d "{
     \"template_id\": \"release-safety\",
-    \"evidence\": [
-      {
-        \"source_type\": \"github_pull_request\",
-        \"source_name\": \"GitHub\",
-        \"external_id\": \"acme/service#42\",
-        \"occurred_at\": \"$NOW\",
-        \"excerpt\": \"Merged PR #42 updates export-worker configuration.\"
-      },
-      {
-        \"source_type\": \"runtime_metric\",
-        \"source_name\": \"Runtime telemetry\",
-        \"external_id\": \"export-worker-memory\",
-        \"occurred_at\": \"$NOW\",
-        \"excerpt\": \"export-worker effective memory limit is 25 MiB.\"
-      }
-    ],
+    \"evidence\": [{
+      \"source_type\": \"github_pull_request\",
+      \"source_name\": \"GitHub\",
+      \"external_id\": \"acme/service#42\",
+      \"occurred_at\": \"$NOW\",
+      \"excerpt\": \"Merged PR changes the export-worker memory limit.\"
+    }],
     \"live_context\": {
-      \"worker_memory_mb\": 25,
-      \"runbook_validated\": true,
+      \"worker_memory_mb\": 8,
+      \"runbook_validated\": false,
       \"deployment_window_open\": true
     }
   }"
 ```
 
-Available stable REST contracts:
+The browser judge sandbox uses the exact same contract, but its source records and memory expire after one hour.
 
-- `POST /workflow-runs` — evidence to memory to SAG to `DecisionBrief`
-- `GET /workflow-runs/{id}` — one auditable run
-- `POST /workflow-runs/{id}/outcome` — UI/REST-only human confirmation
-- `POST /decisions/check` — pre-flight memory and deterministic safety check
+## Connect an agent with MCP
 
-All external company actions remain human-approved. A workflow result is a
-governed recommendation, not authorization to perform a refund, deployment,
-or feature-flag change.
-
-## 3. Connect an agent: MCP
-
-Use the canonical Streamable HTTP endpoint after TLS is verified:
+Use authenticated Streamable HTTP:
 
 ```text
 https://brain.veriflowai.me/mcp/
+X-Brain-Api-Key: cb_live_...
 ```
 
-Every MCP request must include `X-Brain-Api-Key`. The server resolves the
-organization from that key; clients cannot supply or override an `org_id`.
-Each tool requires an explicit capability scope:
+The server resolves the organization from the API key. It ignores caller-supplied organization IDs.
 
-| MCP tool | Required key permission | Purpose |
+| Permission | Tool | Purpose |
 | --- | --- | --- |
-| `recall_skills` | `mcp:read` | Read relevant active company memory |
-| `check_intercept` | `mcp:check` | Pre-flight check against memory and live context |
-| `evaluate_workflow` | `mcp:workflow` | Run the shared evidence-to-DecisionBrief workflow engine |
-| `compile_experience` | `mcp:write` | Compile a resolved experience into governed memory |
+| `mcp:read` | `recall_skills` | Recall established governed skills. |
+| `mcp:read` | `inspect_memory` | Inspect active or superseded Reality Memory. |
+| `mcp:read` | `query_evidence` | Inspect immutable evidence summaries and provenance. |
+| `mcp:check` | `check_intercept` | Run a pre-flight memory/SAG check. |
+| `mcp:workflow` | `evaluate_workflow` | Return the source-aware `DecisionBrief`. |
+| `mcp:write` | `compile_experience` | Compile a deliberate resolved experience into durable skill memory. |
 
-The MCP surface has no tool for recording a human outcome or executing an
-external company action. The legacy `/mcp/sse` endpoint is retired and returns
-`410` on the public deployment.
+`/mcp/sse` is retired in production. MCP cannot record a human outcome or run a deployment, refund, feature-flag change, or Slack post.
 
-Browser-originated MCP requests must also match the configured origin allowlist
-(`MCP_ALLOWED_ORIGINS`). Full OAuth 2.1 / dynamic-client registration is a
-production next step, not a hackathon claim.
+## Status language
 
-## Deployment identity
+- `connected`: server configuration is complete.
+- `setup_required`: the provider has not been configured on the server.
+- `contract_ready`: a supported API contract is available.
+- `fixture`: deterministic demo evidence only.
+- `preview`: not production-ready.
 
-The intended public identity is `https://brain.veriflowai.me`. It becomes the
-catalog's public endpoint only after the DNS record, ECS port 443, certificate,
-and `PUBLIC_BASE_URL` configuration have been verified. See
-[`docs/DEPLOYMENT_PROOF.md`](docs/DEPLOYMENT_PROOF.md) for the safe deployment
-and proof sequence.
+OAuth 2.1 dynamic client registration, per-company secret-vault onboarding, and self-serve GitHub/Slack/Drive installation are roadmap items. They are not claimed by this submission.

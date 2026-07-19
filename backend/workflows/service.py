@@ -403,6 +403,66 @@ class WorkflowService:
             ),
         )
 
+    async def _source_memory_refs(
+        self,
+        *,
+        template: WorkflowTemplate,
+        evidence: list[EvidenceRecord],
+        org_id: str,
+    ) -> list[MemoryReference]:
+        """Attach durable Reality Memory already linked to supplied evidence.
+
+        The workflow engine does not infer an organization identifier or create
+        source memory itself.  It only surfaces source-ledger records already
+        resolved by an authenticated/signed adapter.
+        """
+        ingestion_ids = [
+            str(item.metadata.get("source_ingestion_id"))
+            for item in evidence
+            if isinstance(item.metadata, dict) and item.metadata.get("source_ingestion_id")
+        ]
+        if not ingestion_ids:
+            return []
+        try:
+            from backend.sources.store import get_source_repository
+
+            repository = get_source_repository()
+            refs: list[MemoryReference] = []
+            seen: set[str] = set()
+            for ingestion_id in ingestion_ids:
+                ingestion = await repository.get_ingestion_by_id(org_id, ingestion_id)
+                if not ingestion or not ingestion.memory_id or ingestion.memory_id in seen:
+                    continue
+                memory = await repository.get_memory(org_id, ingestion.memory_id)
+                if memory is None:
+                    continue
+                seen.add(memory.memory_id)
+                refs.append(
+                    MemoryReference(
+                        memory_id=memory.memory_id,
+                        memory_type=template.memory_type,
+                        summary=memory.claim,
+                        skill_id=memory.compiled_skill_id,
+                        is_ephemeral=memory.is_ephemeral,
+                        provenance={
+                            "kind": "reality_memory",
+                            "claim_key": memory.claim_key,
+                            "status": memory.status.value,
+                            "subject": memory.subject,
+                            "predicate": memory.predicate,
+                            "scope": memory.scope,
+                            "source_ingestion_ids": memory.source_ingestion_ids,
+                            "supersedes": memory.supersedes,
+                            "superseded_by": memory.superseded_by,
+                            "qwen_generated": memory.qwen_generated,
+                        },
+                    )
+                )
+            return refs
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Source memory lookup failed; retaining workflow decision: %s", exc)
+            return []
+
     async def run_workflow(
         self,
         body: WorkflowRunRequest,
@@ -523,7 +583,10 @@ class WorkflowService:
         else:
             inference.text = f"{inference.text} The path remains eligible only for a human-approved action."
 
-        memory_refs = [template_memory]
+        source_memory = await self._source_memory_refs(
+            template=template, evidence=evidence, org_id=org_id
+        )
+        memory_refs = [template_memory, *source_memory]
         if compiled_memory:
             memory_refs.append(compiled_memory)
         brief = DecisionBrief(

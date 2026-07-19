@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import APIRouter
 
 from backend.config import settings
+from backend.sources.service import configured_connections
 from backend.workflows.models import workflow_now
 
 
@@ -69,8 +70,6 @@ def build_integration_catalog() -> dict[str, Any]:
     Keep the endpoint paths in one place so API clients and the frontend cannot
     drift into claiming connectors that have not been configured.
     """
-    github_configuration = _github_configuration()
-    github_connected = _github_is_connected(github_configuration)
     mcp_connected = _mcp_is_connected()
     base_url = _normalise_base_url(settings.PUBLIC_BASE_URL)
     fresh_timestamp = workflow_now().isoformat()
@@ -100,24 +99,62 @@ def build_integration_catalog() -> dict[str, Any]:
     }
     workflow_example_json = json.dumps(workflow_example_body, separators=(",", ":"))
 
+    source_connections = {
+        item.provider.value: item for item in configured_connections(org_id=settings.SOURCE_ORG_ID)
+    }
+    github = source_connections["github"]
+    slack = source_connections["slack"]
+    drive = source_connections["google_drive"]
+    web = source_connections["web"]
+
     boundaries: list[dict[str, Any]] = [
         {
             "id": "evidence",
-            "title": "Connect evidence",
-            "status": "connected" if github_connected else "setup_required",
-            "description": (
-                "Signed GitHub merged-PR intake persists raw evidence, compiled memory, "
-                "audit record, and a workflow decision before acknowledging delivery."
-            ),
+            "title": github.title,
+            "status": github.status.value,
+            "description": "Signed merged-PR intake persists raw evidence, Qwen memory, audit record, source lineage, and a workflow decision.",
             "connector": "github_merged_pull_request",
-            "endpoint": _public_endpoint("/integrations/github/pr"),
+            "endpoint": github.endpoint,
             "requirements": [
                 "GitHub webhook secret",
-                "GitHub token for merged PR diff retrieval",
+                "Read-only diff token",
                 "Explicit repository allowlist",
             ],
-            "configuration": github_configuration,
-            "scope": "The submission implements one signed GitHub intake, not self-service GitHub App onboarding.",
+            "configuration": github.configuration,
+            "scope": "One signed GitHub intake; self-service GitHub App onboarding is not claimed.",
+        },
+        {
+            "id": "slack",
+            "title": slack.title,
+            "status": slack.status.value,
+            "description": "Signed Slack Events API intake for one configured #ops-incidents channel. Messages become source-backed evidence; Company Brain never posts to Slack.",
+            "connector": "slack_events_api",
+            "endpoint": slack.endpoint,
+            "requirements": ["Slack signing secret", "Workspace allowlist", "#ops-incidents channel ID allowlist"],
+            "configuration": slack.configuration,
+            "scope": "Read-only selected-channel evidence, not workspace-wide search.",
+        },
+        {
+            "id": "google_drive",
+            "title": drive.title,
+            "status": drive.status.value,
+            "description": "A read-only service account syncs only documents in one folder explicitly shared with it and keeps modification provenance.",
+            "connector": "google_drive_shared_folder",
+            "endpoint": drive.endpoint,
+            "requirements": ["Service-account JSON mounted on the server", "One explicitly shared folder", "Drive read-only scope"],
+            "configuration": drive.configuration,
+            "scope": "No Google OAuth self-service flow or Drive write capability is claimed.",
+        },
+        {
+            "id": "web",
+            "title": web.title,
+            "status": web.status.value,
+            "description": "Authenticated fetch of a configured public HTTPS URL with host allowlisting and SSRF controls. This is not a web-search connector.",
+            "connector": "verified_web_evidence",
+            "endpoint": web.endpoint,
+            "requirements": ["X-Brain-Api-Key with mcp:write", "Allowlisted public HTTPS host"],
+            "configuration": web.configuration,
+            "scope": "Read-only, explicit URL evidence only.",
         },
         {
             "id": "workflow",
@@ -175,6 +212,8 @@ def build_integration_catalog() -> dict[str, Any]:
             "endpoint": _public_endpoint("/mcp/"),
             "tools": [
                 {"name": "recall_skills", "permission": "mcp:read"},
+                {"name": "inspect_memory", "permission": "mcp:read"},
+                {"name": "query_evidence", "permission": "mcp:read"},
                 {"name": "check_intercept", "permission": "mcp:check"},
                 {"name": "evaluate_workflow", "permission": "mcp:workflow"},
                 {"name": "compile_experience", "permission": "mcp:write"},

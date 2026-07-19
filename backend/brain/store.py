@@ -13,7 +13,6 @@ from pymongo.errors import DuplicateKeyError, OperationFailure, ServerSelectionT
 
 from backend.config import settings
 from backend.core.schema import (
-    AgentRegistration,
     CompanyBrainSkill,
     InterceptLogEntry,
     InterceptResult,
@@ -82,8 +81,6 @@ async def _ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     await db.events.create_index([("event_id", ASCENDING), ("org_id", ASCENDING)], unique=True)
     await db.events.create_index([("agent_id", ASCENDING), ("occurred_at", DESCENDING)])
     await db.events.create_index([("org_id", ASCENDING), ("ingestion_status", ASCENDING)])
-
-    await db.agents.create_index([("agent_id", ASCENDING), ("org_id", ASCENDING)], unique=True)
 
     await db.sessions.create_index([("session_id", ASCENDING), ("org_id", ASCENDING)], unique=True)
     await db.sessions.create_index([("user_id", ASCENDING), ("last_updated", DESCENDING)])
@@ -583,24 +580,6 @@ async def get_intercept_stats(org_id: str = "default") -> dict[str, Any]:
     }
 
 
-async def register_agent(agent_id: str, agent_type: str, org_id: str = "default") -> None:
-    db = get_db()
-    now = utc_now()
-    await db.agents.update_one(
-        {"agent_id": agent_id, "org_id": org_id},
-        {
-            "$set": {
-                "agent_id": agent_id,
-                "agent_type": agent_type,
-                "org_id": org_id,
-                "last_seen_at": now,
-            },
-            "$setOnInsert": {"registered_at": now, "last_brain_version": 0},
-        },
-        upsert=True,
-    )
-
-
 async def seed_demo_data(org_id: str = "default") -> dict[str, Any]:
     """Idempotent org-scoped demo seed used by the API endpoint.
 
@@ -616,12 +595,6 @@ async def backfill_embeddings_for_org(org_id: str = "default") -> int:
     from backend.core import compiler
 
     return await compiler.backfill_seed_embeddings(org_id=org_id)
-
-
-async def get_all_agent_ids(org_id: str = "default") -> list[str]:
-    db = get_db()
-    cursor = db.agents.find({"org_id": org_id}, {"agent_id": 1})
-    return [d["agent_id"] async for d in cursor]
 
 
 async def log_intercept(

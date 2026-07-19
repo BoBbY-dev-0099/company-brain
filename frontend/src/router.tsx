@@ -1,17 +1,11 @@
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom"
 import Landing from "./pages/Landing"
-import Onboard from "./pages/Onboard"
-import Dashboard from "./pages/Dashboard"
-import Brain from "./pages/Brain"
-import Intercepts from "./pages/Intercepts"
-import Agents from "./pages/Agents"
-import Events from "./pages/Events"
-import Settings from "./pages/Settings"
 import ApiKeys from "./pages/ApiKeys"
 import Operations from "./pages/Operations"
 import Connect from "./pages/Connect"
 import Simulation from "./pages/Simulation"
 import WorkflowPlayground from "./pages/WorkflowPlayground"
+import MemoryLedger from "./pages/MemoryLedger"
 import AppShell from "./components/layout/AppShell"
 
 const router = createBrowserRouter([
@@ -34,14 +28,9 @@ const router = createBrowserRouter([
       { path: "inbox", element: <Navigate to="/" replace /> },
       { path: "audit", element: <Operations /> },
       { path: "connect", element: <Connect /> },
-      { path: "dashboard", element: <Dashboard /> },
-      { path: "brain", element: <Brain /> },
-      { path: "intercepts", element: <Intercepts /> },
-      { path: "agents", element: <Agents /> },
-      { path: "events", element: <Events /> },
-      { path: "settings", element: <Settings /> },
+      { path: "memory", element: <MemoryLedger /> },
       { path: "api-keys", element: <ApiKeys /> },
-      { path: "onboard", element: <Onboard /> },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
 ])

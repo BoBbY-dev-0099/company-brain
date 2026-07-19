@@ -12,7 +12,6 @@ import logging
 import uuid
 from typing import Any
 
-from backend.brain import store
 from backend.core.schema import (
     CompanyBrainSkill,
     InterceptResult,
@@ -77,12 +76,10 @@ def _skill_summary(skill: CompanyBrainSkill) -> dict[str, Any]:
 
 
 async def propagate_skill(skill: CompanyBrainSkill, is_new: bool = True, org_id: str | None = None) -> None:
-    agent_ids = await store.get_all_agent_ids(org_id=org_id)
     event = SSEEvent(
         type=SSEEventType.SKILL_COMPILED if is_new else SSEEventType.SKILL_REINFORCED,
         payload={
             "skill": _skill_summary(skill),
-            "agent_ids": agent_ids,
         },
     )
     await broadcast(event, org_id=org_id)

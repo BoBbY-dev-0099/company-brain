@@ -1,249 +1,72 @@
-import { useEffect, useMemo, useState } from "react"
-import {
-  ArrowRight,
-  Bot,
-  Braces,
-  CheckCircle2,
-  CircleDot,
-  CloudCog,
-  FileInput,
-  KeyRound,
-  RefreshCw,
-  ShieldCheck,
-  UserRound,
-} from "lucide-react"
-import { getIntegrationCatalog } from "../lib/api"
-import type { IntegrationBoundary, IntegrationCatalog, IntegrationContract } from "../types/schema"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { ArrowLeft, Bot, CheckCircle2, ChevronDown, Cloud, FileText, Github, MessageSquareText, RefreshCw, ShieldCheck, Webhook } from "lucide-react"
+import { Link } from "react-router-dom"
+import { getIntegrationCatalog, getSourceConnections, type SourceConnection } from "../lib/api"
+import type { IntegrationBoundary, IntegrationCatalog } from "../types/schema"
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
+function sourceIcon(provider: string) {
+  if (provider === "slack") return MessageSquareText
+  if (provider === "github") return Github
+  if (provider === "google_drive") return FileText
+  if (provider === "web") return Cloud
+  return Webhook
 }
 
-function catalogFrom(payload: unknown): IntegrationCatalog | null {
-  if (!isRecord(payload)) return null
-  return (isRecord(payload.catalog) ? payload.catalog : payload) as IntegrationCatalog
+function tone(status: string) {
+  if (status === "connected") return "border-emerald-200 bg-emerald-50 text-emerald-800"
+  if (status === "contract_ready") return "border-blue-200 bg-blue-50 text-blue-800"
+  if (status === "setup_required") return "border-amber-200 bg-amber-50 text-amber-800"
+  return "border-slate-200 bg-slate-50 text-slate-600"
 }
 
-function boundariesFrom(catalog: IntegrationCatalog | null): IntegrationBoundary[] {
-  if (!catalog) return []
-  if (Array.isArray(catalog.connection_boundaries)) return catalog.connection_boundaries
-  return Array.isArray(catalog.connections) ? catalog.connections : []
-}
-
-function boundaryId(boundary: IntegrationBoundary, index: number): string {
-  return boundary.id ?? `boundary-${index}`
-}
-
-function statusStyle(status: string | undefined): string {
-  switch (status) {
-    case "connected":
-      return "border-[#22c55e]/40 bg-[#22c55e]/10 text-[#86efac]"
-    case "contract_ready":
-      return "border-[#60a5fa]/40 bg-[#60a5fa]/10 text-[#bfdbfe]"
-    case "setup_required":
-      return "border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#fbbf24]"
-    case "fixture":
-      return "border-[#a78bfa]/40 bg-[#a78bfa]/10 text-[#c4b5fd]"
-    default:
-      return "border-[#2a2a30] bg-[#17171a] text-[#a1a1aa]"
-  }
-}
-
-function displayStatus(status: string | undefined): string {
-  return status ?? "not_reported"
-}
-
-function boundaryIcon(id: string | undefined) {
-  if (id === "evidence") return FileInput
-  if (id === "workflow") return Braces
-  if (id === "agent") return Bot
-  return CloudCog
-}
-
-function contractText(value: IntegrationContract | string): string {
-  if (typeof value === "string") return value
-  const method = typeof value.method === "string" ? value.method : ""
-  const endpoint = typeof value.path === "string" ? value.path : typeof value.endpoint === "string" ? value.endpoint : ""
-  const title = typeof value.title === "string" ? value.title : ""
-  const name = typeof value.name === "string" ? value.name : ""
-  const permission = typeof value.permission === "string" ? `(${value.permission})` : ""
-  const description = typeof value.description === "string" ? value.description : typeof value.purpose === "string" ? value.purpose : ""
-  return [method, endpoint || title || name, permission, description].filter(Boolean).join(" - ") || "Server contract detail"
-}
-
-function contractItems(value: unknown): Array<IntegrationContract | string> {
-  return Array.isArray(value)
-    ? value.filter((item): item is IntegrationContract | string => typeof item === "string" || isRecord(item))
-    : []
-}
-
-function exampleText(value: unknown): string | null {
-  if (typeof value === "string") return value
-  if (!isRecord(value)) return null
-  for (const key of ["code", "curl", "content", "example"]) {
-    if (typeof value[key] === "string") return value[key]
-  }
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return null
-  }
-}
-
-function BoundaryCard({ boundary, index }: { boundary: IntegrationBoundary; index: number }) {
-  const Icon = boundaryIcon(boundary.id)
-  const contracts = contractItems(boundary.contracts)
-  const tools = contractItems(boundary.tools)
-  const requirements = Array.isArray(boundary.requirements) ? boundary.requirements : []
-  const examples = [boundary.example, boundary.example_request, ...(Array.isArray(boundary.examples) ? boundary.examples : [])]
-    .map(exampleText)
-    .filter((item): item is string => item !== null)
-
-  return (
-    <article className="rounded-2xl border border-[#1f1f22] bg-[#111114] p-5 md:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="rounded-lg border border-[#2a2a30] bg-[#09090b] p-2 text-[#86efac]">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7c7c8a]">Connection {index + 1}</p>
-            <h2 className="mt-1 text-lg font-semibold text-[#f4f4f5]">{boundary.title ?? boundary.id ?? "Server-defined connection"}</h2>
-          </div>
-        </div>
-        <span className={`shrink-0 rounded-full border px-2.5 py-1 font-mono text-[10px] font-semibold ${statusStyle(boundary.status)}`}>
-          {displayStatus(boundary.status)}
-        </span>
-      </div>
-
-      <p className="mt-4 text-sm leading-6 text-[#b4b4bb]">{boundary.description ?? "The server has not provided a description for this connection boundary."}</p>
-
-      {boundary.endpoint && (
-        <div className="mt-4 rounded-lg border border-[#1f1f22] bg-[#09090b] px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wide text-[#7c7c8a]">Endpoint</p>
-          <code className="mt-1 block break-all text-xs text-[#bfdbfe]">{boundary.endpoint}</code>
-        </div>
-      )}
-
-      {requirements.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7c7c8a]">Requirements</p>
-          <ul className="mt-2 space-y-1.5 text-sm text-[#d4d4d8]">
-            {requirements.map((item) => <li key={item} className="flex gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#7c7c8a]" />{item}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {contracts.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7c7c8a]">Server contracts</p>
-          <div className="mt-2 space-y-2">
-            {contracts.map((contract, itemIndex) => <code key={`${contractText(contract)}-${itemIndex}`} className="block break-words rounded border border-[#1f1f22] bg-[#09090b] px-3 py-2 text-[11px] leading-5 text-[#c4c4ca]">{contractText(contract)}</code>)}
-          </div>
-        </div>
-      )}
-
-      {examples.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7c7c8a]">Copy-paste example</p>
-          {examples.map((example, itemIndex) => <pre key={`${example.slice(0, 32)}-${itemIndex}`} className="mt-2 max-h-56 overflow-auto rounded border border-[#1f1f22] bg-[#050505] p-3 text-[11px] leading-5 text-[#c4c4ca]">{example}</pre>)}
-        </div>
-      )}
-
-      {tools.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7c7c8a]">MCP tools</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {tools.map((tool, itemIndex) => <code key={`${contractText(tool)}-${itemIndex}`} className="rounded border border-[#1f1f22] bg-[#09090b] px-2 py-1 text-[11px] text-[#c4c4ca]">{contractText(tool)}</code>)}
-          </div>
-        </div>
-      )}
-    </article>
-  )
+function boundaries(catalog: IntegrationCatalog | null) {
+  return catalog?.connection_boundaries ?? catalog?.connections ?? []
 }
 
 export default function Connect() {
+  const [sources, setSources] = useState<SourceConnection[]>([])
   const [catalog, setCatalog] = useState<IntegrationCatalog | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const refresh = async () => {
-    setRefreshing(true)
+  const refresh = useCallback(async () => {
+    setLoading(true)
     try {
-      const payload = await getIntegrationCatalog()
-      const nextCatalog = catalogFrom(payload)
-      if (!nextCatalog) throw new Error("The server returned an invalid connection catalog.")
-      setCatalog(nextCatalog)
+      const [sourcePayload, catalogPayload] = await Promise.all([getSourceConnections(), getIntegrationCatalog()])
+      setSources(sourcePayload.connections)
+      setCatalog(catalogPayload)
       setError(null)
     } catch {
-      setCatalog(null)
-      setError("The connection catalog could not be loaded. Connection statuses are intentionally not inferred in the browser.")
+      setError("The server could not load its integration status. The browser does not infer connection claims.")
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => { void refresh() }, [refresh])
+  const mcp = useMemo(() => boundaries(catalog).find((item) => item.id === "agent"), [catalog])
+  const workflow = useMemo(() => boundaries(catalog).find((item) => item.id === "workflow"), [catalog])
 
-  const boundaries = useMemo(() => boundariesFrom(catalog), [catalog])
-  const statusDefinitions = catalog?.status_definitions ?? {}
-  const positioning = catalog?.positioning ?? "Company Brain does not replace a company's agents or systems. It is the governed memory checkpoint they call before consequential actions."
+  return <div className="min-h-screen bg-[#f5f1e8] text-[#17212b]">
+    <header className="border-b border-[#d9d3c8] bg-[#f5f1e8]/95"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5"><Link to="/" className="inline-flex items-center gap-2 text-sm font-semibold"><ArrowLeft className="h-4 w-4" />Reality Console</Link><button type="button" onClick={() => void refresh()} className="inline-flex items-center gap-2 text-sm font-semibold text-[#2148c7]"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh status</button></div></header>
+    <main className="mx-auto max-w-7xl px-5 py-10"><section className="max-w-3xl"><p className="text-xs font-bold uppercase tracking-[0.18em] text-[#2f5eeb]">Integration Studio</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em]">Connect evidence. Keep action authority outside.</h1><p className="mt-4 text-base leading-7 text-[#5a6775]">Company Brain is the governed memory checkpoint inside an existing company workflow. It reads only the configured evidence boundaries and returns a DecisionBrief to the workflow or agent.</p></section>
 
-  return (
-    <div className="mx-auto max-w-7xl space-y-5 pb-10">
-      <section className="rounded-2xl border border-[#22c55e]/25 bg-gradient-to-br from-[#22c55e]/10 via-[#111114] to-[#111114] p-5 md:p-7">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-          <div className="max-w-3xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#86efac]">
-              <CircleDot className="h-3 w-3" /> Connection boundaries
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#fafafa]">Connect Company Brain to the systems you already run</h1>
-            <p className="mt-2 text-sm leading-6 text-[#b4b4bb] md:text-base">{positioning}</p>
-          </div>
-          <button type="button" onClick={() => void refresh()} disabled={refreshing} className="inline-flex shrink-0 items-center justify-center gap-2 rounded border border-[#2a2a30] bg-[#111114] px-3 py-2 text-sm text-[#e4e4e7] hover:border-[#22c55e]/50 disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh catalog
-          </button>
-        </div>
-        {catalog?.public_base_url && <p className="mt-5 font-mono text-xs text-[#93c5fd]">Public base URL: {catalog.public_base_url}</p>}
-      </section>
-
-      <section className="grid items-stretch gap-2 rounded-xl border border-[#1f1f22] bg-[#09090b] p-4 text-center sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] sm:gap-3">
-        <FlowItem icon={<FileInput className="h-4 w-4" />} label="Company evidence" />
-        <ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#686871] sm:block" />
-        <FlowItem icon={<ShieldCheck className="h-4 w-4" />} label="Qwen memory + SAG" active />
-        <ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#686871] sm:block" />
-        <FlowItem icon={<Bot className="h-4 w-4" />} label="Agent or workflow" />
-        <ArrowRight className="mx-auto hidden h-4 w-4 self-center text-[#686871] sm:block" />
-        <FlowItem icon={<UserRound className="h-4 w-4" />} label="Human confirmation" />
-      </section>
-
-      {loading ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">{[0, 1, 2].map((item) => <div key={item} className="min-h-64 animate-pulse rounded-xl border border-[#1f1f22] bg-[#111114] p-5"><div className="h-5 w-2/3 rounded bg-[#222227]" /><div className="mt-4 h-3 w-full rounded bg-[#1b1b20]" /><div className="mt-4 h-24 rounded bg-[#17171a]" /></div>)}</div>
-      ) : error ? (
-        <section className="rounded-xl border border-dashed border-[#2a2a30] bg-[#111114] px-5 py-10 text-center"><KeyRound className="mx-auto h-7 w-7 text-[#7c7c8a]" /><h2 className="mt-3 font-medium text-[#e4e4e7]">Connection catalog unavailable</h2><p className="mx-auto mt-1 max-w-lg text-sm text-[#7c7c8a]">{error}</p><button type="button" onClick={() => void refresh()} className="mt-4 text-sm font-medium text-[#86efac] hover:underline">Retry server connection</button></section>
-      ) : boundaries.length === 0 ? (
-        <section className="rounded-xl border border-dashed border-[#2a2a30] bg-[#111114] px-5 py-10 text-center"><CloudCog className="mx-auto h-7 w-7 text-[#7c7c8a]" /><h2 className="mt-3 font-medium text-[#e4e4e7]">No connection boundaries reported</h2><p className="mx-auto mt-1 max-w-lg text-sm text-[#7c7c8a]">The API responded, but did not return any server-defined connection boundaries.</p></section>
-      ) : (
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">{boundaries.map((boundary, index) => <BoundaryCard key={boundaryId(boundary, index)} boundary={boundary} index={index} />)}</section>
-      )}
-
-      {Object.keys(statusDefinitions).length > 0 && (
-        <section className="rounded-xl border border-[#1f1f22] bg-[#111114] p-5">
-          <h2 className="text-sm font-semibold text-[#e4e4e7]">Runtime status vocabulary</h2>
-          <p className="mt-1 text-xs text-[#7c7c8a]">Definitions below are returned by the server, alongside each connection's current status.</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {Object.entries(statusDefinitions).map(([status, definition]) => <div key={status} className="rounded border border-[#1f1f22] bg-[#09090b] p-3"><code className={`inline-flex rounded border px-2 py-1 text-[10px] font-semibold ${statusStyle(status)}`}>{status}</code><p className="mt-2 text-xs leading-5 text-[#a1a1aa]">{definition}</p></div>)}
-          </div>
-        </section>
-      )}
-
-      <section className="rounded-lg border border-[#60a5fa]/25 bg-[#60a5fa]/5 px-4 py-3 text-xs leading-5 text-[#b8c7e5]"><span className="font-semibold text-[#bfdbfe]">Governance boundary: </span>Every listed path creates or returns an auditable decision record. Human confirmation remains outside MCP, and no listed connector executes an external company action.</section>
-    </div>
-  )
+      {error && <div className="mt-7 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div>}
+      <section className="mt-9 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{sources.map((source) => <SourceCard key={source.provider} source={source} />)}</section>
+      <section className="mt-8 grid gap-5 lg:grid-cols-2"><ContractCard title="Connect an agent" icon={<Bot className="h-5 w-5" />} boundary={mcp} /><ContractCard title="Connect a workflow" icon={<ShieldCheck className="h-5 w-5" />} boundary={workflow} /></section>
+      <section className="mt-8 rounded-2xl border border-[#d9d3c8] bg-[#fffcf7] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#718096]">Deployment boundary</p><p className="mt-2 text-sm leading-6 text-[#536170]">Credentials are server-only environment configuration. The public product never accepts a Slack token, Google service-account file, or GitHub secret. OAuth self-service onboarding and a managed secret vault are roadmap items, not current claims.</p></section>
+    </main>
+  </div>
 }
 
-function FlowItem({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) {
-  return <div className={`flex min-h-14 items-center justify-center gap-2 rounded-lg border px-3 py-3 text-xs font-medium ${active ? "border-[#22c55e]/35 bg-[#22c55e]/10 text-[#86efac]" : "border-[#1f1f22] bg-[#111114] text-[#c4c4ca]"}`}>{icon}{label}</div>
+function SourceCard({ source }: { source: SourceConnection }) {
+  const Icon = sourceIcon(source.provider)
+  return <article className="rounded-2xl border border-[#ded7cb] bg-[#fffcf7] p-5 shadow-[0_12px_32px_rgba(52,45,35,0.04)]"><div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#edf2fb] text-[#2f5eeb]"><Icon className="h-5 w-5" /></span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${tone(source.status)}`}>{source.status.replaceAll("_", " ")}</span></div><h2 className="mt-5 font-semibold">{source.title}</h2><p className="mt-2 text-xs leading-5 text-[#637080]">{source.allowed_scope.join(" · ")}</p><details className="mt-4 rounded-xl border border-[#e3ded4] bg-[#faf7f0] px-3 py-2"><summary className="cursor-pointer text-xs font-semibold text-[#42556b]">Setup and health</summary><div className="mt-3 space-y-2 text-xs leading-5 text-[#596778]"><p>Endpoint: <code className="break-all text-[#2148c7]">{source.endpoint ?? "server-defined"}</code></p>{Object.entries(source.configuration ?? {}).map(([key, value]) => <p key={key} className="flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-[#5d7d72]" />{key.replaceAll("_", " ")}: {String(value)}</p>)}{source.last_success_at && <p>Last healthy source event: {new Date(source.last_success_at).toLocaleString()}</p>}</div></details></article>
+}
+
+function ContractCard({ title, icon, boundary }: { title: string; icon: React.ReactNode; boundary?: IntegrationBoundary }) {
+  if (!boundary) return <article className="rounded-2xl border border-[#ded7cb] bg-[#fffcf7] p-5">No server contract was reported.</article>
+  const tools = Array.isArray(boundary.tools) ? boundary.tools : []
+  const contracts = Array.isArray(boundary.contracts) ? boundary.contracts : []
+  return <article className="rounded-2xl border border-[#d3ddf0] bg-[#f8faff] p-5"><div className="flex items-start justify-between gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e6edff] text-[#2148c7]">{icon}</span><span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${tone(String(boundary.status ?? "preview"))}`}>{String(boundary.status ?? "preview").replaceAll("_", " ")}</span></div><h2 className="mt-5 font-semibold">{title}</h2><p className="mt-2 text-sm leading-6 text-[#536170]">{boundary.description}</p><p className="mt-4 rounded-lg border border-[#dbe3f2] bg-white px-3 py-2 font-mono text-xs text-[#2148c7] break-all">{boundary.endpoint}</p>{(tools.length > 0 || contracts.length > 0) && <details className="mt-4 rounded-xl border border-[#dbe3f2] bg-white px-3 py-2"><summary className="flex cursor-pointer items-center justify-between text-xs font-semibold text-[#42556b]">Published contract <ChevronDown className="h-4 w-4" /></summary><div className="mt-3 space-y-2">{[...tools, ...contracts].map((item, index) => <code key={index} className="block rounded bg-[#f5f7fb] p-2 text-[11px] leading-5 text-[#536170]">{typeof item === "string" ? item : `${item.method ?? ""} ${item.path ?? item.name ?? ""} ${item.permission ?? ""} ${item.purpose ?? ""}`}</code>)}</div></details>}</article>
 }

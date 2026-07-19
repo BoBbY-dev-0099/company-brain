@@ -65,7 +65,14 @@ def build_templates() -> tuple[WorkflowTemplate, ...]:
             "Suspend a deployment/runbook when a PR or runtime change makes a "
             "previously safe operating assumption false."
         ),
-        source_types=["github_pull_request", "runtime_metric", "deployment_runbook"],
+        source_types=[
+            "github_pull_request",
+            "runtime_metric",
+            "deployment_runbook",
+            "slack_message",
+            "google_drive_document",
+            "verified_web_page",
+        ],
         required_source_types=["github_pull_request", "runtime_metric"],
         required_evidence_fields=["source_type", "external_id", "occurred_at", "excerpt"],
         evidence_max_age_hours=168,

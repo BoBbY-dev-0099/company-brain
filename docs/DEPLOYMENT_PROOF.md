@@ -70,9 +70,10 @@ curl -fsS https://brain.veriflowai.me/api/integration-catalog
 
 The readiness response must show the deployed build SHA, `judge-demo-v1`, Qwen
 configuration status, and canonical fixture counts. The catalog should only
-report GitHub as `connected` after its webhook secret, token, and repository
-allowlist are configured; it reports the REST workflow contract separately and
-MCP as `preview` until authenticated HTTPS configuration is enabled.
+report Slack, Drive, or GitHub as `connected` after the exact server-side
+configuration for that adapter is complete; it reports verified web and the
+REST workflow boundary separately and MCP only after authenticated HTTPS is
+enabled.
 
 To exercise MCP, use a scoped `X-Brain-Api-Key` against the canonical endpoint
 `https://brain.veriflowai.me/mcp/`. The public legacy `/mcp/sse` path should
@@ -86,8 +87,8 @@ return `410`; it is not a valid production connector.
 2. **Runtime proof:** one sequence showing `docker compose ... ps`, the local
    readiness response, and its build SHA.
 3. **Public judge route:** `https://brain.veriflowai.me/` in a fresh
-   browser session, showing the four-module Launchpad, one backend-derived simulation, and its
-   five-step explanation.
+   browser session, showing the Company Reality Console, one backend-derived
+   incident-to-release trace, and its source/memory/SAG explanation.
 4. **HTTPS/MCP proof:** a redacted `curl -I` or browser security view for the
    hostname plus the integration catalog response. Never show API keys.
 
