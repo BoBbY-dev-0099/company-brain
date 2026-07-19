@@ -17,6 +17,16 @@ flowchart LR
 
 The first fold shows the source posture, current risk, and a single **Run incident-to-release check** action. It proves the flow with a private, expiring sandbox; it never deploys, refunds, changes a flag, or posts to Slack.
 
+## Judge walkthrough (90 seconds)
+
+1. Open [the Reality Console](https://brain.veriflowai.me/). The four source tiles use backend-derived runtime labels, not optimistic client state.
+2. Click **Run incident-to-release check**. The trace must advance in order: source evidence, Qwen Reality Memory, MCP decision gateway, then human owner.
+3. Read the returned recommendation: the release is suspended because the incident, runbook, GitHub change, and runtime value no longer agree.
+4. Inspect the evidence rows for observed/retrieved times, freshness, availability, ACL scope, payload hash, and Qwen status. Open **Audit proof** for complete server responses.
+5. Open `/play/workflow` to show the same authenticated MCP contract in a temporary judge sandbox; use Money Safety and Rollout Safety as short reuse proof.
+
+The live deployment is self-identifying: `GET /api/demo/readiness` reports its build SHA, Qwen health, scenario version, canonical counts, and sandbox-isolation status. Do not use a screenshot or README claim as a substitute for that response.
+
 ## What is shipped
 
 | Layer | What it does | Truthful boundary |
@@ -77,6 +87,19 @@ curl http://localhost/api/demo/readiness
 ```
 
 For development without Docker, start MongoDB as a replica set, install `requirements.txt`, run `uvicorn backend.main:app --reload`, then run `npm.cmd install` and `npm.cmd run dev` in `frontend/`.
+
+## Verification
+
+```powershell
+# Backend unit and contract coverage
+python -m pytest backend/tests -q
+
+# Production UI bundle
+cd frontend
+npm.cmd run build
+```
+
+The source test suite covers Slack HMAC/replay and channel restrictions, Drive content-version ingestion, verified-web SSRF rejection, sandbox expiry, temporal memory boundaries, workflow safety, and MCP scopes. The public rehearsal must also confirm that the visual trace renders the server response after every stage; it must never fabricate a verdict or Qwen completion in the browser.
 
 ## Useful endpoints
 
