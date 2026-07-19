@@ -28,6 +28,16 @@ from backend.sources.store import SourceRepository, get_source_repository
 logger = logging.getLogger(__name__)
 
 
+def normalise_source_timestamp(value: datetime) -> datetime:
+    """Treat legacy Mongo datetimes without tzinfo as UTC.
+
+    Source records are persisted as UTC. PyMongo can return those values as
+    naive datetimes depending on its codec settings, so re-ingesting an
+    idempotent delivery must not crash freshness calculation.
+    """
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
 def configured_connections(*, org_id: str) -> list[SourceConnection]:
     """Return server-observed configuration, never secret material."""
     github_ready = bool(
@@ -107,9 +117,11 @@ class SourceService:
 
     async def accept(self, ingestion: SourceIngestion) -> tuple[bool, SourceIngestion]:
         now = datetime.now(timezone.utc)
-        age_seconds = max(0.0, (now - ingestion.occurred_at).total_seconds())
+        occurred_at = normalise_source_timestamp(ingestion.occurred_at)
+        age_seconds = max(0.0, (now - occurred_at).total_seconds())
         ingestion = ingestion.model_copy(
             update={
+                "occurred_at": occurred_at,
                 "retrieved_at": now,
                 "freshness": "fresh" if age_seconds <= 24 * 60 * 60 else "stale",
                 "availability": ingestion.availability or "available",

@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -14,6 +14,7 @@ import pytest
 from backend.config import settings
 from backend.routers import sources as source_router
 from backend.sources import adapters
+from backend.sources.service import normalise_source_timestamp
 from backend.sources.models import SourceIngestion, SourceProvider
 from backend.sources import service as source_service_module
 from backend.sources.service import SourceService
@@ -58,6 +59,13 @@ def test_slack_signature_rejects_stale_and_accepts_fresh(monkeypatch):
     assert adapters.verify_slack_signature(secret="secret", body=body, timestamp=timestamp, signature=signature, now=1001)
     assert not adapters.verify_slack_signature(secret="secret", body=body, timestamp=timestamp, signature=signature, now=1401)
     assert not adapters.verify_slack_signature(secret="other", body=body, timestamp=timestamp, signature=signature, now=1001)
+
+
+def test_source_timestamp_normalisation_handles_legacy_naive_mongo_values():
+    naive = datetime(2026, 7, 19, 12, 0, 0)
+    normalised = normalise_source_timestamp(naive)
+    assert normalised.tzinfo == timezone.utc
+    assert normalised.isoformat() == "2026-07-19T12:00:00+00:00"
 
 
 def test_slack_event_scope_is_team_and_channel_limited(monkeypatch):
