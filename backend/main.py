@@ -44,6 +44,7 @@ from backend.middleware.auth import (
     auth_middleware,
     resolve_org_from_token,
 )
+from backend.sources.runtime_config import load_runtime_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -133,6 +134,12 @@ async def _brain_lifespan(app: FastAPI) -> AsyncIterator[None]:
     global _ttl_task, _keepalive_task
 
     await store.init_db()
+    try:
+        restored = await load_runtime_config()
+        if restored:
+            logger.info("Loaded encrypted operator source configuration for: %s", ", ".join(sorted(restored)))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not load operator source configuration: %s", exc)
     # Seed the clean demo org used by open UI (not the polluted local `default`).
     # Order inside seed_for_org / seed_demo_stage: Skill → Config=25 → Horror intercept.
     seeded = await seed_data.seed_for_org(settings.DEMO_ORG_ID)
@@ -248,7 +255,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Brain-Api-Key"],
+    allow_headers=["Content-Type", "X-Brain-Api-Key", "X-Integration-Admin-Token"],
     allow_credentials=False,
 )
 
@@ -263,6 +270,7 @@ from backend.routers import audit as audit_router
 from backend.routers import benchmark as benchmark_router
 from backend.routers import github_integration as github_router
 from backend.routers import integration_catalog as integration_catalog_router
+from backend.routers import operator_integrations as operator_integrations_router
 from backend.routers import sag as sag_router
 from backend.routers import sources as sources_router
 from backend.routers import workflows as workflows_router
@@ -272,6 +280,7 @@ app.include_router(audit_router.router)
 app.include_router(benchmark_router.router)
 app.include_router(github_router.router)
 app.include_router(integration_catalog_router.router)
+app.include_router(operator_integrations_router.router)
 app.include_router(sag_router.router)
 app.include_router(sources_router.router)
 app.include_router(workflows_router.router)

@@ -90,9 +90,16 @@ class Settings(BaseSettings):
     GITHUB_REPOS: str = os.getenv("GITHUB_REPOS", "")
 
     # Source adapters are deliberately least-privilege and configured on the
-    # server.  The public judge UI never receives these values and cannot
-    # create a connection by submitting a credential.
+    # server. The public judge UI never receives these values. A separate
+    # operator-unlocked setup surface can save encrypted runtime overrides.
     SOURCE_ORG_ID: str = os.getenv("SOURCE_ORG_ID", "sandbox")
+
+    # Operator-only Integration Studio setup.  The public judge experience
+    # never receives either value.  The token gates configuration requests and
+    # the Fernet key encrypts provider secrets before they are persisted in
+    # MongoDB for the API and worker to share.
+    INTEGRATION_ADMIN_TOKEN: str = os.getenv("INTEGRATION_ADMIN_TOKEN", "")
+    INTEGRATION_CONFIG_ENCRYPTION_KEY: str = os.getenv("INTEGRATION_CONFIG_ENCRYPTION_KEY", "")
 
     # Slack Events API: only verified events from explicitly allowlisted
     # workspace/channel IDs are accepted.  A bot token is optional and only

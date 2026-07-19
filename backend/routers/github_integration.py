@@ -351,7 +351,10 @@ async def github_pr_webhook(
     if not _allowed_repo(repo):
         return Response(status_code=204)
 
-    org_id = getattr(request.state, "org_id", None) or settings.DEMO_ORG_ID
+    # Real source adapters share the explicitly configured source org.  The
+    # public judge UI and its immutable fixture remain separate from real
+    # connector evidence.
+    org_id = getattr(request.state, "org_id", None) or settings.SOURCE_ORG_ID
     try:
         assert_demo_org_mutable(org_id)
     except ValueError as exc:

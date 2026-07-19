@@ -12,6 +12,21 @@ flowchart LR
 
 Open **Integration Studio** at `/app/connect`. It reads `GET /integration-catalog` and `GET /source-connections`, so its labels reflect server configuration rather than client-side copy.
 
+### Operator setup from the frontend
+
+The public Studio is intentionally redacted. To configure a test connector in
+the browser, an operator sets `INTEGRATION_ADMIN_TOKEN` and
+`INTEGRATION_CONFIG_ENCRYPTION_KEY` on the server, unlocks `/app/connect`, and
+saves the selected provider. Values are encrypted before MongoDB persistence;
+the browser receives only presence flags and masked values. The API and source
+worker refresh the encrypted runtime configuration, so a saved Drive connector
+is used by the worker without a container rebuild.
+
+This is a single-deployment, administrator-controlled path. It is not a claim
+of self-serve OAuth, generic marketplace installation, or production tenant
+administration. Use a dedicated Slack workspace, GitHub repository, and Drive
+folder with synthetic evidence for the public hackathon deployment.
+
 ## Source adapters
 
 | Source | Endpoint / job | Required configuration | Boundary |

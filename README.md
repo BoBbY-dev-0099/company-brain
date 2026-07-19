@@ -65,7 +65,13 @@ The canonical endpoint is `https://brain.veriflowai.me/mcp/` when deployed. Ever
 
 ## Source configuration
 
-All secrets stay in server environment variables. The public UI accepts neither credentials nor an organization ID.
+The public judge UI accepts neither credentials nor an organization ID. The
+Integration Studio can be operator-unlocked only when the deployment sets both
+`INTEGRATION_ADMIN_TOKEN` and `INTEGRATION_CONFIG_ENCRYPTION_KEY`. In that
+mode, the operator form posts over same-origin HTTPS, secrets are encrypted
+before MongoDB persistence, only redacted configuration returns to the browser,
+and the API plus worker load the same values. This is a deployment-admin setup
+path for a selected test workspace, not self-serve multi-company OAuth.
 
 | Provider | Required server configuration | Read boundary |
 | --- | --- | --- |
@@ -73,6 +79,12 @@ All secrets stay in server environment variables. The public UI accepts neither 
 | Google Drive | `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_FILE`, `GOOGLE_DRIVE_FOLDER_ID` | One explicitly shared folder; Google Docs, text, and PDFs only; never writes to Drive. |
 | GitHub | `GITHUB_WEBHOOK_SECRET`, `GITHUB_TOKEN`, `GITHUB_REPOS` | Signed merged-PR intake and repository allowlist. |
 | Verified Web | `WEB_EVIDENCE_ALLOWED_HOSTS` | API-key authenticated, HTTPS-only explicit fetch; blocks private IPs, unsafe redirects, unsupported MIME types, and oversize bodies. |
+
+For frontend operator setup, set the two unlock variables above, open
+`/app/connect`, unlock the operator panel, save one provider, then run its
+read-only connectivity test. Slack test never posts; GitHub test reads one
+allowlisted repository; Drive test lists allowed files; Web verifies its saved
+host allowlist. The setup form never re-renders a saved secret.
 
 Copy [`.env.example`](.env.example) to `.env`; leave source values blank unless the server is genuinely configured. The Docker `worker` consumes durable source events and performs the optional Drive polling sync.
 

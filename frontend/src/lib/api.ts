@@ -131,6 +131,40 @@ export function getIntegrationCatalog() {
   return apiGet<IntegrationCatalog>("/integration-catalog")
 }
 
+export type OperatorSetup = {
+  enabled: boolean
+  providers: Record<string, { fields: string[]; endpoint: string; steps: string[] }>
+}
+
+export type OperatorProviderConfig = {
+  provider: string
+  configured: boolean
+  public: Record<string, string>
+  secrets: Record<string, boolean>
+  masked: Record<string, string>
+  updated_at?: string | null
+}
+
+function operatorHeaders(token: string) {
+  return { headers: { "X-Integration-Admin-Token": token } }
+}
+
+export function getOperatorSetup() {
+  return apiGet<OperatorSetup>("/operator/integrations/setup")
+}
+
+export function getOperatorConfigs(token: string) {
+  return apiGet<{ providers: Record<string, OperatorProviderConfig> }>("/operator/integrations/config", operatorHeaders(token))
+}
+
+export function saveOperatorConfig(provider: string, values: Record<string, string>, token: string) {
+  return apiClient.put<{ provider: OperatorProviderConfig; message: string }>(`/operator/integrations/${encodeURIComponent(provider)}`, { values }, operatorHeaders(token)).then((res) => res.data)
+}
+
+export function testOperatorConfig(provider: string, token: string) {
+  return apiClient.post<{ ok: boolean; status: string; detail: string }>(`/operator/integrations/${encodeURIComponent(provider)}/test`, {}, operatorHeaders(token)).then((res) => res.data)
+}
+
 export type SourceConnection = {
   provider: string
   title: string

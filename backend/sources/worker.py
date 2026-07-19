@@ -7,6 +7,7 @@ import logging
 
 from backend.brain import store
 from backend.config import settings
+from backend.sources.runtime_config import load_runtime_config
 from backend.sources.service import source_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 async def run() -> None:
     await store.init_db()
+    last_config_load = 0.0
     last_drive_sync = 0.0
     try:
         while True:
@@ -22,6 +24,12 @@ async def run() -> None:
             if processed:
                 logger.info("processed %d source event(s)", len(processed))
             now = asyncio.get_running_loop().time()
+            if now - last_config_load >= 10.0:
+                last_config_load = now
+                try:
+                    await load_runtime_config()
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Could not refresh operator source configuration: %s", exc)
             if now - last_drive_sync >= settings.GOOGLE_DRIVE_SYNC_INTERVAL_SECONDS:
                 last_drive_sync = now
                 try:
