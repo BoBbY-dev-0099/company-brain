@@ -50,6 +50,31 @@ export type RealityMemory = {
   updated_at: string
 }
 
+export type QwenCaseResult = {
+  case_id: string
+  title: string
+  description: string
+  verdict: "suspended" | "review_required" | "proceed_with_human_approval" | string
+  recommendation: string
+  qwen: {
+    status: "compiled" | "unavailable" | string
+    model?: string | null
+    summary: string
+    source_count: number
+    memory_id?: string | null
+  }
+  sag: Record<string, unknown>
+  human_approval_required: boolean
+  ephemeral: boolean
+}
+
+export type NexaFlowCaseMatrix = {
+  scenario_version: string
+  qwen_configured: boolean
+  cases: QwenCaseResult[]
+  boundary: string
+}
+
 export type DecisionRun = {
   run_id: string
   template_id: string
@@ -111,6 +136,10 @@ export async function getNexaFlowOverview() {
 
 export async function runNexaFlowReleaseCheck() {
   return (await apiClient.post<NexaFlowDecision>("/nexaflow/release-check", {})).data
+}
+
+export async function runNexaFlowCaseMatrix() {
+  return (await apiClient.post<NexaFlowCaseMatrix>("/nexaflow/case-matrix", {})).data
 }
 
 export async function getOperatorSetup() {

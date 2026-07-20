@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
@@ -236,11 +237,36 @@ class WorkflowService:
     def _facts(
         evidence: list[EvidenceRecord], live_context: dict[str, Any]
     ) -> list[DecisionFact]:
+        def concise_excerpt(item: EvidenceRecord) -> str:
+            text = re.sub(r"#{1,6}\s*", "", item.excerpt or "")
+            text = re.sub(r"\s+", " ", text).strip()
+            provider = str((item.metadata or {}).get("provider") or item.source_type).lower()
+            if provider in {"alibaba_oss", "google_drive", "alibaba_oss_object", "google_drive_document"}:
+                match = re.search(
+                    r"(?:at least|minimum(?:\s+of)?|no less than)\s+(\d+)\s*(?:mi?b|mb)",
+                    text,
+                    flags=re.IGNORECASE,
+                )
+                if match:
+                    return f"Runbook minimum is {match.group(1)} MiB before release promotion."
+            if provider in {"github", "github_pull_request"}:
+                match = re.search(r"NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)", text, flags=re.IGNORECASE)
+                if match:
+                    return f"Merged configuration sets worker memory to {match.group(1)} MiB."
+            if len(text) > 220:
+                sentence = re.split(r"(?<=[.!?])\s+", text, maxsplit=1)[0]
+                return f"{sentence[:220].rstrip()}…"
+            return text or "Source supplied an evidence record."
+
         facts: list[DecisionFact] = []
         for item in evidence:
             label = item.source_name or item.source_type
-            statement = item.excerpt.strip() or f"{label} supplied an evidence record."
-            facts.append(DecisionFact(statement=f"{label}: {statement}", source_evidence_ids=[item.evidence_id]))
+            facts.append(
+                DecisionFact(
+                    statement=f"{label}: {concise_excerpt(item)}",
+                    source_evidence_ids=[item.evidence_id],
+                )
+            )
         for key, value in sorted(live_context.items()):
             facts.append(DecisionFact(statement=f"Live context — {key}: {value!r}"))
         return facts
@@ -591,6 +617,31 @@ class WorkflowService:
         source_memory = await self._source_memory_refs(
             template=template, evidence=evidence, org_id=org_id
         )
+        # The aggregate NexaFlow check intentionally avoids compiling the same
+        # source event twice. If source adapters already produced Qwen Reality
+        # Memory, make that provenance visible instead of incorrectly showing
+        # the generic "Qwen unavailable" fallback.
+        qwen_source_memory = [
+            memory for memory in source_memory if memory.provenance.get("qwen_generated") is True
+        ]
+        if compiled_memory is None and qwen_source_memory:
+            summaries = " ".join(memory.summary for memory in qwen_source_memory[:3])
+            inference = DecisionInference(
+                text=(
+                    f"Qwen previously compiled {len(qwen_source_memory)} source-backed memory "
+                    f"claim{'s' if len(qwen_source_memory) != 1 else ''} for this decision. {summaries}"
+                ),
+                generated_by=f"qwen_reality_memory ({settings.QWEN_COMPILER_MODEL})",
+                is_model_generated=True,
+            )
+            if changed:
+                inference.text = f"{inference.text} Observed change: {changed}"
+            if verdict == WorkflowVerdict.SUSPENDED:
+                inference.text = f"{inference.text} The live context no longer satisfies the prior memory."
+            elif verdict == WorkflowVerdict.REVIEW_REQUIRED:
+                inference.text = f"{inference.text} No action is recommended until the missing evidence is supplied."
+            else:
+                inference.text = f"{inference.text} The path remains eligible only for a human-approved action."
         memory_refs = [template_memory, *source_memory]
         if compiled_memory:
             memory_refs.append(compiled_memory)

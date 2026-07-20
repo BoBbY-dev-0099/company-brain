@@ -184,7 +184,9 @@ minimal:
 2. one primary action: **Run release safety check**;
 3. the returned verdict, blocker, owner, and action;
 4. persisted evidence and Reality Memory lineage;
-5. a collapsed **Audit proof** section containing the server response,
+5. a **Qwen case proof** action that runs five private realities through the
+   same compiler and SAG engine;
+6. a collapsed **Audit proof** section containing the server response,
    provenance, parsing values, and deterministic SAG trace.
 
 After a run, the console shows the exact facts:
@@ -199,8 +201,12 @@ Execution: Human confirmation required
 ~~~
 
 The result is a real backend response, not a fixture-only UI animation. The
-browser supplies no organization ID, source evidence, provider credentials, or
-verdict.
+case proof covers a memory regression, a safe resolved incident, an open
+incident with safe memory, missing policy, and stale policy. Each case invokes
+Qwen compilation, exposes the returned model/status, then shows the
+deterministic verdict. The cases are ephemeral and cannot change canonical
+memory or external systems. The browser supplies no organization ID, source
+evidence, provider credentials, or verdict.
 
 ## Real integrations
 
@@ -322,7 +328,8 @@ powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
 
 Then open http://localhost/. Configure the three read-only source adapters at
 http://localhost/setup, send the Slack incident, sync the OSS runbook, merge the
-GitHub PR, and run the release check.
+GitHub PR, run the release check, and use **Run Qwen case proof** to rehearse
+the five alternate realities.
 
 No provider secret is committed or exposed in the browser. The local rehearsal
 uses a dedicated companybrain_nexaflow database and does not reuse the previous
@@ -340,8 +347,10 @@ The verified local gate includes:
 - source-org isolation and no caller-controlled organization;
 - MCP scope and cross-organization checks;
 - no-external-action enforcement;
-- backend tests: 94 passed, 5 intentionally skipped without Mongo integration;
+- backend tests: 95 passed, 5 intentionally skipped without Mongo integration;
 - Mongo integration tests: 5 passed;
+- Qwen case matrix: 5 ephemeral compilations, with suspended,
+  proceed-with-human-approval, and review-required outcomes;
 - production frontend build: passed;
 - clean Docker API, worker, MongoDB, and nginx boot;
 - edge profile smoke: `fresh` snapshot, stale fallback, and no-action boundary;

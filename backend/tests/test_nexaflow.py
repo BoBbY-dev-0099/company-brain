@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend import main
+from backend.core.schema import CompanyBrainSkill
 from backend.routers import nexaflow
 from backend.sources.models import IngestionStage, SourceIngestion, SourceProvider
 from backend.sources.service import source_service
@@ -145,3 +146,35 @@ async def test_readiness_reports_scenario_and_canonical_counts(monkeypatch):
         "active_memories": 1,
         "workflow_runs": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_case_matrix_compiles_multiple_ephemeral_cases_with_qwen(monkeypatch):
+    calls: list[str] = []
+
+    async def fake_compile(event):
+        calls.append(event.event_id)
+        return CompanyBrainSkill(
+            skill_id=f"matrix-{len(calls)}",
+            name="NexaFlow case memory",
+            summary=f"Qwen case summary for {event.event_id}",
+            org_id="nexaflow-case-matrix",
+        )
+
+    monkeypatch.setattr(nexaflow.settings, "QWEN_API_KEY", "test-key")
+    monkeypatch.setattr("backend.workflows.service.compiler.compile_event_to_skill", fake_compile)
+
+    response = await nexaflow.case_matrix(_Request())
+
+    assert len(response["cases"]) == 5
+    assert [item["verdict"] for item in response["cases"]] == [
+        "suspended",
+        "proceed_with_human_approval",
+        "suspended",
+        "review_required",
+        "review_required",
+    ]
+    assert len(calls) == 5
+    assert all(item["qwen"]["status"] == "compiled" for item in response["cases"])
+    assert all(item["ephemeral"] is True for item in response["cases"])
+    assert response["boundary"].startswith("Private Qwen compilation only")

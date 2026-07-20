@@ -211,6 +211,10 @@ source ledger.
    human-required next action.
 5. Expand **Audit proof** to show the exact server-derived records and parser
    output. No external action has occurred.
+6. Click **Run Qwen case proof** to compile five ephemeral alternate realities:
+   safe/resolved, open incident, missing policy, stale policy, and the memory
+   regression. The Qwen model/status is shown beside each deterministic SAG
+   verdict; these runs never change canonical memory.
 
 To rehearse missing/stale paths safely, remove or let one required source age
 out; the same endpoint returns `review_required` instead of inventing a
@@ -222,6 +226,7 @@ decision.
 | --- | --- | --- |
 | `GET` | `/nexaflow/overview` | Read-only console state for `nexaflow-demo`. |
 | `POST` | `/nexaflow/release-check` | Aggregate Slack + OSS + GitHub release decision. |
+| `POST` | `/nexaflow/case-matrix` | Five ephemeral Qwen + SAG regression cases for judge proof. |
 | `POST` | `/integrations/slack/events` | Signed, allowlisted Slack ingress. |
 | `POST` | `/integrations/github/pr` | Signed merged pull-request ingress. |
 | `POST` | `/operator/integrations/alibaba_oss/sync-now` | Operator-authenticated, read-only Alibaba OSS sync. |

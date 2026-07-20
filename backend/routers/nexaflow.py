@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -162,6 +163,68 @@ def _evidence(item: SourceIngestion) -> EvidenceInput:
     )
 
 
+def _matrix_case_evidence(
+    case_id: str,
+    *,
+    memory_mb: int | None,
+    incident_open: bool | None,
+    runbook_minimum_mb: int | None = 24,
+    age_hours: int = 0,
+) -> tuple[list[EvidenceInput], dict[str, Any]]:
+    """Build private, ephemeral evidence for the judge-facing Qwen matrix.
+
+    These records deliberately use the same normalized workflow contract as a
+    real source event. They are never persisted, never become canonical
+    memory, and exist only to demonstrate that Qwen compiles more than the
+    single live production path.
+    """
+    occurred_at = datetime.now(timezone.utc) - timedelta(hours=age_hours)
+    evidence: list[EvidenceInput] = []
+    if incident_open is not None:
+        incident_text = (
+            "SEV-2: fulfillment workers are OOM. Pause promotion until the incident is resolved."
+            if incident_open
+            else "SEV-2 fulfillment incident resolved and mitigated; promotion may be considered after validation."
+        )
+        evidence.append(
+            EvidenceInput(
+                source_type="slack_message",
+                source_name="Slack #ops-incidents",
+                external_id=f"matrix-{case_id}-incident",
+                occurred_at=occurred_at,
+                excerpt=incident_text,
+            )
+        )
+    if runbook_minimum_mb is not None:
+        evidence.append(
+            EvidenceInput(
+                source_type="alibaba_oss_object",
+                source_name="Alibaba Cloud OSS runbook",
+                external_id=f"matrix-{case_id}-runbook",
+                occurred_at=occurred_at,
+                excerpt=(
+                    f"Fulfillment workers require at least {runbook_minimum_mb} MiB of memory before promotion."
+                ),
+            )
+        )
+    if memory_mb is not None:
+        evidence.append(
+            EvidenceInput(
+                source_type="github_pull_request",
+                source_name="GitHub merged pull request",
+                external_id=f"matrix-{case_id}-pr",
+                occurred_at=occurred_at,
+                excerpt=f"Merged NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB={memory_mb}.",
+            )
+        )
+    live_context: dict[str, Any] = {}
+    if runbook_minimum_mb is not None and memory_mb is not None:
+        live_context["configured_memory_meets_runbook"] = memory_mb >= runbook_minimum_mb
+    if incident_open is not None:
+        live_context["linked_incident_open"] = incident_open
+    return evidence, live_context
+
+
 def _pending_reason(records: list[SourceIngestion], provider: SourceProvider, label: str) -> str:
     if provider == SourceProvider.ALIBABA_OSS and _runbook_conflict(records):
         return f"Conflicting {label} records share the newest source timestamp; human review is required."
@@ -292,4 +355,121 @@ async def release_check(request: Request) -> dict[str, Any]:
         },
         "parsing": parsing,
         "boundary": "Read-only source evidence and a human-required recommendation. No deployment, Slack post, GitHub change, or OSS write was executed.",
+    }
+
+
+@router.post("/case-matrix")
+async def case_matrix(request: Request) -> dict[str, Any]:
+    """Run several private cases through the same Qwen + SAG workflow engine.
+
+    This is a judge-facing proof surface, not a second demo product. Each run
+    is ephemeral and sandbox-marked, so it cannot change canonical counts,
+    durable skills, confidence, or external systems.
+    """
+    cases = (
+        {
+            "case_id": "memory_regression_and_open_incident",
+            "title": "Memory regression + open incident",
+            "description": "The merged worker setting is below policy while the incident is still active.",
+            "memory_mb": 8,
+            "incident_open": True,
+            "runbook_minimum_mb": 24,
+            "age_hours": 0,
+        },
+        {
+            "case_id": "safe_configuration_resolved_incident",
+            "title": "Safe configuration + resolved incident",
+            "description": "Current evidence satisfies both safety predicates, but approval is still required.",
+            "memory_mb": 32,
+            "incident_open": False,
+            "runbook_minimum_mb": 24,
+            "age_hours": 0,
+        },
+        {
+            "case_id": "open_incident_safe_memory",
+            "title": "Open incident blocks a safe configuration",
+            "description": "The memory value is safe, but an active incident independently blocks promotion.",
+            "memory_mb": 32,
+            "incident_open": True,
+            "runbook_minimum_mb": 24,
+            "age_hours": 0,
+        },
+        {
+            "case_id": "missing_runbook",
+            "title": "Missing runbook evidence",
+            "description": "Without the current policy, the system refuses to invent a safe threshold.",
+            "memory_mb": 32,
+            "incident_open": False,
+            "runbook_minimum_mb": None,
+            "age_hours": 0,
+        },
+        {
+            "case_id": "stale_runbook",
+            "title": "Stale runbook evidence",
+            "description": "An old policy is visible but outside the freshness window, so review is required.",
+            "memory_mb": 8,
+            "incident_open": True,
+            "runbook_minimum_mb": 24,
+            "age_hours": 200,
+        },
+    )
+    service = WorkflowService()
+
+    async def evaluate_case(case: dict[str, Any]) -> dict[str, Any]:
+        evidence, live_context = _matrix_case_evidence(
+            case["case_id"],
+            memory_mb=case["memory_mb"],
+            incident_open=case["incident_open"],
+            runbook_minimum_mb=case["runbook_minimum_mb"],
+            age_hours=case["age_hours"],
+        )
+        run = await service.run_workflow(
+            WorkflowRunRequest(
+                template_id=TEMPLATE_ID,
+                fixture=False,
+                evidence=evidence,
+                live_context=live_context,
+            ),
+            # The case matrix is intentionally private and non-persistent. It
+            # uses a fixed server-owned namespace only for model provenance.
+            org_id="nexaflow-case-matrix",
+            persist=False,
+            compile_memory=True,
+            is_judge_sandbox=True,
+            execution_origin="nexaflow_case_matrix",
+        )
+        compiled = [
+            ref
+            for ref in run.decision_brief.memory_refs
+            if ref.provenance.get("kind") == "compiled_event"
+        ]
+        qwen_compiled = bool(
+            compiled and any(ref.provenance.get("compiler") == "qwen" for ref in compiled)
+        )
+        return {
+            "case_id": case["case_id"],
+            "title": case["title"],
+            "description": case["description"],
+            "verdict": run.decision_brief.verdict.value,
+            "recommendation": run.decision_brief.recommended_next_action,
+            "qwen": {
+                "status": "compiled" if qwen_compiled else "unavailable",
+                "model": settings.QWEN_COMPILER_MODEL if qwen_compiled else None,
+                "summary": compiled[-1].summary if compiled else run.decision_brief.inference.text,
+                "source_count": len(run.decision_brief.evidence),
+                "memory_id": compiled[-1].memory_id if compiled else None,
+            },
+            "sag": run.decision_brief.sag_trace,
+            "human_approval_required": run.decision_brief.human_approval_required,
+            "ephemeral": True,
+        }
+
+    # The cases are independent. Parallel compilation keeps the judge route
+    # responsive while still exercising Qwen once per reality.
+    results = await asyncio.gather(*(evaluate_case(case) for case in cases))
+    return {
+        "scenario_version": settings.DEMO_SCENARIO_VERSION,
+        "qwen_configured": bool(settings.QWEN_API_KEY),
+        "cases": results,
+        "boundary": "Private Qwen compilation only. No canonical memory, confidence, or external action was changed.",
     }
