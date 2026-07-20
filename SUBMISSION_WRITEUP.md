@@ -19,6 +19,9 @@ reaches production.
 systems and its consequential actions.** It does not replace a company's
 agents or systems. It gives them current, explainable memory before they act.
 
+**Its core idea is simple:** memory must retain *why* it was trusted—and know
+when that trust has expired.
+
 **Try the judge route:** [brain.veriflowai.me](https://brain.veriflowai.me/)
 No login is required when the scheduled ECS demo window is active.
 
@@ -189,6 +192,12 @@ structured Reality Memory candidate containing:
 - freshness and availability state;
 - validity and reconciliation metadata.
 
+The compiler requests strict JSON Schema output for this candidate. If the
+endpoint cannot accept that format, it falls back to JSON-object generation;
+the server still parses and validates the returned candidate before it can
+enter the evidence-to-memory pipeline. A failed compilation is surfaced
+honestly rather than converted into an invented memory.
+
 The UI shows the returned Qwen status and rationale. If Qwen is unavailable,
 the UI says so. It never claims that memory was compiled when it was not.
 
@@ -197,6 +206,19 @@ the UI says so. It never claims that memory was compiled when it was not.
 Qwen memory remains attributable to the evidence that produced it. Older
 claims are retained for audit. New or conflicting evidence can supersede an
 older claim or mark it for review instead of silently overwriting history.
+
+### Why this is a MemoryAgent, not just retrieval
+
+Retrieval can find a relevant document; it cannot by itself establish that the
+document is still the right thing to trust. Company Brain treats every memory
+as a time-bound operational claim. A claim carries its source, retrieval and
+source timestamps, availability, freshness, scope, and relationship to newer
+claims. A caller receives the claim's current status—active, superseded, or
+review-required—not just a similarity score.
+
+That distinction is what lets an agent use memory safely across sessions and
+across systems: it can see both *what was known* and *whether it remains safe
+to act on it now*.
 
 ### Semantic recall
 
@@ -207,6 +229,10 @@ evidence and status. It is not presented as an unsupported answer.
 The deployed Qwen configuration uses the Alibaba DashScope International
 compatible endpoint with `qwen-plus` for compilation and
 `text-embedding-v3` for embeddings.
+
+The submitted Qwen Cloud request-log artifact independently shows successful
+calls to both models. Qwen is therefore visible in the evidence-to-memory
+path, not hidden behind a generic "AI" label.
 
 ---
 
@@ -245,6 +271,19 @@ owner
 recommended next action
 human approval requirement
 ```
+
+### Human approval is a circuit breaker, not a bottleneck
+
+Company Brain does not make people manually reconstruct every routine decision.
+When the required evidence is fresh, consistent, and within policy, the gate
+can immediately return **proceed with human approval**. The named person still
+owns any external action; that is the intentional execution boundary.
+
+When facts conflict, a required source is stale, or a claim cannot be safely
+parsed, Company Brain refuses to turn model confidence into an action. It
+returns `suspended` or `review_required` with the missing evidence and owner.
+The system is fast when reality is clear and deliberately conservative when it
+is not.
 
 ---
 
@@ -336,6 +375,11 @@ The same engine covers five realities:
 The proof runs are ephemeral. They cannot modify canonical memory, confidence,
 provider records, reinforcement state, or external systems.
 
+This matters because the product is not designed to always say "stop." The
+safe-configuration / resolved-incident case demonstrates the reciprocal
+behavior: a fresh, aligned reality produces a bounded recommendation to
+proceed, while the human confirmation boundary remains intact.
+
 ### Evaluation at a glance
 
 | Dimension | Evidence in this build |
@@ -360,7 +404,11 @@ The current local verification includes:
 - read-only OSS sync, object hashing, and source freshness coverage;
 - Qwen fallback honesty and source-provenance checks;
 - temporal memory supersession and source-org isolation checks;
-- authenticated MCP scope and cross-organization isolation checks;
+- an in-memory 100-concurrent-workflow test that verifies unique run IDs and
+  isolated run storage across two organizations;
+- authenticated MCP tests that verify the API key—not caller-supplied
+  input—selects the organization and rejects cross-organization evidence
+  access;
 - no-external-action enforcement;
 - production frontend build and clean Docker API, worker, MongoDB, and nginx
   boot;
@@ -417,6 +465,17 @@ The next product layer is per-company OAuth onboarding, more source adapters,
 and carefully governed external action adapters. Human approval and the
 no-external-action boundary remain mandatory until those controls are
 independently governed.
+
+### Product path
+
+| Stage | What it means |
+| --- | --- |
+| **Now — evidence-backed memory** | Signed Slack and GitHub intake, read-only Alibaba OSS policy sync, Qwen Reality Memory, deterministic SAG, audit lineage, and an authenticated MCP/REST decision contract. |
+| **Next — safer adoption** | Per-company OAuth onboarding, managed secret storage, and additional governed read-only source adapters. |
+| **Only after independent authorization controls** | Carefully scoped action adapters, each with its own approval, audit, and revocation boundary. |
+
+This is intentionally a sequence, not a promise of uncontrolled automation:
+the ability to recommend safely must exist before the ability to execute.
 
 That boundary is deliberate. We scoped the submission around the hardest and
 most reusable primitive: ingest diverse evidence, preserve why it was trusted,
