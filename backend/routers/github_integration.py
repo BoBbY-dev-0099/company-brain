@@ -309,7 +309,10 @@ async def github_pr_webhook(
         raise HTTPException(status_code=422, detail={"error": "GITHUB_DIFF_URL_MISSING"})
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # GitHub may redirect a pull-request diff URL from api.github.com to
+        # github.com. Follow that read-only redirect so a valid merged PR is
+        # not reported as a webhook failure.
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             diff_resp = await client.get(
                 diff_url,
                 headers={
