@@ -80,5 +80,6 @@ def test_parsers_need_real_nexaflow_markers():
     assert nexaflow._github_memory_value("+NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8") == 8
     assert nexaflow._github_memory_value("a generic memory setting is 8") is None
     assert nexaflow._incident_state("SEV-2 OOM: pause promotion") is True
+    assert nexaflow._incident_state("SEV-2: OOM. Pause promotion until the incident is resolved.") is True
     assert nexaflow._incident_state("SEV-2 OOM resolved") is False
     assert nexaflow._incident_state("daily standup notes") is None

@@ -75,6 +75,16 @@ def _incident_state(excerpt: str) -> bool | None:
     value = excerpt.lower()
     if not re.search(r"\b(sev[- ]?[0-9]|incident|oom|out.of.memory|pause\s+promotion)\b", value):
         return None
+    # A message can mention a future resolution condition while the incident
+    # is still active (for example, "pause promotion until the incident is
+    # resolved"). Treat those hold/pending forms as open rather than letting
+    # the word "resolved" alone imply that the incident has cleared.
+    if re.search(
+        r"\b(?:until|while|pending|awaiting|not|unresolved|still|remains)\b"
+        r".{0,100}\b(?:resolved|closed|mitigated|cleared)\b",
+        value,
+    ) or re.search(r"\b(?:pause|hold|block|stop)\b.{0,80}\b(?:promotion|release)\b", value):
+        return True
     if re.search(r"\b(resolved|closed|mitigated|cleared)\b", value):
         return False
     return True
