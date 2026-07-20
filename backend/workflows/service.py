@@ -238,7 +238,8 @@ class WorkflowService:
         evidence: list[EvidenceRecord], live_context: dict[str, Any]
     ) -> list[DecisionFact]:
         def concise_excerpt(item: EvidenceRecord) -> str:
-            text = re.sub(r"#{1,6}\s*", "", item.excerpt or "")
+            raw_text = item.excerpt or ""
+            text = re.sub(r"#{1,6}\s*", "", raw_text)
             text = re.sub(r"\s+", " ", text).strip()
             provider = str((item.metadata or {}).get("provider") or item.source_type).lower()
             if provider in {"alibaba_oss", "google_drive", "alibaba_oss_object", "google_drive_document"}:
@@ -255,11 +256,11 @@ class WorkflowService:
                 # not the baseline that the PR removed.
                 match = re.search(
                     r"^\+\s*(?:export\s+)?NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)",
-                    text,
+                    raw_text,
                     flags=re.IGNORECASE | re.MULTILINE,
                 ) or re.search(
                     r"NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)",
-                    text,
+                    raw_text,
                     flags=re.IGNORECASE,
                 )
                 if match:
