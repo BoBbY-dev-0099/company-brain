@@ -90,6 +90,35 @@ To exercise MCP, use a scoped `X-Brain-Api-Key` against the canonical endpoint
 `https://brain.veriflowai.me/mcp/`. The public legacy `/mcp/sse` path should
 return `410`; it is not a valid production connector.
 
+## Verified public run
+
+On 20 July 2026, the exact commit `746ccf4281345d43e8aedba9580857baa66d877f`
+was deployed to the NexaFlow ECS host and verified from outside the host.
+
+- Public health: `status=ok`, MongoDB connected to `companybrain_nexaflow`,
+  Qwen configured, embeddings healthy.
+- Public overview: 3 persisted source records, 3 Reality Memory records, and
+  Slack, Alibaba OSS, and GitHub all `connected/healthy` for `nexaflow-demo`.
+- Aggregate release check: `suspended`; runbook minimum `24 MiB`, merged
+  configuration `8 MiB`, linked incident `open`, owner `NexaFlow engineering
+  release owner`.
+- Safety boundary: the response explicitly states that no deployment, Slack
+  post, GitHub change, or OSS write was executed.
+- Legacy transport: `GET /mcp/sse` returns `410`.
+- Authenticated MCP: initialize, `tools/list`, `query_evidence`, and
+  `check_intercept` were exercised with a temporary scoped key; all 8 tools
+  were listed and the check returned `external_action_permitted=false`,
+  `human_approval_required=true`, and `auto_execute=false`. The temporary key
+  was revoked after the test.
+
+The captured non-secret HTTP responses are versioned under
+[`docs/assets/deployment-proof-20260720T101115Z`](assets/deployment-proof-20260720T101115Z/):
+
+- [`health.json`](assets/deployment-proof-20260720T101115Z/health.json)
+- [`readiness.json`](assets/deployment-proof-20260720T101115Z/readiness.json)
+- [`integration-catalog.json`](assets/deployment-proof-20260720T101115Z/integration-catalog.json)
+- [`https-headers.txt`](assets/deployment-proof-20260720T101115Z/https-headers.txt)
+
 ## Evidence to capture
 
 1. **Workbench Overview:** Alibaba Cloud Workbench/instance view showing the
@@ -109,10 +138,10 @@ Place redacted images in `docs/assets/` and link them below only after capture.
 
 | Artifact | Required state | Link |
 | --- | --- | --- |
-| Alibaba Workbench Overview | Pending capture on deployed ECS/SAS | Add after capture |
-| Container, health, readiness, and build SHA | Pending capture on deployed ECS/SAS | Add after capture |
-| Public NexaFlow Console over HTTPS | Pending DNS, TLS, and browser rehearsal | Add after capture |
-| HTTPS/MCP integration catalog proof | Pending authenticated endpoint check | Add after capture |
+| Alibaba Workbench Overview | Pending manual redacted screenshot | Capture from the Alibaba console before submission |
+| Container, health, readiness, and build SHA | Captured from deployed ECS | [health](assets/deployment-proof-20260720T101115Z/health.json) · [readiness](assets/deployment-proof-20260720T101115Z/readiness.json) |
+| Public NexaFlow Console over HTTPS | Browser route verified; screenshot still requires manual capture | [live console](https://brain.veriflowai.me/) |
+| HTTPS/MCP integration catalog proof | Captured; authenticated MCP smoke verified | [catalog](assets/deployment-proof-20260720T101115Z/integration-catalog.json) · [headers](assets/deployment-proof-20260720T101115Z/https-headers.txt) |
 
 This document intentionally makes no claim that the DNS hostname, TLS
 certificate, or public deployment is live until those artifacts are attached.

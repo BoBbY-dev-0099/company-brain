@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from backend import main
 from backend.routers import nexaflow
 from backend.sources.models import IngestionStage, SourceIngestion, SourceProvider
 from backend.sources.service import source_service
@@ -110,3 +111,37 @@ def test_parsers_need_real_nexaflow_markers():
     assert nexaflow._incident_state("SEV-2: OOM. Pause promotion until the incident is resolved.") is True
     assert nexaflow._incident_state("SEV-2 OOM resolved") is False
     assert nexaflow._incident_state("daily standup notes") is None
+
+
+@pytest.mark.asyncio
+async def test_readiness_reports_scenario_and_canonical_counts(monkeypatch):
+    class _ReadinessRepository:
+        async def list_ingestions(self, _org_id: str, limit: int = 1000):
+            return [object(), object(), object()][:limit]
+
+        async def list_memories(self, _org_id: str, include_superseded: bool = True, limit: int = 1000):
+            return [
+                SimpleNamespace(status=SimpleNamespace(value="active")),
+                SimpleNamespace(status=SimpleNamespace(value="superseded")),
+            ][:limit]
+
+    class _ReadinessWorkflowService:
+        async def list_runs(self, *, org_id: str, limit: int = 1000):
+            return [object()][:limit]
+
+    monkeypatch.setattr(main.source_service, "repository", _ReadinessRepository())
+    monkeypatch.setattr(main, "WorkflowService", lambda: _ReadinessWorkflowService())
+    monkeypatch.setattr(main.settings, "SOURCE_ORG_ID", "nexaflow-demo")
+    monkeypatch.setattr(main.settings, "DEMO_SCENARIO_VERSION", "nexaflow-live-v1")
+
+    response = await main.demo_readiness()
+
+    assert response["scenario_version"] == "nexaflow-live-v1"
+    assert response["source_org_id"] == "nexaflow-demo"
+    assert response["database_status"] == "connected"
+    assert response["canonical_counts"] == {
+        "evidence": 3,
+        "memories": 2,
+        "active_memories": 1,
+        "workflow_runs": 1,
+    }

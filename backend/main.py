@@ -42,7 +42,9 @@ from backend.middleware.auth import (
     auth_middleware,
     resolve_org_from_token,
 )
+from backend.sources.service import source_service
 from backend.sources.runtime_config import load_runtime_config
+from backend.workflows.service import WorkflowService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -323,13 +325,49 @@ async def health() -> dict[str, Any]:
 
 @app.get("/demo/readiness")
 async def demo_readiness() -> dict[str, Any]:
-    """Compatibility health response; no fixture state is reported."""
+    """Return non-secret deployment and canonical NexaFlow counts.
+
+    Readiness is deliberately scoped to the server-selected source organization.
+    It reports persisted records rather than browser-derived or optimistic demo
+    state, while still returning a useful zero-count response when MongoDB is
+    unavailable during boot.
+    """
+    evidence_count = 0
+    memory_count = 0
+    active_memory_count = 0
+    workflow_run_count = 0
+    database_status = "unavailable"
+    try:
+        org_id = settings.SOURCE_ORG_ID
+        evidence = await source_service.repository.list_ingestions(org_id, limit=1000)
+        memories = await source_service.repository.list_memories(
+            org_id,
+            include_superseded=True,
+            limit=1000,
+        )
+        runs = await WorkflowService().list_runs(org_id=org_id, limit=1000)
+        evidence_count = len(evidence)
+        memory_count = len(memories)
+        active_memory_count = sum(1 for memory in memories if getattr(memory.status, "value", memory.status) == "active")
+        workflow_run_count = len(runs)
+        database_status = "connected"
+    except Exception as exc:  # noqa: BLE001
+        # Health/readiness must remain inspectable while MongoDB is starting.
+        logger.warning("readiness counts unavailable: %s", exc)
     return {
         "mode": "nexaflow_real_source_local",
         "build_sha": settings.BUILD_SHA,
+        "scenario_version": settings.DEMO_SCENARIO_VERSION,
         "qwen_configured": bool(settings.QWEN_API_KEY),
         "embedding_healthy": getattr(app.state, "embedding_healthy", None),
         "source_org_id": settings.SOURCE_ORG_ID,
+        "database_status": database_status,
+        "canonical_counts": {
+            "evidence": evidence_count,
+            "memories": memory_count,
+            "active_memories": active_memory_count,
+            "workflow_runs": workflow_run_count,
+        },
     }
 
 
