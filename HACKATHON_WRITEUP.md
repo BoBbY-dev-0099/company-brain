@@ -88,6 +88,8 @@ the system exposes that state; it never claims that a memory was compiled.
 
 ## Architecture
 
+![NexaFlow evidence-to-decision architecture](docs/nexaflow-architecture.svg)
+
 ~~~mermaid
 flowchart LR
   S["Slack #ops-incidents"] --> L["Immutable evidence ledger"]
