@@ -1,8 +1,9 @@
-# NexaFlow
+# Company Brain
 
-**Submission writeup:** [HACKATHON_WRITEUP.md](HACKATHON_WRITEUP.md)
+**Submission writeup:** [SUBMISSION_WRITEUP.md](SUBMISSION_WRITEUP.md) · **Technical appendix:** [HACKATHON_WRITEUP.md](HACKATHON_WRITEUP.md)
 
-NexaFlow is a local-first operational memory system. A real Slack incident, a
+Company Brain is a local-first operational memory system. In the NexaFlow demo,
+a real Slack incident, a
 read-only Alibaba Cloud OSS runbook, and a signed GitHub merged pull request become
 source-backed Qwen Reality Memory before one governed decision is made:
 
@@ -23,7 +24,7 @@ For the clean-room positioning against adjacent company-brain patterns, see
 the [architecture comparison](docs/ARCHITECTURE.md#positioning-against-adjacent-company-brain-patterns).
 The complete judge-facing flow is shown in the [NexaFlow Reality Layer architecture diagram](docs/nexaflow-reality-architecture.svg).
 
-The root route is the **NexaFlow Live Operations Console**. It is intentionally
+The root route is the **Company Brain Live Operations Console**. It is intentionally
 empty until the real test company sends evidence; it has no synthetic fallback,
 no browser-provided organization ID, and no fake green verdict.
 

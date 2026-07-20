@@ -1,11 +1,11 @@
-# NexaFlow: Reality Memory Before a Company Acts
+# Company Brain: Reality Memory Before a Company Acts
 
 **Qwen Cloud Hackathon 2026 | MemoryAgent track**
 
 ## One-line pitch
 
-NexaFlow prevents an automated release from acting on stale company reality by
-turning a signed Slack incident, an approved Alibaba Cloud OSS runbook, and a
+Company Brain prevents an automated release from acting on stale company reality
+by turning a signed Slack incident, an approved Alibaba Cloud OSS runbook, and a
 merged GitHub change into source-backed Qwen memory and a human-required
 release decision.
 
@@ -24,7 +24,7 @@ The result is not an ordinary search problem. It is a memory and decision
 problem: which claim is current, what evidence supports it, what changed, and
 who must confirm the next action?
 
-## The NexaFlow solution
+## The Company Brain solution
 
 NexaFlow is the operational memory checkpoint that sits between company sources
 and an agent or consequential workflow. It does not replace Slack, OSS, GitHub,
@@ -177,7 +177,7 @@ visible as `stale` or `unavailable`.
 
 ## What a judge can see
 
-The root route is the **NexaFlow Live Operations Console**. It is intentionally
+The root route is the **Company Brain Live Operations Console**. It is intentionally
 minimal:
 
 1. three backend-derived source tiles for Slack, Alibaba OSS, and GitHub;
