@@ -2,18 +2,18 @@
 
 | Criterion | Current status | Evidence and remaining proof |
 | --- | --- | --- |
-| Innovation & AI Creativity | Green | The product is a reusable Reality Memory engine: source-specific evidence, temporal provenance, Qwen claims, deterministic SAG, and human action share one contract. The console turns a fragmented-source problem into an immediate release-risk story. |
-| Technical Depth & Engineering | Green in code; deployment proof pending | FastAPI source ledger, Qwen compiler provenance, temporal supersession, deterministic SAG, Mongo-backed decisions, durable idempotent source intake, authenticated MCP, test coverage, sandbox isolation, and human-only reinforcement are implemented. Attach actual Alibaba proof before claiming cloud completion. |
-| Problem Value & Impact | Green | Each template names the blocker, accountable role, and safe next action when current evidence invalidates previously trusted operational memory. No unsupported savings or autonomous-action claim is required. |
-| Presentation & Documentation | Green in repository; video pending | `/` is the Company Reality Console and `/app/connect` is Integration Studio. [`HACKATHON_WRITEUP.md`](../HACKATHON_WRITEUP.md), [`CONNECT.md`](../CONNECT.md), [`DEPLOYMENT_PROOF.md`](DEPLOYMENT_PROOF.md), and the pre-submit checklist mirror the same story. Record the final public video and attach real deployment evidence. |
+| Innovation and AI creativity | Green | NexaFlow turns fragmented operational evidence into temporal Qwen Reality Memory with provenance, supersession, and a deterministic safety decision. |
+| Technical depth and engineering | Green in local acceptance; deployment proof pending | FastAPI source ledger, signed Slack/GitHub intake, read-only Alibaba OSS sync, Qwen compiler provenance, Mongo persistence, durable worker, deterministic SAG, authenticated MCP, and human-only action boundary. |
+| Problem value and impact | Green | The primary story prevents an unsafe fulfillment release when an open incident and a merged configuration disagree with the current runbook. |
+| Presentation and documentation | Green in repository; video and cloud artifacts pending | The root route is one minimal NexaFlow console with an evidence timeline, memory lineage, decision panel, and collapsed audit proof. |
 
-## Only external blockers
+## Final external gates
 
-1. Deploy the verified commit to Alibaba ECS/SAS and complete the evidence
-   manifest in [`DEPLOYMENT_PROOF.md`](DEPLOYMENT_PROOF.md).
-2. Publish the final public video and live URL after the deployed route is
-   rehearsed.
-3. Confirm the current official rules and complete every Devpost field.
+1. Deploy the verified commit to Alibaba ECS or SAS.
+2. Capture Workbench Overview, redacted health/readiness, public HTTPS, and
+   MCP proof.
+3. Record the 1-3 minute demo from a fresh browser session.
+4. Confirm the current official submission fields before publishing.
 
-The implementation does not claim these external steps are complete until the
-corresponding evidence is attached.
+The repository and local acceptance run do not claim that these external
+artifacts are complete until they are captured from the deployed commit.

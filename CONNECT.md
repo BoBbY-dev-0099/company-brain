@@ -1,99 +1,87 @@
-# Connect Company Brain
+# Connect NexaFlow
 
-Company Brain is the evidence and memory checkpoint inside an existing workflow. It does not replace Slack, Drive, GitHub, an agent runtime, or an operator.
+NexaFlow is the evidence and memory checkpoint inside an existing workflow. It
+does not replace Slack, Alibaba Cloud OSS, GitHub, an agent runtime, or an
+operator.
 
-```mermaid
+~~~mermaid
 flowchart LR
   S["Company source"] --> E["Evidence adapter"]
-  E --> M["Reality Memory"]
+  E --> M["Qwen Reality Memory"]
   M --> C["MCP or REST check"]
   C --> H["Human-confirmed next step"]
-```
+~~~
 
-Open **Integration Studio** at `/app/connect`. It reads `GET /integration-catalog` and `GET /source-connections`, so its labels reflect server configuration rather than client-side copy.
+Open Setup sources at /setup. The public console reads server-owned status, so
+source labels reflect actual configuration rather than optimistic client copy.
 
-### Operator setup from the frontend
+## Operator setup
 
-The public Studio is intentionally redacted. To configure a test connector in
-the browser, an operator sets `INTEGRATION_ADMIN_TOKEN` and
-`INTEGRATION_CONFIG_ENCRYPTION_KEY` on the server, unlocks `/app/connect`, and
-saves the selected provider. Values are encrypted before MongoDB persistence;
-the browser receives only presence flags and masked values. The API and source
-worker refresh the encrypted runtime configuration, so a saved Drive connector
-is used by the worker without a container rebuild.
+The browser never receives provider secrets. The operator configures the
+selected provider through the local setup surface; values are encrypted before
+MongoDB persistence and the UI receives only presence or masked values.
 
 This is a single-deployment, administrator-controlled path. It is not a claim
 of self-serve OAuth, generic marketplace installation, or production tenant
-administration. Use a dedicated Slack workspace, GitHub repository, and Drive
-folder with synthetic evidence for the public hackathon deployment.
+administration. Use a dedicated Slack workspace, GitHub repository, and
+Alibaba OSS bucket with synthetic evidence for the public hackathon deployment.
 
 ## Source adapters
 
-| Source | Endpoint / job | Required configuration | Boundary |
+| Source | Endpoint or job | Required configuration | Boundary |
 | --- | --- | --- | --- |
-| Slack | `POST /integrations/slack/events` | Signing secret, team ID, channel IDs | Signed messages from one configured `#ops-incidents` channel only; persisted before acknowledgement; no Slack write. |
-| Google Drive | `POST /integrations/google-drive/sync` or worker poll | Read-only service account JSON/file, shared folder ID | Reads Google Docs, text, and PDFs in one shared folder; no write or sharing change. |
-| GitHub | `POST /integrations/github/pr` | Webhook secret, token, repository allowlist | Signed, merged PRs from allowlisted repositories. |
-| Verified Web | `POST /integrations/web/fetch` | Exact HTTPS host allowlist | API-key protected explicit fetch with SSRF, redirect, MIME, timeout, and size controls. Not web search. |
+| Slack | POST /integrations/slack/events | Signing secret, team ID, channel IDs | Signed messages from one configured #ops-incidents channel only; persisted before acknowledgement; no Slack write. |
+| Alibaba Cloud OSS | POST /operator/integrations/alibaba_oss/sync-now or worker poll | Read-only RAM AccessKey, bucket, region, prefix | Reads Markdown, text, and PDF runbooks in one private prefix; no upload, delete, or ACL change. |
+| GitHub | POST /integrations/github/pr | Webhook secret, read-only token, repository allowlist | Signed, merged pull requests from allowlisted repositories. |
+| Verified Web | POST /integrations/web/fetch | Exact HTTPS host allowlist | API-key protected explicit fetch with SSRF, redirect, MIME, timeout, and size controls. Not web search. |
 
-Source events are organization-scoped immutable ledger records. Each has a source/external ID, URL where available, raw payload hash, excerpt, source and retrieval time, freshness, availability, ACL scope, and lifecycle stage.
+Source events are organization-scoped immutable ledger records. Each has a
+source/external ID, URL where available, raw payload hash, excerpt, source and
+retrieval time, freshness, availability, ACL scope, and lifecycle stage.
 
-## Connect a workflow with REST
+## Primary release workflow
 
-An existing workflow can submit normalized evidence and live context to a code-owned template. It receives a `DecisionBrief`; it does not receive authority to execute a company action.
+The judge-facing route uses the server-owned NexaFlow release template. The
+browser supplies no organization or evidence:
 
-```bash
-NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-curl -X POST https://brain.veriflowai.me/workflow-runs \
-  -H 'Content-Type: application/json' \
-  -H 'X-Brain-Api-Key: cb_live_...' \
-  -d "{
-    \"template_id\": \"release-safety\",
-    \"evidence\": [{
-      \"source_type\": \"github_pull_request\",
-      \"source_name\": \"GitHub\",
-      \"external_id\": \"acme/service#42\",
-      \"occurred_at\": \"$NOW\",
-      \"excerpt\": \"Merged PR changes the export-worker memory limit.\"
-    }],
-    \"live_context\": {
-      \"worker_memory_mb\": 8,
-      \"runbook_validated\": false,
-      \"deployment_window_open\": true
-    }
-  }"
-```
+~~~text
+POST /api/nexaflow/release-check
+{}
+~~~
 
-The browser judge sandbox uses the exact same contract, but its source records and memory expire after one hour.
+The server selects the newest fresh Slack, OSS, and GitHub records, parses the
+runbook minimum, merged worker memory, and incident state, then returns a
+DecisionBrief. Missing, stale, unavailable, unsigned, or unparseable evidence
+returns review_required.
 
 ## Connect an agent with MCP
 
 Use authenticated Streamable HTTP:
 
-```text
+~~~text
 https://brain.veriflowai.me/mcp/
 X-Brain-Api-Key: cb_live_...
-```
+~~~
 
-The server resolves the organization from the API key. It ignores caller-supplied organization IDs.
+The server resolves the organization from the API key and ignores any
+caller-supplied organization ID.
 
-| Permission | Tool | Purpose |
+| Permission | Tools | Purpose |
 | --- | --- | --- |
-| `mcp:read` | `recall_skills` | Recall established governed skills. |
-| `mcp:read` | `inspect_memory` | Inspect active or superseded Reality Memory. |
-| `mcp:read` | `query_evidence` | Inspect immutable evidence summaries and provenance. |
-| `mcp:check` | `check_intercept` | Run a pre-flight memory/SAG check. |
-| `mcp:workflow` | `evaluate_workflow` | Return the source-aware `DecisionBrief`. |
-| `mcp:write` | `compile_experience` | Compile a deliberate resolved experience into durable skill memory. |
+| mcp:read | recall_skills, inspect_memory, query_evidence | Read governed memory and source provenance. |
+| mcp:check | check_intercept | Run a pre-flight memory and safety check. |
+| mcp:workflow | evaluate_workflow | Return the source-aware DecisionBrief. |
+| mcp:write | compile_experience | Compile a deliberate resolved experience into durable skill memory. |
 
-`/mcp/sse` is retired in production. MCP cannot record a human outcome or run a deployment, refund, feature-flag change, or Slack post.
+MCP cannot record a human outcome or run a deployment, refund, feature-flag
+change, GitHub write, OSS write, or Slack post. OAuth 2.1 dynamic registration,
+per-company secret-vault onboarding, and self-serve provider installation are
+roadmap items, not shipped claims.
 
 ## Status language
 
-- `connected`: server configuration is complete.
-- `setup_required`: the provider has not been configured on the server.
-- `contract_ready`: a supported API contract is available.
-- `fixture`: deterministic demo evidence only.
-- `preview`: not production-ready.
-
-OAuth 2.1 dynamic client registration, per-company secret-vault onboarding, and self-serve GitHub/Slack/Drive installation are roadmap items. They are not claimed by this submission.
+- connected: server configuration is complete.
+- setup_required: the provider has not been configured on the server.
+- contract_ready: a supported API contract is available.
+- fixture: deterministic demo evidence only.
+- preview: not production-ready.

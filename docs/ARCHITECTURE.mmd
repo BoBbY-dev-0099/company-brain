@@ -1,7 +1,7 @@
 flowchart LR
   subgraph Sources["Read-only source adapters"]
     Slack["Slack\nsigned events"]
-    Drive["Google Drive\nshared folder"]
+    OSS["Alibaba Cloud OSS\nprivate runbook prefix"]
     GitHub["GitHub\nsigned merged PR"]
     Web["Verified Web\nallowlisted HTTPS"]
   end
@@ -10,7 +10,7 @@ flowchart LR
   Gateway["REST / authenticated MCP\ndeterministic SAG"]
   Human["Human-confirmed outcome"]
   Slack --> Evidence
-  Drive --> Evidence
+  OSS --> Evidence
   GitHub --> Evidence
   Web --> Evidence
   Evidence --> Qwen --> Gateway --> Human

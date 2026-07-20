@@ -1,5 +1,7 @@
 # NexaFlow
 
+**Submission writeup:** [HACKATHON_WRITEUP.md](HACKATHON_WRITEUP.md)
+
 NexaFlow is a local-first operational memory system. A real Slack incident, a
 read-only Alibaba Cloud OSS runbook, and a signed GitHub merged pull request become
 source-backed Qwen Reality Memory before one governed decision is made:

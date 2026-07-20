@@ -1,6 +1,6 @@
-# Alibaba Cloud deployment proof
+# NexaFlow Alibaba Cloud deployment proof
 
-This is the judge-facing deployment packet for Company Brain. Local Docker is
+This is the judge-facing deployment packet for NexaFlow. Local Docker is
 a useful validation gate, but it is not evidence of an Alibaba Cloud
 deployment. Do not mark the artifacts below complete until the exact checked
 out commit is running on ECS or SAS and the public HTTPS route has been tested.
