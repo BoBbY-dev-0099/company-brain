@@ -207,10 +207,9 @@ human approval requirement
 
 ## 6. The real integration architecture
 
-![Company Brain evidence-to-decision architecture](docs/nexaflow-architecture.svg)
-
-For the uploadable judge artifact, use the matching PDF:
-[company-brain-architecture-v2.pdf](docs/assets/company-brain-architecture-v2.pdf).
+The architecture diagram is provided separately as the uploadable judge
+artifact. The written implementation below explains the same path without
+duplicating the visual.
 
 The implementation is organized as four explicit layers:
 
@@ -425,8 +424,6 @@ independently governed.
 - Integration Studio: <https://brain.veriflowai.me/setup>
 - Repository: <https://github.com/BoBbY-dev-0099/company-brain>
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- Architecture SVG source: [docs/nexaflow-architecture.svg](docs/nexaflow-architecture.svg)
-- Uploadable architecture PDF: [docs/assets/company-brain-architecture-v2.pdf](docs/assets/company-brain-architecture-v2.pdf)
 - Deployment proof: [docs/DEPLOYMENT_PROOF.md](docs/DEPLOYMENT_PROOF.md)
 - Setup guide: [CONNECT.md](CONNECT.md)
 - Release policy: [real-workflow/runbooks/fulfillment-release-policy.md](real-workflow/runbooks/fulfillment-release-policy.md)
