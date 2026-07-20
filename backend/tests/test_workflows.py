@@ -90,7 +90,7 @@ async def test_concurrent_release_checks_preserve_org_isolated_runs():
             org_id="nexaflow-demo" if index % 2 == 0 else "other-org",
         )
 
-    runs = await asyncio.gather(*(run_once(index) for index in range(20)))
-    assert len({run.run_id for run in runs}) == 20
-    assert len(await repository.list_runs(org_id="nexaflow-demo", limit=50)) == 10
-    assert len(await repository.list_runs(org_id="other-org", limit=50)) == 10
+    runs = await asyncio.gather(*(run_once(index) for index in range(100)))
+    assert len({run.run_id for run in runs}) == 100
+    assert len(await repository.list_runs(org_id="nexaflow-demo", limit=100)) == 50
+    assert len(await repository.list_runs(org_id="other-org", limit=100)) == 50

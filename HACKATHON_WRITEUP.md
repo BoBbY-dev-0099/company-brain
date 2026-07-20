@@ -162,6 +162,19 @@ excerpts, freshness, and agent provenance. Notes are idempotent, organization
 scoped, and explicitly marked as agent-authored rather than Qwen-generated.
 Both tools preserve the human approval and no-external-action flags.
 
+### Multimodal and edge extension
+
+An authenticated agent can submit a redacted dashboard screenshot to the
+vision evidence adapter. Qwen-VL returns a typed observation (metric, unit,
+confidence, and review flag); NexaFlow stores the SHA-256 digest and the
+observation, never the original image. If the vision model is unavailable, the
+ledger says `qwen_status=unavailable`, emits no metric, and requires review.
+
+For warehouses with intermittent connectivity, the optional edge profile keeps
+the latest server-issued memory and decision in a small read-only cache. It
+does not claim local inference or permit external execution; a failed sync is
+visible as `stale` or `unavailable`.
+
 ## What a judge can see
 
 The root route is the **NexaFlow Live Operations Console**. It is intentionally

@@ -34,6 +34,7 @@ Alibaba OSS bucket with synthetic evidence for the public hackathon deployment.
 | Alibaba Cloud OSS | POST /operator/integrations/alibaba_oss/sync-now or worker poll | Read-only RAM AccessKey, bucket, region, prefix | Reads Markdown, text, and PDF runbooks in one private prefix; no upload, delete, or ACL change. |
 | GitHub | POST /integrations/github/pr | Webhook secret, read-only token, repository allowlist | Signed, merged pull requests from allowlisted repositories. |
 | Verified Web | POST /integrations/web/fetch | Exact HTTPS host allowlist | API-key protected explicit fetch with SSRF, redirect, MIME, timeout, and size controls. Not web search. |
+| Qwen-VL image evidence | POST /integrations/vision/evidence | `mcp:write` API key and base64 PNG/JPEG/WebP | Typed observation plus image digest only; no original-image persistence or external action. |
 
 Source events are organization-scoped immutable ledger records. Each has a
 source/external ID, URL where available, raw payload hash, excerpt, source and
@@ -103,6 +104,15 @@ one.
 A second agent calls query_cross_agent_memory with subject Acme. The response
 includes the shared note, Reality Memory ID, evidence excerpt, freshness, and
 the explicit no-external-action boundary.
+
+### Optional Qwen-VL evidence adapter
+
+An authenticated agent with `mcp:write` may send a base64 PNG, JPEG, or WebP to
+`POST /integrations/vision/evidence`. The server calls `QWEN_VISION_MODEL`,
+stores only the image SHA-256 plus the typed observation, and never persists
+the original image. The response and resulting ledger record expose
+`qwen_status=compiled` or `qwen_status=unavailable`; an unavailable model
+produces no metric and requires human review.
 
 ## Status language
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
@@ -22,6 +24,7 @@ from backend.sources.adapters import (
 )
 from backend.sources.models import SourceIngestion, SourceProvider
 from backend.sources.service import configured_connections, source_service
+from backend.sources.vision import extract_observation
 
 
 router = APIRouter(tags=["sources"])
@@ -46,6 +49,15 @@ class VerifiedWebRequest(BaseModel):
     url: HttpUrl
     label: str = Field(default="Verified web evidence", max_length=120)
     memory_key: str | None = Field(default=None, max_length=160)
+
+
+class VisionEvidenceRequest(BaseModel):
+    """Base64 image request for an authenticated, read-only evidence adapter."""
+
+    image_base64: str = Field(min_length=16, max_length=6_000_000)
+    mime_type: str = Field(default="image/png", pattern=r"^image/(?:png|jpeg|webp)$")
+    label: str = Field(default="Operational dashboard screenshot", max_length=120)
+    memory_key: str | None = Field(default="nexaflow:vision:operational-metric", max_length=160)
 
 
 @router.get("/source-connections")
@@ -179,3 +191,60 @@ async def fetch_web(request: Request, body: VerifiedWebRequest) -> dict[str, Any
     )
     claimed, stored = await source_service.accept(ingestion)
     return {"accepted": claimed, "ingestion": stored.model_dump(mode="json")}
+
+
+@router.post("/integrations/vision/evidence")
+async def ingest_vision_evidence(request: Request, body: VisionEvidenceRequest) -> dict[str, Any]:
+    """Persist Qwen vision output as evidence; never persist the original image."""
+    org_id = await _require_source_write_capability(request)
+    try:
+        image = base64.b64decode(body.image_base64, validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail={"error": "INVALID_IMAGE_BASE64"}) from exc
+    try:
+        observation = await extract_observation(image, body.mime_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"error": "VISION_EVIDENCE_REJECTED", "detail": str(exc)}) from exc
+    digest = hashlib.sha256(image).hexdigest()
+    qwen_status = str(observation.get("qwen_status") or "unavailable")
+    summary = str(observation.get("summary") or "Vision extraction unavailable; no metric was asserted.")
+    claim = str(observation.get("memory_claim") or "No image-derived operational claim is available.")
+    excerpt = (
+        f"{summary} Metric: {observation.get('metric_name') or 'not detected'} "
+        f"{observation.get('metric_value') if observation.get('metric_value') is not None else 'n/a'} "
+        f"{observation.get('metric_unit') or ''}. Confidence: {observation.get('confidence', 'low')}."
+    )[:4000]
+    ingestion = SourceIngestion(
+        ingestion_id=f"vision-{digest[:24]}",
+        provider=SourceProvider.WEB,
+        org_id=org_id,
+        external_id=digest,
+        source_type="vision_observation",
+        source_name=body.label,
+        occurred_at=datetime.now(timezone.utc),
+        excerpt=excerpt,
+        raw_payload_sha256=digest,
+        raw_payload={"mime_type": body.mime_type, "image_sha256": digest, "observation": observation},
+        auth_verified=True,
+        metadata={
+            "modality": "image",
+            "vision_model": observation.get("model"),
+            "vision_status": qwen_status,
+            "vision_claim": claim,
+            "memory_subject": body.label,
+            "memory_predicate": "observes",
+            "memory_scope": "vision",
+            "memory_key": body.memory_key or "nexaflow:vision:operational-metric",
+        },
+        acl_scope=["authenticated_agent", "read_only", "image_digest_only"],
+        qwen_status=qwen_status,
+    )
+    claimed, stored = await source_service.accept(ingestion)
+    return {
+        "accepted": claimed,
+        "qwen_status": qwen_status,
+        "observation": observation,
+        "image_sha256": digest,
+        "original_image_persisted": False,
+        "ingestion": stored.model_dump(mode="json"),
+    }

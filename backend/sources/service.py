@@ -206,7 +206,21 @@ class SourceService:
             qwen_generated = False
             qwen_rationale = ""
             qwen_status = "unavailable"
-            if settings.QWEN_API_KEY:
+            # Vision evidence has already been interpreted by qwen-vl at the
+            # authenticated adapter boundary. Re-running the text compiler
+            # would discard that provenance and could turn an unavailable
+            # visual parse into an optimistic claim.
+            vision_status = str(current.metadata.get("vision_status") or "")
+            if current.metadata.get("modality") == "image":
+                qwen_status = vision_status or "unavailable"
+                qwen_generated = qwen_status == "compiled"
+                qwen_rationale = str(current.metadata.get("vision_claim") or "")
+                current = await self.repository.update_ingestion(
+                    current,
+                    stage=IngestionStage.QWEN_COMPILED,
+                    qwen_status=qwen_status,
+                )
+            elif settings.QWEN_API_KEY:
                 skill = await compiler.compile_event_to_skill(self._raw_event(current))
                 if not current.is_judge_sandbox:
                     saved = await brain_store.save_skill(skill, org_id=current.org_id)

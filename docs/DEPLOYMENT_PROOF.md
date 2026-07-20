@@ -68,12 +68,12 @@ curl -fsS https://brain.veriflowai.me/api/demo/readiness
 curl -fsS https://brain.veriflowai.me/api/integration-catalog
 ```
 
-The readiness response must show the deployed build SHA, `judge-demo-v1`, Qwen
-configuration status, and canonical fixture counts. The catalog should only
-report Slack, Drive, or GitHub as `connected` after the exact server-side
-configuration for that adapter is complete; it reports verified web and the
-REST workflow boundary separately and MCP only after authenticated HTTPS is
-enabled.
+The readiness response must show the deployed build SHA, NexaFlow scenario
+version, Qwen configuration status, and the source/decision counts for the
+configured `nexaflow-demo` organization. The catalog should only report Slack,
+Alibaba OSS, or GitHub as `connected` after the exact server-side configuration
+for that adapter is complete; it reports verified web and the REST workflow
+boundary separately and MCP only after authenticated HTTPS is enabled.
 
 To exercise MCP, use a scoped `X-Brain-Api-Key` against the canonical endpoint
 `https://brain.veriflowai.me/mcp/`. The public legacy `/mcp/sse` path should
@@ -100,7 +100,7 @@ Place redacted images in `docs/assets/` and link them below only after capture.
 | --- | --- | --- |
 | Alibaba Workbench Overview | Pending capture on deployed ECS/SAS | Add after capture |
 | Container, health, readiness, and build SHA | Pending capture on deployed ECS/SAS | Add after capture |
-| Public Decision Queue over HTTPS | Pending DNS, TLS, and browser rehearsal | Add after capture |
+| Public NexaFlow Console over HTTPS | Pending DNS, TLS, and browser rehearsal | Add after capture |
 | HTTPS/MCP integration catalog proof | Pending authenticated endpoint check | Add after capture |
 
 This document intentionally makes no claim that the DNS hostname, TLS

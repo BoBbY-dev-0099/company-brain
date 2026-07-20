@@ -23,6 +23,8 @@
       query evidence, and evaluate a workflow; invalid or cross-org keys fail.
 - [ ] A scoped MCP write/read rehearsal shows one agent writing an
       evidence-linked note and another agent reading the same provenance.
+- [ ] The optional edge profile returns cached memory with explicit
+      `fresh`, `stale`, or `unavailable` status and never permits an action.
 - [ ] Source status is called connected only after server configuration is
       complete. Otherwise the UI says setup_required.
 - [ ] Slack HMAC, GitHub signing, OSS prefix scope, memory supersession,

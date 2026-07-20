@@ -51,6 +51,7 @@ ingestion state.
 | Alibaba Cloud OSS | Read-only RAM credentials, one configured bucket/prefix, MIME allowlist, modified-time and content-hash tracking. | Does not upload, delete, change sharing, or modify an object. |
 | GitHub | Signed webhook, explicit repository allowlist, merged pull request, read-only diff fetch. | Does not merge, comment, or modify a repository. |
 | Verified Web | API-key authentication, exact host allowlist, HTTPS, safe redirects, public-IP resolution, MIME/size/time controls. | Does not search the web or act as an arbitrary outbound proxy. |
+| Qwen-VL image evidence | API-key authentication, image MIME/size allowlist, typed observation, image digest. | Does not persist the original image or infer a release action without human review. |
 
 ## Reality Memory
 
@@ -90,6 +91,24 @@ scopes the tools. The caller cannot override the organization ID.
 There is intentionally no MCP tool for deployment, refund, feature-flag
 changes, GitHub writes, OSS writes, or Slack posting. Human outcome recording
 stays in the REST/UI path.
+
+## Positioning against adjacent company-brain patterns
+
+This is a clean-room positioning comparison, not a claim that adjacent
+projects share an implementation or feature-complete product scope.
+
+| Dimension | `agno-agi/scout` | `caelstewart/company-brain` | NexaFlow |
+| --- | --- | --- | --- |
+| Memory unit | Retrieved source/context | Connected company knowledge | Versioned Reality Memory claims |
+| Time model | Current navigation context | Relationships and recall | Freshness, validity windows, supersession, and conflict review |
+| Safety decision | Not the primary boundary | Not the primary boundary | Deterministic SAG evaluates current approved memory plus live evidence |
+| Agent connection | Tools can drive a workflow | Agents can consume knowledge | Authenticated MCP with scoped read/check/workflow/write permissions |
+| Consequential action | Depends on the integrating agent | Depends on the integrating agent | Human owner confirmation; NexaFlow never deploys, posts, or mutates a provider |
+| Intermittent connectivity | Not the primary product promise | Not the primary product promise | Optional read-only edge cache with explicit stale/unavailable state |
+
+The differentiator is not another chatbot over company documents. NexaFlow
+records why a claim was trusted, when it stopped being current, and what must
+happen before an agent or release workflow proceeds.
 
 ## Storage and isolation
 

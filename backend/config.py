@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     QWEN_EMBEDDING_BASE_URL: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     QWEN_COMPILER_MODEL: str = "qwen-plus"
     QWEN_AGENT_MODEL: str = "qwen-plus"
+    # Optional multimodal evidence parser.  It is used only by the
+    # authenticated vision-evidence endpoint; an unavailable model is exposed
+    # as unavailable rather than replaced with a guessed observation.
+    QWEN_VISION_MODEL: str = os.getenv("QWEN_VISION_MODEL", "qwen-vl-plus")
+    QWEN_VISION_MAX_IMAGE_BYTES: int = int(os.getenv("QWEN_VISION_MAX_IMAGE_BYTES", "4000000"))
     QWEN_EMBEDDING_MODEL: str = "text-embedding-v3"
     # Explicit context cache on the compiler's frozen system prefix (>1024 tokens).
     QWEN_ENABLE_EXPLICIT_CACHE: bool = True

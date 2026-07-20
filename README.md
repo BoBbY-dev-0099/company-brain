@@ -19,6 +19,9 @@ flowchart LR
   R --> H["Engineering owner\nhuman-required action"]
 ```
 
+For the clean-room positioning against adjacent company-brain patterns, see
+the [architecture comparison](docs/ARCHITECTURE.md#positioning-against-adjacent-company-brain-patterns).
+
 The root route is the **NexaFlow Live Operations Console**. It is intentionally
 empty until the real test company sends evidence; it has no synthetic fallback,
 no browser-provided organization ID, and no fake green verdict.
@@ -41,6 +44,10 @@ no browser-provided organization ID, and no fake green verdict.
 - Authenticated Streamable HTTP MCP for read/audit proof. MCP does not deploy,
   change GitHub or OSS, or post to Slack. Human confirmation remains outside
   MCP.
+- Optional authenticated Qwen-VL evidence intake stores a typed observation and
+  image digest only; unavailable vision is explicit and review-required.
+- Optional edge profile serves a stale-aware, read-only cache for intermittent
+  connectivity without local action execution.
 
 This is a selected-workspace local rehearsal, not a connector marketplace,
 self-service OAuth product, autonomous executor, or generic workflow builder.
