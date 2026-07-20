@@ -4,14 +4,23 @@
 
 **Qwen Cloud Hackathon 2026 | MemoryAgent track**
 
-Company Brain is the governed memory checkpoint between a company's live
-systems and its consequential actions. It receives what changed in Slack,
-Alibaba Cloud OSS, and GitHub; asks Qwen to turn that evidence into
-source-linked operational memory; and applies a deterministic safety check
-before a release workflow or agent can proceed.
+### The 30-second story
 
-It does not replace a company's agents or systems. It gives them a current,
-explainable memory checkpoint before they act.
+A release looked safe at `32 MiB`. Then a merged GitHub pull request lowered
+the worker to `8 MiB`, the Alibaba OSS runbook still required `24 MiB`, and
+Slack reported that the workers were already running out of memory. An agent
+that saw only the latest code change could still promote the release.
+
+Company Brain correlates those three signals, asks Qwen to compile the changed
+reality into source-linked memory, and stops the consequential action before it
+reaches production.
+
+**Company Brain is the governed memory checkpoint between a company's live
+systems and its consequential actions.** It does not replace a company's
+agents or systems. It gives them current, explainable memory before they act.
+
+**Try the judge route:** [brain.veriflowai.me](https://brain.veriflowai.me/)
+No login is required when the scheduled ECS demo window is active.
 
 ---
 
@@ -39,6 +48,25 @@ This is not just a search problem. A trustworthy system must answer:
 Most agent systems optimize for doing more automatically. Company Brain starts
 with the missing control: knowing when an agent should stop and ask for a
 human decision.
+
+### The failure mode we make visible
+
+In the NexaFlow rehearsal, each source is individually plausible:
+
+- GitHub says what the release changed: `32 MiB -> 8 MiB`;
+- the OSS runbook says what is approved: at least `24 MiB`;
+- Slack says what is happening now: a live SEV-2 OOM incident.
+
+The unsafe decision appears only when those facts are joined in time. Company
+Brain turns that join into a replayable `DecisionBrief`, instead of asking a
+human or an agent to reconstruct it from three disconnected systems.
+
+### Who it is for
+
+Company Brain is for SREs, release engineers, platform teams, and compliance
+owners who need automation to move quickly without trusting stale operational
+memory. It is also a safe checkpoint for agent builders who need a governed
+answer before a tool call can have an external consequence.
 
 ---
 
@@ -69,6 +97,14 @@ Named human owner and confirmation
 The browser is deliberately untrusted. It cannot choose an organization,
 submit provider credentials, inject evidence, or invent a verdict. Provider
 callbacks and the server-side OSS worker are the only source-write paths.
+
+### What makes this different
+
+| Approach | What it can miss | Company Brain's answer |
+| --- | --- | --- |
+| Vector-only retrieval | A semantically similar claim can be stale or superseded. | Every memory result carries freshness, provenance, and status. |
+| Chat history | Contradictory facts disappear into an unstructured thread. | New evidence reconciles against prior claims and preserves lineage. |
+| Autonomous action | A plausible model answer can become an irreversible tool call. | Deterministic SAG checks current reality and routes the result to a named human owner. |
 
 ---
 
@@ -133,6 +169,13 @@ incident.
 ## 4. How Qwen is used
 
 Qwen is a core part of the product, not decorative chat copy.
+
+Without Qwen, the Slack message, OSS policy, and GitHub diff remain separate
+facts that a workflow must interpret by hand. Qwen provides the bridge from
+heterogeneous evidence to a structured operational claim that both an agent
+can retrieve and a human can audit. The deterministic gate still owns the
+final safety decision, and the UI reports the real Qwen-unavailable state when
+compilation cannot run.
 
 ### Evidence-to-memory compilation
 
@@ -293,6 +336,16 @@ The same engine covers five realities:
 The proof runs are ephemeral. They cannot modify canonical memory, confidence,
 provider records, reinforcement state, or external systems.
 
+### Evaluation at a glance
+
+| Dimension | Evidence in this build |
+| --- | --- |
+| Problem value | A concrete unsafe-release class is caught before promotion: an 8 MiB merged setting conflicts with a 24 MiB policy and an open incident. |
+| Qwen use | `qwen-plus` compiles each source into provenance-linked Reality Memory; `text-embedding-v3` supports semantic recall. |
+| Engineering depth | Signed Slack and GitHub intake, read-only OSS sync, durable worker stages, temporal reconciliation, MCP, MongoDB lineage, and automated tests. |
+| Trust and safety | Deterministic SAG owns the verdict, stale or missing evidence becomes `review_required`, and all external actions remain human-approved. |
+| Presentation | One judge route shows the evidence, Qwen interpretation, safety trace, owner, and audit proof in a single decision story. |
+
 ---
 
 ## 8. Confirmation evidence
@@ -415,6 +468,12 @@ The next product layer is per-company OAuth onboarding, more source adapters,
 and carefully governed external action adapters. Human approval and the
 no-external-action boundary remain mandatory until those controls are
 independently governed.
+
+That boundary is deliberate. We scoped the submission around the hardest and
+most reusable primitive: ingest diverse evidence, preserve why it was trusted,
+reconcile what changed, and decide whether an agent or workflow should be
+allowed to proceed. More connectors and action adapters can be added without
+changing that core contract.
 
 ---
 
