@@ -3,7 +3,10 @@
 NexaFlow is a source-backed operational memory system. Governance is the final
 checkpoint, not the whole product.
 
-![NexaFlow evidence-to-decision architecture](nexaflow-architecture.svg)
+![NexaFlow Reality Layer architecture](nexaflow-reality-architecture.svg)
+
+The [standalone SVG architecture proof](nexaflow-reality-architecture.svg) is
+submission-ready for a deck or judge walkthrough.
 
 ~~~mermaid
 flowchart LR

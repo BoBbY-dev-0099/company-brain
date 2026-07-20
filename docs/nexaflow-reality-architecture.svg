@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">NexaFlow Reality Layer architecture</title>
+  <desc id="desc">Signed Slack incidents, read-only Alibaba Cloud OSS runbooks, GitHub merged pull requests, verified web evidence, and optional Qwen vision observations enter an immutable evidence ledger. Qwen compiles versioned Reality Memory with provenance and temporal supersession. A deterministic safety gate serves REST and authenticated MCP callers, while a human owner remains required before any external action.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbfaf7"/><stop offset="1" stop-color="#f0f5fb"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#173b76"/><stop offset="1" stop-color="#2866b2"/></linearGradient>
+    <linearGradient id="memory" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9f2ff"/><stop offset="1" stop-color="#f7fbff"/></linearGradient>
+    <linearGradient id="safe" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eaf8f0"/><stop offset="1" stop-color="#f8fcf9"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1a3151" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#6684ad"/></marker>
+    <style>
+      .eyebrow { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #3265ad; letter-spacing: 2px; }
+      .title { font: 700 34px Inter, ui-sans-serif, system-ui, sans-serif; fill: #142234; letter-spacing: -.8px; }
+      .subtitle { font: 400 16px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5d6b7b; }
+      .lane { font: 700 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5f6e80; letter-spacing: 1.5px; }
+      .card-title { font: 700 19px Inter, ui-sans-serif, system-ui, sans-serif; fill: #17212b; }
+      .card-copy { font: 400 13px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536170; }
+      .small { font: 600 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #657384; letter-spacing: .6px; }
+      .tag { font: 700 10px Inter, ui-sans-serif, system-ui, sans-serif; fill: #fff; letter-spacing: .8px; }
+      .callout-title { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #173b76; }
+      .callout-copy { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536170; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="980" fill="url(#bg)"/>
+  <path d="M0 142 H1600" stroke="#dfe3e8"/>
+  <text x="64" y="56" class="eyebrow">NEXAFLOW REALITY LAYER</text>
+  <text x="64" y="98" class="title">Evidence becomes governed memory before a company acts</text>
+  <text x="64" y="126" class="subtitle">The same source-backed contract powers the console, REST workflows, authenticated MCP agents, and the optional edge read path.</text>
+
+  <text x="64" y="184" class="lane">01  REAL COMPANY SOURCES</text>
+  <text x="424" y="184" class="lane">02  EVIDENCE LEDGER</text>
+  <text x="790" y="184" class="lane">03  QWEN REALITY MEMORY</text>
+  <text x="1152" y="184" class="lane">04  SAFE DECISION GATE</text>
+
+  <g filter="url(#shadow)">
+    <rect x="64" y="210" width="286" height="92" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
+    <rect x="86" y="232" width="42" height="42" rx="12" fill="#fff0f0"/><text x="107" y="259" text-anchor="middle" font-size="22" fill="#df4b4b">#</text>
+    <text x="146" y="244" class="card-title">Slack incident</text><text x="146" y="267" class="card-copy">Signed #ops-incidents event</text><text x="146" y="287" class="small">SEV-2 OOM / pause promotion</text>
+    <rect x="64" y="324" width="286" height="92" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
+    <rect x="86" y="346" width="42" height="42" rx="12" fill="#eef5ff"/><text x="107" y="373" text-anchor="middle" font-size="19" fill="#2866b2">O</text>
+    <text x="146" y="358" class="card-title">Alibaba Cloud OSS</text><text x="146" y="381" class="card-copy">Private read-only runbook</text><text x="146" y="401" class="small">24 MiB minimum requirement</text>
+    <rect x="64" y="438" width="286" height="92" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
+    <rect x="86" y="460" width="42" height="42" rx="12" fill="#f1f3f6"/><text x="107" y="487" text-anchor="middle" font-size="20" fill="#34455c">G</text>
+    <text x="146" y="472" class="card-title">GitHub merged PR</text><text x="146" y="495" class="card-copy">Signed allowlisted change</text><text x="146" y="515" class="small">8 MiB effective configuration</text>
+    <rect x="64" y="552" width="286" height="92" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
+    <rect x="86" y="574" width="42" height="42" rx="12" fill="#f1f7ef"/><text x="107" y="601" text-anchor="middle" font-size="19" fill="#4d8c62">W</text>
+    <text x="146" y="586" class="card-title">Verified web / vision</text><text x="146" y="609" class="card-copy">Allowlisted URL or Qwen-VL</text><text x="146" y="629" class="small">Optional, typed, review-required</text>
+  </g>
+  <rect x="46" y="676" width="322" height="100" rx="18" fill="#edf3fb" stroke="#c6d5e8"/>
+  <text x="70" y="708" class="callout-title">Source adapter boundary</text><text x="70" y="733" class="callout-copy">Verify signature, scope, freshness, MIME,</text><text x="70" y="752" class="callout-copy">idempotency, and never write back to a provider.</text>
+  <path d="M350 256 C382 256 382 300 408 300" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/><path d="M350 370 H408" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/><path d="M350 484 C382 484 382 440 408 440" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/><path d="M350 598 C382 598 382 520 408 520" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)"><rect x="408" y="232" width="300" height="344" rx="22" fill="#fffdfa" stroke="#b9cbe6"/><rect x="408" y="232" width="300" height="12" rx="6" fill="url(#blue)"/>
+    <text x="438" y="286" class="card-title">Immutable evidence ledger</text><text x="438" y="312" class="card-copy">One normalized record per source event</text>
+    <text x="438" y="353" class="small">RAW PAYLOAD HASH</text><text x="438" y="373" class="card-copy">SHA-256 · redacted metadata · external ID</text>
+    <text x="438" y="414" class="small">PROVENANCE</text><text x="438" y="434" class="card-copy">URL · source time · retrieval time · ACL</text>
+    <text x="438" y="475" class="small">FRESHNESS</text><text x="438" y="495" class="card-copy">fresh · stale · unavailable · review required</text>
+    <rect x="438" y="523" width="240" height="28" rx="14" fill="#edf3fb"/><text x="558" y="542" text-anchor="middle" class="small">accepted → normalized → decision_ready</text>
+  </g>
+  <path d="M708 404 H770" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/><text x="718" y="389" class="small">Qwen compile</text>
+
+  <g filter="url(#shadow)"><rect x="770" y="232" width="304" height="344" rx="22" fill="url(#memory)" stroke="#a9c5e8"/><rect x="770" y="232" width="304" height="12" rx="6" fill="#2866b2"/>
+    <text x="800" y="286" class="card-title">Qwen Reality Memory</text><text x="800" y="312" class="card-copy">Claims, not an untraceable chat history</text>
+    <text x="800" y="353" class="small">QWEN CANDIDATE</text><text x="800" y="373" class="card-copy">Claim · rationale · confidence · source IDs</text>
+    <text x="800" y="414" class="small">TEMPORAL LINEAGE</text><text x="800" y="434" class="card-copy">validity window · active · superseded</text>
+    <text x="800" y="475" class="small">RECONCILIATION</text><text x="800" y="495" class="card-copy">conflict → review_required, never silent overwrite</text>
+    <rect x="800" y="523" width="244" height="28" rx="14" fill="#dcecff"/><text x="922" y="542" text-anchor="middle" class="small">current approved memory + fresh context</text>
+  </g>
+  <path d="M1074 404 H1132" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/><text x="1081" y="389" class="small">evaluate</text>
+
+  <g filter="url(#shadow)"><rect x="1132" y="232" width="404" height="344" rx="22" fill="#fffdfa" stroke="#c7d7c9"/><rect x="1132" y="232" width="404" height="12" rx="6" fill="#23745f"/>
+    <text x="1162" y="286" class="card-title">Deterministic safety gate</text><text x="1162" y="312" class="card-copy">SAG checks the live world against memory</text>
+    <rect x="1162" y="337" width="158" height="34" rx="17" fill="#eaf8f0"/><text x="1241" y="359" text-anchor="middle" class="tag" fill="#23745f">REST / WORKFLOW</text>
+    <rect x="1332" y="337" width="174" height="34" rx="17" fill="#eaf3ff"/><text x="1419" y="359" text-anchor="middle" class="tag" fill="#2866b2">AUTHENTICATED MCP</text>
+    <text x="1162" y="412" class="small">DECISION BRIEF</text><text x="1162" y="432" class="card-copy">facts · inference · missing evidence · SAG trace</text>
+    <text x="1162" y="473" class="small">CURRENT RELEASE EXAMPLE</text><text x="1162" y="493" class="card-copy">24 MiB runbook vs 8 MiB merged config + open SEV-2</text>
+    <rect x="1162" y="523" width="344" height="28" rx="14" fill="#fff0f0"/><text x="1334" y="542" text-anchor="middle" class="small" fill="#b33c3c">SUSPEND · engineering owner · human approval required</text>
+  </g>
+  <path d="M1334 576 V646" fill="none" stroke="#6684ad" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <g filter="url(#shadow)"><rect x="1132" y="646" width="404" height="104" rx="20" fill="url(#safe)" stroke="#b9d8c6"/><text x="1162" y="682" class="card-title">Human-confirmed outcome</text><text x="1162" y="707" class="card-copy">Record the outcome in the audit trail.</text><text x="1162" y="728" class="small">NexaFlow never deploys, posts, merges, refunds, or mutates a provider.</text></g>
+  <rect x="408" y="646" width="666" height="104" rx="20" fill="#f3f6fa" stroke="#cbd7e6"/><text x="438" y="682" class="callout-title">Optional read-only edge cache</text><text x="438" y="707" class="callout-copy">Edge agents mirror the last verified DecisionBrief for intermittent networks.</text><text x="438" y="729" class="small">fresh / stale / unavailable is explicit · external_action_permitted = false · reconnect to central before acting</text>
+
+  <rect x="64" y="836" width="1472" height="70" rx="18" fill="#173b76"/><text x="800" y="868" text-anchor="middle" class="tag" font-size="12">DEPLOYMENT SHAPE</text><text x="800" y="891" text-anchor="middle" fill="#dcecff" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="13">Alibaba ECS · nginx TLS · FastAPI API · source worker · MongoDB · Qwen health/readiness · signed callbacks</text>
+</svg>

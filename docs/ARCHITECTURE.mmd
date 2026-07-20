@@ -1,17 +1,20 @@
 flowchart LR
   subgraph Sources["Read-only source adapters"]
-    Slack["Slack\nsigned events"]
+    Slack["Slack\nsigned #ops-incidents events"]
     OSS["Alibaba Cloud OSS\nprivate runbook prefix"]
     GitHub["GitHub\nsigned merged PR"]
-    Web["Verified Web\nallowlisted HTTPS"]
+    Web["Verified Web / Qwen-VL\nallowlisted, typed evidence"]
   end
   Evidence["Immutable normalized evidence\nhash · timestamps · freshness · ACL"]
   Qwen["Qwen Reality Memory\nclaims · provenance · supersession"]
-  Gateway["REST / authenticated MCP\ndeterministic SAG"]
-  Human["Human-confirmed outcome"]
+  SAG["Deterministic SAG\nlive context + current memory"]
+  Gateway["REST + authenticated MCP\nscoped read/check/workflow tools"]
+  Human["Human-confirmed outcome\nno external action"]
+  Edge["Optional edge cache\nfresh / stale / unavailable"]
   Slack --> Evidence
   OSS --> Evidence
   GitHub --> Evidence
   Web --> Evidence
-  Evidence --> Qwen --> Gateway --> Human
+  Evidence --> Qwen --> SAG --> Gateway --> Human
   Human --> Qwen
+  SAG --> Edge

@@ -21,6 +21,7 @@ flowchart LR
 
 For the clean-room positioning against adjacent company-brain patterns, see
 the [architecture comparison](docs/ARCHITECTURE.md#positioning-against-adjacent-company-brain-patterns).
+The complete judge-facing flow is shown in the [NexaFlow Reality Layer architecture diagram](docs/nexaflow-reality-architecture.svg).
 
 The root route is the **NexaFlow Live Operations Console**. It is intentionally
 empty until the real test company sends evidence; it has no synthetic fallback,

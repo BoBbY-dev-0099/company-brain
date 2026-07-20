@@ -88,7 +88,7 @@ the system exposes that state; it never claims that a memory was compiled.
 
 ## Architecture
 
-![NexaFlow evidence-to-decision architecture](docs/nexaflow-architecture.svg)
+![NexaFlow Reality Layer architecture](docs/nexaflow-reality-architecture.svg)
 
 ~~~mermaid
 flowchart LR
@@ -405,7 +405,7 @@ adapters are the next product layer after the hackathon.
 - Repository: https://github.com/BoBbY-dev-0099/company-brain
 - Expected judge route after final ECS/TLS verification:
   https://brain.veriflowai.me/
-- Architecture: docs/ARCHITECTURE.md
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [standalone SVG](docs/nexaflow-reality-architecture.svg)
 - Setup guide: CONNECT.md
 - Deployment proof: docs/DEPLOYMENT_PROOF.md
 - Submission checklist: docs/SUBMISSION_CHECKLIST.md
