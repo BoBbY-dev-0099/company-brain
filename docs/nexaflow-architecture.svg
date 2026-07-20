@@ -1,144 +1,214 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
-  <title id="title">NexaFlow evidence to governed decision architecture</title>
-  <desc id="desc">Slack, Alibaba Cloud OSS, and GitHub feed an immutable evidence ledger. Qwen compiles Reality Memory, a deterministic SAG checks current reality, and a human owner confirms the recommended action. No external action is executed by NexaFlow.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Company Brain architecture: sources to Qwen Cloud to governed decision</title>
+  <desc id="desc">Slack, Alibaba Cloud OSS, and GitHub send verified evidence to the Company Brain FastAPI backend. The backend calls Qwen Cloud through DashScope, persists source evidence and Qwen Reality Memory in MongoDB, evaluates a deterministic safety gate, and serves an auditable DecisionBrief to the frontend and authenticated MCP or REST clients. A human confirms the recommendation and no external action is executed.</desc>
   <defs>
-    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#fbfaf7"/>
-      <stop offset="1" stop-color="#f2f5fa"/>
+      <stop offset="1" stop-color="#f0f4f8"/>
     </linearGradient>
-    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#173b76"/>
-      <stop offset="1" stop-color="#245da9"/>
-    </linearGradient>
-    <linearGradient id="memory" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="backend" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#eaf3ff"/>
-      <stop offset="1" stop-color="#f5f9ff"/>
+      <stop offset="1" stop-color="#f7fbff"/>
+    </linearGradient>
+    <linearGradient id="qwen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f1eaff"/>
+      <stop offset="1" stop-color="#fbf8ff"/>
     </linearGradient>
     <linearGradient id="safe" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#effaf3"/>
+      <stop offset="0" stop-color="#eaf8ef"/>
       <stop offset="1" stop-color="#f8fcf9"/>
     </linearGradient>
     <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#20324d" flood-opacity=".10"/>
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#22344d" flood-opacity=".12"/>
     </filter>
-    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
-      <path d="M0,0 L12,6 L0,12 z" fill="#5b79a6"/>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#527aa8"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#7960ae"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#2d7a63"/>
     </marker>
     <style>
-      .title { font: 700 32px Inter, ui-sans-serif, system-ui, sans-serif; fill: #142234; letter-spacing: -.7px; }
-      .subtitle { font: 400 16px Inter, ui-sans-serif, system-ui, sans-serif; fill: #5d6b7b; }
-      .eyebrow { font: 700 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #3265ad; letter-spacing: 1.8px; }
-      .card-title { font: 700 19px Inter, ui-sans-serif, system-ui, sans-serif; fill: #17212b; }
-      .card-copy { font: 400 13px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536170; }
-      .small { font: 600 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #657384; letter-spacing: .7px; }
-      .badge { font: 700 11px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; letter-spacing: .8px; }
-      .callout-title { font: 700 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #173b76; }
-      .callout-copy { font: 400 12px Inter, ui-sans-serif, system-ui, sans-serif; fill: #536170; }
+      .eyebrow { font: 700 11px Arial, Inter, sans-serif; fill: #2f679d; letter-spacing: 1.8px; }
+      .title { font: 700 31px Arial, Inter, sans-serif; fill: #142234; letter-spacing: -.6px; }
+      .subtitle { font: 400 15px Arial, Inter, sans-serif; fill: #5c6b7a; }
+      .lane { font: 700 12px Arial, Inter, sans-serif; fill: #52677f; letter-spacing: 1.2px; }
+      .cardTitle { font: 700 18px Arial, Inter, sans-serif; fill: #17212b; }
+      .copy { font: 400 13px Arial, Inter, sans-serif; fill: #526172; }
+      .small { font: 600 11px Arial, Inter, sans-serif; fill: #637589; letter-spacing: .5px; }
+      .label { font: 700 11px Arial, Inter, sans-serif; fill: #456d9b; letter-spacing: .4px; }
+      .whiteLabel { font: 700 11px Arial, Inter, sans-serif; fill: #ffffff; letter-spacing: .8px; }
+      .calloutTitle { font: 700 14px Arial, Inter, sans-serif; fill: #173b76; }
+      .calloutCopy { font: 400 12px Arial, Inter, sans-serif; fill: #536170; }
     </style>
   </defs>
 
-  <rect width="1600" height="900" fill="url(#canvas)"/>
-  <path d="M0 120 H1600" stroke="#dedfe3" stroke-width="1"/>
-  <text x="64" y="58" class="eyebrow">NEXAFLOW LIVE OPERATIONS CONSOLE</text>
-  <text x="64" y="98" class="title">Evidence becomes governed memory before a company acts</text>
-  <text x="64" y="126" class="subtitle">A real source event enters the ledger, Qwen explains what changed, and deterministic safety rules keep the final decision auditable.</text>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <path d="M0 132 H1600" stroke="#d9e0e7" stroke-width="1"/>
 
-  <!-- Source lane -->
-  <text x="70" y="166" class="eyebrow">01  REAL SOURCES</text>
+  <text x="64" y="49" class="eyebrow">COMPANY BRAIN | EVIDENCE TO SAFE ACTION</text>
+  <text x="64" y="91" class="title">How Qwen Cloud connects reality to a governed decision</text>
+  <text x="64" y="119" class="subtitle">The browser never calls Qwen directly. The backend receives verified evidence, compiles memory, stores lineage, and returns one auditable DecisionBrief.</text>
+
+  <!-- Lane labels -->
+  <text x="64" y="176" class="lane">01 | COMPANY SYSTEMS</text>
+  <text x="365" y="176" class="lane">02 | COMPANY BRAIN BACKEND</text>
+  <text x="1295" y="176" class="lane">03 | PEOPLE AND CLIENTS</text>
+
+  <!-- External sources -->
   <g filter="url(#shadow)">
-    <rect x="70" y="185" width="290" height="108" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
-    <rect x="90" y="207" width="42" height="42" rx="12" fill="#fff0f0"/>
-    <text x="111" y="234" text-anchor="middle" font-size="22">#</text>
-    <text x="150" y="219" class="card-title">Slack incident</text>
-    <text x="150" y="243" class="card-copy">Signed #ops-incidents event</text>
-    <text x="150" y="265" class="small">OOM / pause promotion</text>
+    <rect x="64" y="205" width="250" height="100" rx="16" fill="#fffdfa" stroke="#e0d8c4"/>
+    <rect x="82" y="225" width="38" height="38" rx="11" fill="#fff0e7"/>
+    <text x="101" y="250" text-anchor="middle" class="cardTitle" fill="#b45f36">S</text>
+    <text x="137" y="237" class="cardTitle">Slack</text>
+    <text x="137" y="260" class="copy">signed #ops-incidents event</text>
+    <text x="137" y="281" class="small">SEV-2 OOM | pause promotion</text>
 
-    <rect x="70" y="338" width="290" height="108" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
-    <rect x="90" y="360" width="42" height="42" rx="12" fill="#eef5ff"/>
-    <text x="111" y="387" text-anchor="middle" font-size="21" fill="#245da9">O</text>
-    <text x="150" y="372" class="card-title">Alibaba Cloud OSS</text>
-    <text x="150" y="396" class="card-copy">Private read-only runbook</text>
-    <text x="150" y="418" class="small">24 MiB minimum</text>
+    <rect x="64" y="335" width="250" height="100" rx="16" fill="#fffdfa" stroke="#d4dfef"/>
+    <rect x="82" y="355" width="38" height="38" rx="11" fill="#edf5ff"/>
+    <text x="101" y="380" text-anchor="middle" class="cardTitle" fill="#2c66a4">O</text>
+    <text x="137" y="367" class="cardTitle">Alibaba Cloud OSS</text>
+    <text x="137" y="390" class="copy">private, read-only runbook</text>
+    <text x="137" y="411" class="small">24 MiB approved minimum</text>
 
-    <rect x="70" y="491" width="290" height="108" rx="18" fill="#fffdfa" stroke="#d8e0ec"/>
-    <rect x="90" y="513" width="42" height="42" rx="12" fill="#f1f3f6"/>
-    <text x="111" y="540" text-anchor="middle" font-size="20" fill="#34455c">G</text>
-    <text x="150" y="525" class="card-title">GitHub merged PR</text>
-    <text x="150" y="549" class="card-copy">Signed allowlisted change</text>
-    <text x="150" y="571" class="small">8 MiB effective value</text>
+    <rect x="64" y="465" width="250" height="100" rx="16" fill="#fffdfa" stroke="#d8dce2"/>
+    <rect x="82" y="485" width="38" height="38" rx="11" fill="#f0f2f5"/>
+    <text x="101" y="510" text-anchor="middle" class="cardTitle" fill="#34455c">G</text>
+    <text x="137" y="497" class="cardTitle">GitHub</text>
+    <text x="137" y="520" class="copy">signed merged pull request</text>
+    <text x="137" y="541" class="small">8 MiB effective value</text>
   </g>
 
-  <!-- Evidence ledger -->
-  <path d="M360 239 C390 239 390 386 430 386" fill="none" stroke="#7190bb" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <path d="M360 392 H430" fill="none" stroke="#7190bb" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <path d="M360 545 C390 545 390 494 430 494" fill="none" stroke="#7190bb" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <text x="430" y="306" class="eyebrow">02  EVIDENCE</text>
+  <!-- Company Brain trust boundary -->
+  <rect x="345" y="195" width="890" height="550" rx="24" fill="#ffffff" fill-opacity=".42" stroke="#a9c1dd" stroke-width="2" stroke-dasharray="8 7"/>
+  <rect x="365" y="195" width="250" height="28" rx="14" fill="#eaf3ff"/>
+  <text x="490" y="214" text-anchor="middle" class="label">TRUST BOUNDARY: SERVER-SIDE ONLY</text>
+
+  <!-- Ingestion backend -->
   <g filter="url(#shadow)">
-    <rect x="430" y="330" width="260" height="220" rx="20" fill="#fffdfa" stroke="#b9cbe6"/>
-    <rect x="430" y="330" width="260" height="12" rx="6" fill="url(#navy)"/>
-    <text x="458" y="385" class="card-title">Immutable ledger</text>
-    <text x="458" y="412" class="card-copy">Normalized records retain:</text>
-    <text x="458" y="439" class="card-copy">source ID and URL</text>
-    <text x="458" y="461" class="card-copy">excerpt and raw-payload hash</text>
-    <text x="458" y="483" class="card-copy">timestamps, freshness, ACL scope</text>
-    <rect x="458" y="507" width="142" height="24" rx="12" fill="#eaf3ff"/>
-    <text x="529" y="523" text-anchor="middle" class="small" fill="#245da9">decision_ready</text>
+    <rect x="380" y="270" width="250" height="178" rx="18" fill="url(#backend)" stroke="#9db9db"/>
+    <rect x="380" y="270" width="250" height="12" rx="6" fill="#2b65a4"/>
+    <text x="408" y="318" class="cardTitle">FastAPI + source worker</text>
+    <text x="408" y="346" class="copy">1. verify signature and scope</text>
+    <text x="408" y="369" class="copy">2. normalize evidence</text>
+    <text x="408" y="392" class="copy">3. hash and persist raw event</text>
+    <rect x="408" y="410" width="155" height="24" rx="12" fill="#dcecff"/>
+    <text x="485" y="426" text-anchor="middle" class="small" fill="#2b65a4">accepted -> decision_ready</text>
   </g>
 
-  <!-- Qwen memory -->
-  <path d="M690 440 H760" fill="none" stroke="#7190bb" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <text x="760" y="306" class="eyebrow">03  QWEN MEMORY</text>
+  <!-- Qwen Cloud -->
   <g filter="url(#shadow)">
-    <rect x="760" y="330" width="270" height="220" rx="20" fill="url(#memory)" stroke="#a9c2e4"/>
-    <rect x="760" y="330" width="270" height="12" rx="6" fill="#245da9"/>
-    <text x="788" y="385" class="card-title">Reality Memory</text>
-    <text x="788" y="412" class="card-copy">Qwen compiles source-backed</text>
-    <text x="788" y="434" class="card-copy">claims with rationale and lineage.</text>
-    <text x="788" y="469" class="card-copy">Active claims stay current.</text>
-    <text x="788" y="491" class="card-copy">Conflicts become superseded or</text>
-    <text x="788" y="513" class="card-copy">review_required, never erased.</text>
+    <rect x="680" y="270" width="250" height="178" rx="18" fill="url(#qwen)" stroke="#b7a5d9"/>
+    <rect x="680" y="270" width="250" height="12" rx="6" fill="#795caf"/>
+    <text x="708" y="318" class="cardTitle">Qwen Cloud / DashScope</text>
+    <text x="708" y="346" class="copy">qwen-plus compiles memory</text>
+    <text x="708" y="369" class="copy">text-embedding-v3 recalls context</text>
+    <text x="708" y="392" class="copy">returns claim + rationale</text>
+    <rect x="708" y="410" width="154" height="24" rx="12" fill="#eee5ff"/>
+    <text x="785" y="426" text-anchor="middle" class="small" fill="#795caf">backend API call only</text>
   </g>
 
-  <!-- Decision gateway -->
-  <path d="M1030 440 H1100" fill="none" stroke="#7190bb" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <text x="1100" y="306" class="eyebrow">04  SAFETY GATE</text>
+  <!-- Persistence -->
   <g filter="url(#shadow)">
-    <rect x="1100" y="330" width="260" height="220" rx="20" fill="#fff8f7" stroke="#e3b8b6"/>
-    <rect x="1100" y="330" width="260" height="12" rx="6" fill="#b94743"/>
-    <text x="1128" y="385" class="card-title">SAG + MCP / REST</text>
-    <text x="1128" y="412" class="card-copy">Deterministic predicates check</text>
-    <text x="1128" y="434" class="card-copy">current memory and live context.</text>
-    <rect x="1128" y="465" width="132" height="31" rx="15" fill="#b94743"/>
-    <text x="1194" y="485" text-anchor="middle" class="badge">SUSPENDED</text>
-    <text x="1128" y="521" class="small">24 MiB required / 8 MiB merged</text>
+    <rect x="980" y="270" width="220" height="178" rx="18" fill="#fffdfa" stroke="#c7d1dd"/>
+    <rect x="980" y="270" width="220" height="12" rx="6" fill="#596c83"/>
+    <text x="1008" y="318" class="cardTitle">MongoDB</text>
+    <text x="1008" y="346" class="copy">evidence ledger</text>
+    <text x="1008" y="369" class="copy">Reality Memory lineage</text>
+    <text x="1008" y="392" class="copy">audit and workflow runs</text>
+    <rect x="1008" y="410" width="138" height="24" rx="12" fill="#edf0f4"/>
+    <text x="1077" y="426" text-anchor="middle" class="small" fill="#596c83">source IDs retained</text>
   </g>
 
-  <!-- Human boundary -->
-  <path d="M1360 440 H1400" fill="none" stroke="#7190bb" stroke-width="2.5" marker-end="url(#arrow)"/>
-  <text x="1400" y="306" class="eyebrow">05  HUMAN</text>
+  <!-- Flow arrows top -->
+  <path d="M314 255 C340 255 340 320 380 320" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="380,320 369,314 369,326" fill="#527aa8"/>
+  <path d="M314 385 C344 385 344 405 380 405" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="380,405 369,399 369,411" fill="#527aa8"/>
+  <path d="M314 515 C344 515 344 430 380 430" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="380,430 369,424 369,436" fill="#527aa8"/>
+  <text x="322" y="242" class="label">signed evidence</text>
+
+  <path d="M630 340 H680" fill="none" stroke="#795caf" stroke-width="3"/>
+  <polygon points="680,340 669,334 669,346" fill="#795caf"/>
+  <text x="638" y="326" class="label" fill="#795caf">normalized evidence</text>
+  <path d="M680 405 H630" fill="none" stroke="#795caf" stroke-width="3"/>
+  <polygon points="630,405 641,399 641,411" fill="#795caf"/>
+  <text x="635" y="423" class="label" fill="#795caf">claim + rationale</text>
+  <path d="M930 340 H980" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="980,340 969,334 969,346" fill="#527aa8"/>
+  <text x="942" y="326" class="label">persist output</text>
+  <path d="M505 448 V555" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="505,555 499,544 511,544" fill="#527aa8"/>
+  <text x="518" y="510" class="label">raw evidence</text>
+
+  <!-- Decision layer -->
   <g filter="url(#shadow)">
-    <rect x="1400" y="330" width="140" height="220" rx="20" fill="url(#safe)" stroke="#a8d2b8"/>
-    <rect x="1400" y="330" width="140" height="12" rx="6" fill="#27755f"/>
-    <text x="1422" y="385" class="card-title">Owner</text>
-    <text x="1422" y="412" class="card-copy">Engineering</text>
-    <text x="1422" y="432" class="card-copy">release owner</text>
-    <text x="1422" y="469" class="card-copy">Review and</text>
-    <text x="1422" y="489" class="card-copy">confirm.</text>
-    <rect x="1422" y="512" width="96" height="22" rx="11" fill="#dff3e6"/>
-    <text x="1470" y="527" text-anchor="middle" class="small" fill="#27755f">NO EXECUTION</text>
+    <rect x="505" y="555" width="300" height="145" rx="18" fill="#fff8f7" stroke="#ddb4b2"/>
+    <rect x="505" y="555" width="300" height="12" rx="6" fill="#b94743"/>
+    <text x="535" y="603" class="cardTitle">SAG decision gateway</text>
+    <text x="535" y="630" class="copy">loads current memory + live context</text>
+    <text x="535" y="652" class="copy">evaluates deterministic predicates</text>
+    <rect x="535" y="666" width="132" height="24" rx="12" fill="#f5d9d6"/>
+    <text x="601" y="682" text-anchor="middle" class="small" fill="#a43e3a">suspended</text>
   </g>
+  <path d="M1090 448 V505 C1090 535 805 535 805 555" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="805,555 799,544 811,544" fill="#527aa8"/>
+  <text x="922" y="522" class="label">current evidence + memory</text>
 
-  <!-- Trust boundary callouts -->
-  <rect x="70" y="690" width="1470" height="126" rx="22" fill="#ffffff" fill-opacity=".72" stroke="#d8e0ec"/>
-  <text x="100" y="727" class="eyebrow">THE GOVERNED BOUNDARY</text>
-  <g>
-    <rect x="100" y="750" width="400" height="40" rx="12" fill="#f7f3eb"/>
-    <text x="120" y="775" class="callout-title">Evidence stays immutable</text>
-    <text x="330" y="775" class="callout-copy">hash + freshness + scope</text>
-    <rect x="550" y="750" width="430" height="40" rx="12" fill="#eef5ff"/>
-    <text x="570" y="775" class="callout-title">Qwen explains; SAG decides</text>
-    <text x="795" y="775" class="callout-copy">model + deterministic rule</text>
-    <rect x="1030" y="750" width="480" height="40" rx="12" fill="#effaf3"/>
-    <text x="1050" y="775" class="callout-title">Human confirms; systems remain untouched</text>
+  <!-- Clients and human -->
+  <g filter="url(#shadow)">
+    <rect x="860" y="555" width="300" height="145" rx="18" fill="#f0f8f4" stroke="#a9d0bd"/>
+    <rect x="860" y="555" width="300" height="12" rx="6" fill="#2d7a63"/>
+    <text x="890" y="603" class="cardTitle">REST + authenticated MCP</text>
+    <text x="890" y="630" class="copy">returns the same DecisionBrief</text>
+    <text x="890" y="652" class="copy">to workflows and agent clients</text>
+    <rect x="890" y="666" width="188" height="24" rx="12" fill="#dff3e6"/>
+    <text x="984" y="682" text-anchor="middle" class="small" fill="#2d7a63">no action authority</text>
   </g>
+  <path d="M805 628 H860" fill="none" stroke="#2d7a63" stroke-width="3"/>
+  <polygon points="860,628 849,622 849,634" fill="#2d7a63"/>
+  <path d="M1160 628 H1295" fill="none" stroke="#2d7a63" stroke-width="3"/>
+  <polygon points="1295,628 1284,622 1284,634" fill="#2d7a63"/>
+
+  <g filter="url(#shadow)">
+    <rect x="1295" y="270" width="245" height="178" rx="18" fill="url(#safe)" stroke="#a9d0bd"/>
+    <rect x="1295" y="270" width="245" height="12" rx="6" fill="#2d7a63"/>
+    <text x="1323" y="318" class="cardTitle">Frontend console</text>
+    <text x="1323" y="346" class="copy">shows evidence and memory</text>
+    <text x="1323" y="369" class="copy">shows SAG rule and verdict</text>
+    <text x="1323" y="392" class="copy">shows owner and next action</text>
+    <rect x="1323" y="410" width="160" height="24" rx="12" fill="#dff3e6"/>
+    <text x="1403" y="426" text-anchor="middle" class="small" fill="#2d7a63">DecisionBrief only</text>
+  </g>
+  <path d="M1010 555 C1130 510 1295 490 1400 448" fill="none" stroke="#527aa8" stroke-width="3"/>
+  <polygon points="1400,448 1388,447 1393,458" fill="#527aa8"/>
+  <text x="1190" y="487" class="label">read-only API response</text>
+
+  <g filter="url(#shadow)">
+    <rect x="1295" y="555" width="245" height="145" rx="18" fill="#fffdfa" stroke="#d9d0bf"/>
+    <rect x="1295" y="555" width="245" height="12" rx="6" fill="#8b7650"/>
+    <text x="1323" y="603" class="cardTitle">Named human owner</text>
+    <text x="1323" y="630" class="copy">reviews the recommendation</text>
+    <text x="1323" y="652" class="copy">confirms outcome in the UI</text>
+    <rect x="1323" y="666" width="154" height="24" rx="12" fill="#f2eadb"/>
+    <text x="1400" y="682" text-anchor="middle" class="small" fill="#8b7650">no auto-execution</text>
+  </g>
+  <path d="M1400 448 V555" fill="none" stroke="#8b7650" stroke-width="3"/>
+  <polygon points="1400,555 1394,544 1406,544" fill="#8b7650"/>
+
+  <!-- Bottom explanation -->
+  <rect x="64" y="800" width="1476" height="130" rx="22" fill="#ffffff" fill-opacity=".74" stroke="#d9e0e7"/>
+  <text x="94" y="837" class="eyebrow">THE IMPORTANT CONNECTIONS</text>
+  <rect x="94" y="855" width="430" height="48" rx="12" fill="#f3f7fc"/>
+  <text x="114" y="876" class="calloutTitle">Qwen Cloud is backend-only</text>
+  <text x="114" y="895" class="calloutCopy">No browser credentials or direct model calls.</text>
+  <rect x="570" y="855" width="430" height="48" rx="12" fill="#f7f1ff"/>
+  <text x="590" y="876" class="calloutTitle">Qwen output is persisted</text>
+  <text x="590" y="895" class="calloutCopy">Claims retain source IDs, rationale, and freshness.</text>
+  <rect x="1046" y="855" width="464" height="48" rx="12" fill="#eff8f2"/>
+  <text x="1066" y="876" class="calloutTitle">Frontend receives a governed brief</text>
+  <text x="1066" y="895" class="calloutCopy">SAG decides deterministically; a human confirms.</text>
 </svg>

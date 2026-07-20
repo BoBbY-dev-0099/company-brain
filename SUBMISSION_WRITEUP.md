@@ -2,352 +2,431 @@
 
 ## Keep agents from acting on outdated reality.
 
-**Qwen Cloud Hackathon 2026 · MemoryAgent track**
+**Qwen Cloud Hackathon 2026 | MemoryAgent track**
 
-Company Brain is a governed memory checkpoint for agent workflows. It receives
-what changed in the systems a company already uses, asks Qwen to compile that
-evidence into source-linked operational memory, and checks whether the next
-consequential action is still safe. A named human owner confirms the outcome.
+Company Brain is the governed memory checkpoint between a company's live
+systems and its consequential actions. It receives what changed in Slack,
+Alibaba Cloud OSS, and GitHub; asks Qwen to turn that evidence into
+source-linked operational memory; and applies a deterministic safety check
+before a release workflow or agent can proceed.
 
-Company Brain does not replace a company’s agents or systems. It sits between
-them and the action boundary.
+It does not replace a company's agents or systems. It gives them a current,
+explainable memory checkpoint before they act.
 
 ---
 
-## The problem
+## 1. The problem
 
-Operational truth is distributed across tools:
+Companies already have automation. They have incident channels, runbooks,
+repositories, release workflows, and agents. The problem is that these systems
+hold different fragments of reality, and reality changes faster than an
+agent's memory.
 
-- an incident is reported in Slack;
-- the approved requirement is documented in a runbook;
-- a configuration change is merged in GitHub;
-- an agent or release workflow sees only one part of that reality.
+An incident can be opened in Slack after a workflow learned that a release was
+safe. A runbook can raise the approved threshold. A merged pull request can
+lower the actual runtime configuration. If the workflow sees only one of
+these changes, it can repeat yesterday's safe decision in today's unsafe
+conditions.
 
-This makes stale memory dangerous. A workflow can apply a previously safe
-decision even though a new incident is open, a policy has changed, or the
-current configuration no longer satisfies the approved requirement.
+This is not just a search problem. A trustworthy system must answer:
 
-This is not only a search problem. The system must answer:
-
-1. What actually arrived?
+1. What evidence actually arrived?
 2. Which claim did that evidence support?
-3. Is the claim still current?
+3. Is the claim fresh, available, and still current?
 4. What does the current evidence allow?
-5. Who is accountable for the next action?
+5. Which human owner is accountable for the next action?
+
+Most agent systems optimize for doing more automatically. Company Brain starts
+with the missing control: knowing when an agent should stop and ask for a
+human decision.
 
 ---
 
-## The solution
+## 2. The solution
 
-Company Brain makes the evidence-to-action path explicit:
+Company Brain makes the full path visible and auditable:
 
-~~~text
-Slack · Alibaba OSS · GitHub
-            ↓
-Immutable normalized evidence
-            ↓
+```text
+Slack | Alibaba Cloud OSS | GitHub
+              |
+              v
+Signed, normalized evidence
+              |
+              v
 Qwen Reality Memory
-claims · rationale · provenance · freshness · supersession
-            ↓
-Deterministic SAG safety check
-            ↓
+claims | rationale | provenance | freshness
+              |
+              v
+Deterministic safety gate
+              |
+              v
 Auditable DecisionBrief
-            ↓
+              |
+              v
 Named human owner and confirmation
-~~~
+```
 
 The browser is deliberately untrusted. It cannot choose an organization,
-submit provider credentials, inject evidence, or invent a verdict.
+submit provider credentials, inject evidence, or invent a verdict. Provider
+callbacks and the server-side OSS worker are the only source-write paths.
 
 ---
 
-## The judge-ready NexaFlow scenario
+## 3. The judge-ready NexaFlow story
 
 The demo company is **NexaFlow Logistics**. Its fulfillment release is about
 to be promoted.
 
-### Three source records
+### Three real source signals
 
-1. Slack **#ops-incidents** receives:
+**Slack - current operational reality**
 
-   > SEV-2: fulfillment workers are OOM. Pause promotion for the release until
-   > the incident is resolved.
+The `#ops-incidents` channel receives:
 
-2. A private Alibaba Cloud OSS runbook says:
+> SEV-2: fulfillment workers are OOM. Pause promotion for the release until the incident is resolved.
 
-   > Fulfillment workers require at least 24 MiB of memory before release
-   > promotion.
+The signed Slack event is verified, persisted, and compiled into a source-
+backed incident memory. Company Brain never posts back to Slack.
 
-3. A signed, merged GitHub pull request changes:
+**Alibaba Cloud OSS - approved policy**
 
-   ~~~diff
-   -NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32
-   +NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8
-   ~~~
+A private, read-only OSS runbook states:
 
-The operator opens the Company Brain console and selects **Run safety check**.
-The server chooses the newest fresh records. The returned decision is:
+> Fulfillment workers require at least 24 MiB of memory before release promotion.
 
-~~~text
+The runbook is synced through a least-privilege RAM identity. Its object key,
+content hash, modification time, and source scope remain attached to the
+memory claim. Company Brain never writes to or deletes the OSS object.
+
+**GitHub - what the release actually changed**
+
+A signed merged pull request changes the worker configuration:
+
+```diff
+-NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32
++NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8
+```
+
+The GitHub webhook verifies the signature, repository allowlist, merged state,
+and read-only diff fetch before creating the evidence record.
+
+### The resulting decision
+
+The operator opens the public console and selects **Run safety check**. The
+server selects the newest fresh, decision-ready records. The result is:
+
+```text
 Verdict: suspended
 Runbook minimum: 24 MiB
 Merged configuration: 8 MiB
 Slack incident: open
 Owner: NexaFlow engineering release owner
 Execution: human confirmation required
-~~~
+```
 
-The recommendation is real, but Company Brain does not deploy, change GitHub,
-write to OSS, post to Slack, or close the incident.
+The recommendation is real, but no external action is executed. Company Brain
+does not deploy, change GitHub, write to OSS, post to Slack, or close the
+incident.
 
 ---
 
-## What Qwen does
+## 4. How Qwen is used
 
-Qwen is a core part of the system, not decorative chat copy.
+Qwen is a core part of the product, not decorative chat copy.
 
 ### Evidence-to-memory compilation
 
-Each normalized source record is sent through the Qwen compiler. Qwen produces
-a structured Reality Memory candidate containing:
+Every normalized source record goes through the Qwen compiler. Qwen produces a
+structured Reality Memory candidate containing:
 
-- a subject, predicate, and operational claim;
-- a concise rationale;
-- linked source ingestion IDs;
+- the subject, predicate, scope, and operational claim;
+- a concise model rationale;
+- linked source ingestion IDs and source excerpts;
 - source and retrieval timestamps;
 - freshness and availability state;
-- scope, validity, and reconciliation metadata.
+- validity and reconciliation metadata.
 
-The UI exposes the actual Qwen status and generated rationale. If Qwen is
-unavailable, the UI says so and never claims that memory was compiled.
+The UI shows the returned Qwen status and rationale. If Qwen is unavailable,
+the UI says so. It never claims that memory was compiled when it was not.
 
-### Temporal reconciliation
+### Source-linked memory, not an untraceable chat history
 
-New evidence does not silently overwrite old knowledge. Conflicting or newer
-claims can mark a previous memory as **superseded** or **review required**,
-while the old record remains available for audit.
+Qwen memory remains attributable to the evidence that produced it. Older
+claims are retained for audit. New or conflicting evidence can supersede an
+older claim or mark it for review instead of silently overwriting history.
 
 ### Semantic recall
 
-Qwen **text-embedding-v3** supports source-backed semantic retrieval. Retrieved
-memory remains attributable to its evidence; it is not presented as an
-unqualified answer.
+The system uses Qwen `text-embedding-v3` for source-backed semantic retrieval.
+Related memories can be found, but every retrieved claim remains linked to its
+evidence and status. It is not presented as an unsupported answer.
 
-### Multi-case proof
-
-The **Run five-case proof** action sends five independent realities through the
-same Qwen plus SAG engine:
-
-| Case | Qwen result | Deterministic result |
-|---|---|---|
-| Memory regression + open incident | Compiled | Suspended |
-| Safe configuration + resolved incident | Compiled | Proceed with human approval |
-| Open incident + safe memory | Compiled | Suspended |
-| Missing runbook | Compiled from available evidence | Review required |
-| Stale runbook | Compiled with stale context visible | Review required |
-
-These runs are ephemeral. They cannot change canonical memory, confidence,
-reinforcement, provider records, or external systems.
+The deployed Qwen configuration uses the Alibaba DashScope International
+compatible endpoint with `qwen-plus` for compilation and
+`text-embedding-v3` for embeddings.
 
 ---
 
-## The deterministic safety gate
+## 5. Qwen explains; the safety gate decides
 
 Qwen interprets evidence. The final safety result is deterministic and
 replayable.
 
-~~~text
+```text
 configured_memory_meets_runbook == true
 AND
 linked_incident_open == false
-~~~
+```
 
-The release is suspended when either independent condition fails. If evidence
-is missing, stale, unavailable, unsigned, out of scope, or not safely
-parseable, the result is **review required**; the system never converts
-missing evidence into a safe verdict.
+In the NexaFlow case:
 
-The DecisionBrief contains:
+- `8 MiB` does not meet the `24 MiB` runbook requirement;
+- the linked severity-two incident is still open;
+- the safety gate returns `suspended`.
 
-~~~text
+If evidence is missing, stale, unavailable, unsigned, outside the configured
+scope, or not safely parseable, the result is `review_required`. Missing
+evidence is never converted into a safe verdict.
+
+Each DecisionBrief contains:
+
+```text
 facts
-inference
+Qwen inference
 missing evidence
 source excerpts and freshness
-prior memory
-SAG trace
+prior memory and lineage
+deterministic safety trace
 verdict
 owner
 recommended next action
-~~~
+human approval requirement
+```
 
 ---
 
-## Architecture
+## 6. The real integration architecture
 
-~~~mermaid
-flowchart LR
-  S["Slack · Alibaba OSS · GitHub"] --> A["Source adapters"]
-  A --> L["Immutable evidence ledger"]
-  L --> Q["Qwen Reality Memory"]
-  Q --> R["REST + authenticated Streamable HTTP MCP"]
-  R --> G["Deterministic SAG"]
-  G --> D["DecisionBrief"]
-  D --> H["Named human owner"]
-  H --> Q
-  D -. "no external execution" .-> X["Company systems remain unchanged"]
-~~~
+![Company Brain evidence-to-decision architecture](docs/nexaflow-architecture.svg)
 
-### Evidence layer
+For the uploadable judge artifact, use the matching PDF:
+[company-brain-architecture-v2.pdf](docs/assets/company-brain-architecture-v2.pdf).
 
-- **Slack:** verifies the signing secret, replay window, team, and
-  **#ops-incidents**; persists before acknowledgment; never posts.
-- **Alibaba OSS:** reads one explicitly configured private bucket/prefix with
-  least-privilege RAM credentials; never writes or deletes objects.
-- **GitHub:** verifies the webhook signature, repository allowlist, merged PR
-  state, and read-only diff fetch.
+The implementation is organized as four explicit layers:
 
-Every record carries source identity, external ID, URL, excerpt, raw-payload
-hash, timestamps, freshness, availability, ACL scope, and ingestion stage.
-Durable worker processing moves a record through:
+1. **Source adapters** accept signed Slack events, merged GitHub pull
+   requests, and read-only Alibaba OSS objects.
+2. **Evidence ledger** stores immutable normalized records with source ID,
+   external ID, URL or object key, excerpt, raw-payload hash, timestamps,
+   freshness, availability, ACL scope, and ingestion stage.
+3. **Qwen Reality Memory** compiles claims with rationale, provenance, scope,
+   validity, and supersession links.
+4. **Action gateway** serves the same DecisionBrief to the console, REST
+   workflows, and authenticated Streamable HTTP MCP clients. The named human
+   owner remains outside the action gateway.
 
-~~~text
-accepted → fetched → normalized → qwen_compiled → reconciled → decision_ready
-~~~
+Durable worker processing moves source records through:
 
-### Memory and action layer
+```text
+accepted -> fetched -> normalized -> qwen_compiled -> reconciled -> decision_ready
+```
 
-MongoDB stores the evidence ledger, Reality Memory lineage, workflow runs, and
-audit records. FastAPI exposes the same DecisionBrief to the console, REST
-clients, and authenticated MCP clients.
+MongoDB stores the evidence ledger, memory lineage, workflow runs, and audit
+records. FastAPI exposes the shared contract. Nginx terminates HTTPS on
+Alibaba ECS and forwards authenticated requests to the API and worker.
 
-MCP is an agent connection, not an executor. Its scoped tools can recall,
-inspect evidence and memory, compile an experience, or evaluate a workflow.
-No MCP tool can deploy, refund, change a feature flag, modify GitHub/OSS, or
-post to Slack.
+### MCP and workflow connection
+
+An agent can call Company Brain before a consequential action through the
+authenticated Streamable HTTP MCP endpoint:
+
+```text
+https://brain.veriflowai.me/mcp/
+```
+
+Scoped tools can recall skills, inspect memory, query evidence, check an
+intercept, evaluate a workflow, or compile an experience. No MCP tool can
+deploy, refund, modify a feature flag, change GitHub or OSS, post to Slack, or
+approve the final human outcome.
+
+Company Brain is therefore not another autonomous agent. It is the governed
+memory checkpoint that existing agents can call before they act.
 
 ---
 
-## What the judge can try
+## 7. What the judge sees
 
 ### Live Operations Console
 
-The root route shows backend-derived Slack, OSS, and GitHub tiles; the four-step
-checkpoint; one primary safety action; the real verdict; persisted evidence;
-Reality Memory lineage; and expandable audit proof.
+The root route at [brain.veriflowai.me](https://brain.veriflowai.me/) shows:
 
-The visible workflow is:
+- backend-derived Slack, Alibaba OSS, and GitHub source status;
+- the four-step evidence-to-decision checkpoint;
+- the latest persisted evidence;
+- Qwen Reality Memory lineage and rationale;
+- the returned verdict, owner, and next action;
+- a compact expandable audit proof.
 
-~~~text
-Input → Qwen output → SAG output → human boundary
-~~~
+The visible handoff is:
 
-The Qwen card shows the returned model status and rationale. The SAG card
-shows the plain-language deterministic rule before the raw trace.
+```text
+Evidence received -> Qwen memory -> safety gate -> human confirmation
+```
 
 ### Integration Studio
 
-The **/setup** route explains and configures the three read-only boundaries:
+The `/setup` route documents the three read-only source boundaries and the
+exact server-side configuration required. Provider secrets are encrypted on
+the server and are never returned to the browser.
 
-~~~text
-Source event → Qwen memory → deterministic safety check → named human owner
-~~~
+### Generalization proof
 
-Provider secrets are encrypted server-side and are never rendered back to the
-browser.
+The same engine covers five realities:
 
-### Qwen case proof
+| Reality | Qwen layer | Deterministic outcome |
+| --- | --- | --- |
+| Memory regression with open incident | Compiled source-backed memory | Suspended |
+| Safe configuration with resolved incident | Compiled source-backed memory | Proceed with human approval |
+| Open incident with safe memory | Compiled source-backed memory | Suspended |
+| Missing runbook | Available evidence remains visible | Review required |
+| Stale runbook | Stale state remains visible | Review required |
 
-Click **Run five-case proof**. Five independent realities are compiled by
-Qwen, evaluated by the same SAG rule, and displayed with the returned model
-status, summary, source count, and verdict.
-
----
-
-## Two-minute demo script
-
-### 0:00–0:15 — State the problem
-
-> The release workflow sees a merged code change, but operational truth is
-> spread across Slack and the runbook. Company Brain checks the company memory
-> before anyone acts.
-
-### 0:15–0:35 — Show the evidence
-
-Point to the three source cards: Slack’s open OOM incident, the 24 MiB OSS
-policy minimum, and GitHub’s merged 8 MiB configuration.
-
-### 0:35–1:00 — Run the real decision
-
-Click **Run safety check**. Show **suspended**, the 24 MiB versus 8 MiB
-mismatch, the open incident, the engineering owner, and human confirmation
-required.
-
-### 1:00–1:25 — Explain Qwen
-
-Open the Qwen interpretation and Reality Memory cards. Explain that Qwen
-converted the three source records into claims with provenance, while SAG
-performed the final deterministic check.
-
-### 1:25–1:45 — Prove generalization
-
-Click **Run five-case proof**. Show that the same engine produces suspension,
-human-approved continuation, and review-required outcomes for different
-realities.
-
-### 1:45–2:00 — Close on the boundary
-
-> Company Brain does not replace a company’s agents. It is the governed memory
-> checkpoint they call before consequential actions. It recommends; a human
-> confirms; nothing external is executed by the demo.
+The proof runs are ephemeral. They cannot modify canonical memory, confidence,
+provider records, reinforcement state, or external systems.
 
 ---
 
-## Verification evidence
+## 8. Confirmation evidence
 
-The local acceptance gate includes signed Slack intake, replay protection,
-idempotency, signed merged GitHub intake, read-only OSS sync, content hashing,
-freshness handling, temporal supersession, source-org isolation, authenticated
-MCP scopes, and no-external-action enforcement.
+[Download the combined evidence pack](docs/assets/judge-proof/nexaflow-evidence-pack.pdf)
 
-Recorded verification:
+### Alibaba Cloud deployment
 
-- backend tests: **95 passed, 5 skipped** without Mongo integration;
-- Mongo integration smoke tests: **5 passed**;
-- five ephemeral Qwen case compilations;
-- production frontend build: passed;
-- clean Docker API, worker, MongoDB, and nginx boot;
-- browser verification of **/** and **/setup**;
-- real release-check flow returning **suspended** with 24 MiB, 8 MiB, and an
-  open incident.
+The deployed ECS instance provides the public HTTPS service and runs the API,
+source worker, MongoDB, and nginx TLS stack.
 
-The latest local UI commit is **a0573466**. The public ECS deployment requires
-redeploying that commit before the final cloud screenshot and video; the last
-SSH deployment attempt was unavailable.
+![Alibaba ECS Workbench deployment - running instance](docs/assets/judge-proof/alibaba-ecs-workbench-running.png)
+
+For the single Alibaba deployment code-link field, use the ECS rollout script
+[`deploy/deploy.sh`](https://github.com/BoBbY-dev-0099/company-brain/blob/demo/reduce-worker-memory/deploy/deploy.sh#L2-L95).
+It provisions the application on the ECS host, starts the API, worker,
+MongoDB, and nginx TLS stack, and exposes the deployed build SHA. The
+read-only Alibaba OSS API implementation is supporting evidence in
+[`AlibabaOSSAdapter`](https://github.com/BoBbY-dev-0099/company-brain/blob/demo/reduce-worker-memory/backend/sources/adapters.py#L102-L202).
+
+### Alibaba OSS runbook
+
+The release policy is stored in the private Alibaba Cloud OSS bucket and is
+read by the backend through the read-only OSS adapter. This screenshot shows
+the exact `fulfillment-release-policy.md` object in the configured Hong Kong
+bucket.
+
+![Alibaba OSS runbook](docs/assets/judge-proof/alibaba-oss-runbook.png)
+
+### Qwen Cloud model calls
+
+Qwen Cloud request logs show successful `qwen-plus` compilation calls and
+`text-embedding-v3` retrieval calls used by the deployed workflow. The browser
+never receives the API key.
+
+![Qwen Cloud request logs](docs/assets/judge-proof/qwen-cloud-request-logs.png)
+
+### Persisted source evidence
+
+The console shows the source records received from GitHub, Alibaba OSS, and
+Slack, including freshness and Qwen compilation state.
+
+![Persisted source evidence](docs/assets/judge-proof/persisted-evidence.png)
+
+### Qwen Reality Memory
+
+The console exposes the Qwen-compiled claims and their provenance instead of
+flattening them into unexplained dashboard text.
+
+![Qwen Reality Memory proof](docs/assets/judge-proof/qwen-memory-proof.png)
 
 ---
 
-## Honest scope
+## 9. Verification
 
-Company Brain is production-shaped for the hackathon, but it does not claim a
-generic connector marketplace, self-service OAuth onboarding for every
-company, broad enterprise RBAC, arbitrary no-code workflows, autonomous
-deployment/refunds/feature-flag changes/Slack posting, guaranteed Qwen
-availability, or guaranteed competition placement.
+The current local verification includes:
 
-The next product layer is per-company OAuth onboarding, expanded source
-adapters, and carefully approved external action adapters. Human approval and
-the no-external-action boundary remain mandatory until those controls are
+- **95 backend tests passed**, with five Mongo integration tests explicitly
+  skipped unless `RUN_MONGO_TESTS=1` is enabled;
+- signed Slack challenge, replay-window, channel, and idempotency coverage;
+- signed merged GitHub webhook, repository allowlist, diff, and idempotency
+  coverage;
+- read-only OSS sync, object hashing, and source freshness coverage;
+- Qwen fallback honesty and source-provenance checks;
+- temporal memory supersession and source-org isolation checks;
+- authenticated MCP scope and cross-organization isolation checks;
+- no-external-action enforcement;
+- production frontend build and clean Docker API, worker, MongoDB, and nginx
+  boot;
+- browser verification of `/` and `/setup`;
+- real NexaFlow release-check flow returning `suspended` for the 24 MiB versus
+  8 MiB mismatch and open incident.
+
+The public deployment reports:
+
+```text
+Build SHA: 90c3688a0032f0086b223b9eb1b1d687e11ef405
+Database: connected
+Qwen: configured
+Embeddings: healthy
+HTTPS: enabled
+```
+
+---
+
+## 10. Demo flow
+
+The strongest judge route is a short problem-to-proof story:
+
+1. State the stale-memory problem.
+2. Show the Slack incident, Alibaba OSS policy, and GitHub change.
+3. Run the release safety check.
+4. Show Qwen's source-linked memory and rationale.
+5. Show the deterministic safety rule and `suspended` verdict.
+6. Show the owner and human approval boundary.
+7. Open audit proof and show the evidence lineage.
+8. Close by showing the same engine's missing, stale, safe, and incident-only
+   cases.
+
+The memorable line is:
+
+> Company Brain does not replace a company's agents. It is the governed memory
+> checkpoint they call before consequential actions.
+
+---
+
+## 11. Honest scope
+
+Company Brain is production-shaped for this hackathon, but it does not claim:
+
+- a generic connector marketplace;
+- self-service OAuth onboarding for every company;
+- arbitrary no-code workflows;
+- broad enterprise RBAC or security certification;
+- autonomous deployment, refunds, feature-flag changes, or Slack posting;
+- guaranteed Qwen availability;
+- guaranteed competition placement.
+
+The next product layer is per-company OAuth onboarding, more source adapters,
+and carefully governed external action adapters. Human approval and the
+no-external-action boundary remain mandatory until those controls are
 independently governed.
 
 ---
 
 ## Links
 
+- Public judge route: <https://brain.veriflowai.me/>
+- Integration Studio: <https://brain.veriflowai.me/setup>
 - Repository: <https://github.com/BoBbY-dev-0099/company-brain>
-- Judge route: <https://brain.veriflowai.me/>
-- Local setup route: <http://localhost/setup>
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Architecture SVG source: [docs/nexaflow-architecture.svg](docs/nexaflow-architecture.svg)
+- Uploadable architecture PDF: [docs/assets/company-brain-architecture-v2.pdf](docs/assets/company-brain-architecture-v2.pdf)
 - Deployment proof: [docs/DEPLOYMENT_PROOF.md](docs/DEPLOYMENT_PROOF.md)
 - Setup guide: [CONNECT.md](CONNECT.md)
 - Release policy: [real-workflow/runbooks/fulfillment-release-policy.md](real-workflow/runbooks/fulfillment-release-policy.md)

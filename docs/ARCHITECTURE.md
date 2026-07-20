@@ -3,10 +3,13 @@
 NexaFlow is a source-backed operational memory system. Governance is the final
 checkpoint, not the whole product.
 
-![NexaFlow Reality Layer architecture](nexaflow-reality-architecture.svg)
+![Company Brain evidence-to-decision architecture](nexaflow-architecture.svg)
 
-The [standalone SVG architecture proof](nexaflow-reality-architecture.svg) is
-submission-ready for a deck or judge walkthrough.
+The [SVG architecture source](nexaflow-architecture.svg) and
+[uploadable PDF architecture proof](assets/company-brain-architecture-v2.pdf)
+show the exact connection between source systems, the Company Brain backend,
+Qwen Cloud, MongoDB, the deterministic safety gate, the frontend, MCP/REST,
+and the human approval boundary.
 
 ~~~mermaid
 flowchart LR
