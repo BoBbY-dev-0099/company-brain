@@ -1,5 +1,7 @@
 # Company Brain
 
+Judge reproduction: [docs/JUDGE_REPRODUCTION.md](docs/JUDGE_REPRODUCTION.md)
+
 **Submission writeup:** [SUBMISSION_WRITEUP.md](SUBMISSION_WRITEUP.md) · **Technical appendix:** [HACKATHON_WRITEUP.md](HACKATHON_WRITEUP.md)
 
 Company Brain is a local-first operational memory system. In the NexaFlow demo,
