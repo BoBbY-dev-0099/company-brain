@@ -414,30 +414,34 @@ async def case_matrix(request: Request) -> dict[str, Any]:
         },
     )
     service = WorkflowService()
+    qwen_slots = asyncio.Semaphore(2)
 
     async def evaluate_case(case: dict[str, Any]) -> dict[str, Any]:
-        evidence, live_context = _matrix_case_evidence(
-            case["case_id"],
-            memory_mb=case["memory_mb"],
-            incident_open=case["incident_open"],
-            runbook_minimum_mb=case["runbook_minimum_mb"],
-            age_hours=case["age_hours"],
-        )
-        run = await service.run_workflow(
-            WorkflowRunRequest(
-                template_id=TEMPLATE_ID,
-                fixture=False,
-                evidence=evidence,
-                live_context=live_context,
-            ),
-            # The case matrix is intentionally private and non-persistent. It
-            # uses a fixed server-owned namespace only for model provenance.
-            org_id="nexaflow-case-matrix",
-            persist=False,
-            compile_memory=True,
-            is_judge_sandbox=True,
-            execution_origin="nexaflow_case_matrix",
-        )
+        # DashScope can rate-limit a burst of independent completions. Two
+        # slots keep the judge path responsive without reducing Qwen coverage.
+        async with qwen_slots:
+            evidence, live_context = _matrix_case_evidence(
+                case["case_id"],
+                memory_mb=case["memory_mb"],
+                incident_open=case["incident_open"],
+                runbook_minimum_mb=case["runbook_minimum_mb"],
+                age_hours=case["age_hours"],
+            )
+            run = await service.run_workflow(
+                WorkflowRunRequest(
+                    template_id=TEMPLATE_ID,
+                    fixture=False,
+                    evidence=evidence,
+                    live_context=live_context,
+                ),
+                # The case matrix is intentionally private and non-persistent.
+                # It uses a fixed server-owned namespace only for provenance.
+                org_id="nexaflow-case-matrix",
+                persist=False,
+                compile_memory=True,
+                is_judge_sandbox=True,
+                execution_origin="nexaflow_case_matrix",
+            )
         compiled = [
             ref
             for ref in run.decision_brief.memory_refs
