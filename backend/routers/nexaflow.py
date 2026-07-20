@@ -40,8 +40,58 @@ def _fresh_ready(records: list[SourceIngestion], provider: SourceProvider) -> So
 
 
 def _fresh_runbook(records: list[SourceIngestion]) -> SourceIngestion | None:
-    """Prefer OSS runbooks while accepting pre-OSS records during migration."""
-    return _fresh_ready(records, SourceProvider.ALIBABA_OSS) or _fresh_ready(records, SourceProvider.GOOGLE_DRIVE)
+    """Select one current runbook, refusing an ambiguous same-time update."""
+    candidates = [
+        item
+        for item in records
+        if item.provider == SourceProvider.ALIBABA_OSS
+        and item.stage == IngestionStage.DECISION_READY
+        and item.availability == "available"
+        and item.freshness == "fresh"
+    ]
+    # Accept pre-OSS records during migration only when no current OSS record
+    # exists. New NexaFlow decisions must prefer the Alibaba source.
+    if not candidates:
+        candidates = [
+            item
+            for item in records
+            if item.provider == SourceProvider.GOOGLE_DRIVE
+            and item.stage == IngestionStage.DECISION_READY
+            and item.availability == "available"
+            and item.freshness == "fresh"
+        ]
+    if not candidates:
+        return None
+    newest_occurred_at = max(item.occurred_at for item in candidates)
+    newest = [item for item in candidates if item.occurred_at == newest_occurred_at]
+    fingerprints = {item.raw_payload_sha256 or item.excerpt.strip() for item in newest}
+    if len(newest) > 1 and len(fingerprints) > 1:
+        # Equal-time conflicting policies cannot be resolved by list order.
+        return None
+    return max(newest, key=lambda item: (item.retrieved_at, item.received_at, item.ingestion_id))
+
+
+def _runbook_conflict(records: list[SourceIngestion]) -> bool:
+    """Return True when equally-timed fresh runbooks disagree."""
+    candidates = [
+        item
+        for item in records
+        if item.provider in {SourceProvider.ALIBABA_OSS, SourceProvider.GOOGLE_DRIVE}
+        and item.stage == IngestionStage.DECISION_READY
+        and item.availability == "available"
+        and item.freshness == "fresh"
+    ]
+    if not candidates:
+        return False
+    preferred_provider = (
+        SourceProvider.ALIBABA_OSS
+        if any(item.provider == SourceProvider.ALIBABA_OSS for item in candidates)
+        else SourceProvider.GOOGLE_DRIVE
+    )
+    candidates = [item for item in candidates if item.provider == preferred_provider]
+    newest_occurred_at = max(item.occurred_at for item in candidates)
+    newest = [item for item in candidates if item.occurred_at == newest_occurred_at]
+    return len(newest) > 1 and len({item.raw_payload_sha256 or item.excerpt.strip() for item in newest}) > 1
 
 
 def _runbook_minimum(excerpt: str) -> int | None:
@@ -113,6 +163,8 @@ def _evidence(item: SourceIngestion) -> EvidenceInput:
 
 
 def _pending_reason(records: list[SourceIngestion], provider: SourceProvider, label: str) -> str:
+    if provider == SourceProvider.ALIBABA_OSS and _runbook_conflict(records):
+        return f"Conflicting {label} records share the newest source timestamp; human review is required."
     candidate = next((item for item in records if item.provider == provider), None)
     if candidate is None:
         return f"No {label} evidence has been ingested yet."

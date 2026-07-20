@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import pytest
 
 from backend.workflows.models import EvidenceInput, WorkflowOutcomeRequest, WorkflowRunRequest, WorkflowRunStatus, WorkflowVerdict, workflow_now
@@ -72,3 +73,24 @@ async def test_human_outcome_resolves_without_external_execution(service: Workfl
     )
     assert updated.decision_brief.status == WorkflowRunStatus.RESOLVED
     assert updated.outcomes[-1].reinforcement_applied is False
+
+
+@pytest.mark.asyncio
+async def test_concurrent_release_checks_preserve_org_isolated_runs():
+    repository = InMemoryWorkflowRepository()
+    service = WorkflowService(repository=repository, enable_qwen_compilation=False)
+
+    async def run_once(index: int):
+        return await service.run_workflow(
+            WorkflowRunRequest(
+                template_id=TEMPLATE,
+                evidence=_evidence(),
+                live_context={"configured_memory_meets_runbook": False, "linked_incident_open": True},
+            ),
+            org_id="nexaflow-demo" if index % 2 == 0 else "other-org",
+        )
+
+    runs = await asyncio.gather(*(run_once(index) for index in range(20)))
+    assert len({run.run_id for run in runs}) == 20
+    assert len(await repository.list_runs(org_id="nexaflow-demo", limit=50)) == 10
+    assert len(await repository.list_runs(org_id="other-org", limit=50)) == 10

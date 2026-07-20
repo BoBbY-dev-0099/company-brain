@@ -82,10 +82,10 @@ scopes the tools. The caller cannot override the organization ID.
 
 | Permission | Tools |
 | --- | --- |
-| mcp:read | recall_skills, inspect_memory, query_evidence |
+| mcp:read | recall_skills, inspect_memory, query_evidence, query_cross_agent_memory |
 | mcp:check | check_intercept |
 | mcp:workflow | evaluate_workflow |
-| mcp:write | compile_experience |
+| mcp:write | compile_experience, write_operational_note |
 
 There is intentionally no MCP tool for deployment, refund, feature-flag
 changes, GitHub writes, OSS writes, or Slack posting. Human outcome recording

@@ -151,6 +151,17 @@ boundary. The UI can record a sandbox outcome for rehearsal; it cannot execute
 the external company action. Human confirmation is also the gate for any
 future reinforcement or auto-execution eligibility.
 
+### Cross-agent memory handoff
+
+The same authenticated MCP boundary can support more than one agent without
+turning the brain into an executor. A sales or incident agent can call
+write_operational_note with a subject, claim, and references to already
+ingested evidence. A customer-success or release agent can call
+query_cross_agent_memory and receive the same note, Reality Memory ID, source
+excerpts, freshness, and agent provenance. Notes are idempotent, organization
+scoped, and explicitly marked as agent-authored rather than Qwen-generated.
+Both tools preserve the human approval and no-external-action flags.
+
 ## What a judge can see
 
 The root route is the **NexaFlow Live Operations Console**. It is intentionally
@@ -262,8 +273,10 @@ Show Human confirmation required and:
 ### 2:20-3:00 - Optional engineering proof
 
 Show the authenticated Streamable HTTP MCP contract and the readiness endpoint.
-The same DecisionBrief can be consumed by an agent without granting that agent
-execution authority.
+If time permits, show the cross-agent handoff: one agent writes an
+evidence-linked Acme blocker note and a second agent queries it. The same
+DecisionBrief and provenance can be consumed by agents without granting either
+agent execution authority.
 
 ## Local rehearsal
 

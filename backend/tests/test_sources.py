@@ -15,7 +15,7 @@ from backend.config import settings
 from backend.routers import sources as source_router
 from backend.sources import adapters
 from backend.sources.service import normalise_source_timestamp
-from backend.sources.models import SourceIngestion, SourceProvider
+from backend.sources.models import ConnectionStatus, SourceConnection, SourceIngestion, SourceProvider
 from backend.sources import service as source_service_module
 from backend.sources.service import SourceService
 from backend.workflows.models import workflow_now
@@ -100,6 +100,88 @@ async def test_slack_endpoint_persists_only_verified_allowlisted_evidence(monkey
     assert ingestion.raw_payload_sha256 == hashlib.sha256(raw).hexdigest()
     assert ingestion.excerpt.startswith("SEV-2")
     assert ingestion.acl_scope == ["team:T-OPS", "channel:C-INCIDENTS", "read_only"]
+
+
+@pytest.mark.asyncio
+async def test_slack_duplicate_event_is_idempotent(monkeypatch):
+    secret = "signing-secret"
+    monkeypatch.setattr(settings, "SLACK_SIGNING_SECRET", secret)
+    monkeypatch.setattr(settings, "SLACK_ALLOWED_TEAM_ID", "T-OPS")
+    monkeypatch.setattr(settings, "SLACK_ALLOWED_CHANNEL_IDS", "C-INCIDENTS")
+    monkeypatch.setattr(settings, "SOURCE_ORG_ID", "source-org")
+    raw = json.dumps(_payload()).encode("utf-8")
+    accepted = AsyncMock(side_effect=lambda ingestion: (accepted.await_count == 1, ingestion))
+    monkeypatch.setattr(source_router.source_service, "accept", accepted)
+    timestamp = str(int(workflow_now().timestamp()))
+    signature = _signature(secret, timestamp, raw)
+
+    first = await source_router.slack_events(
+        _Request(raw),
+        x_slack_signature=signature,
+        x_slack_request_timestamp=timestamp,
+    )
+    second = await source_router.slack_events(
+        _Request(raw),
+        x_slack_signature=signature,
+        x_slack_request_timestamp=timestamp,
+    )
+
+    assert first["accepted"] is True
+    assert second["accepted"] is False
+    assert first["ingestion_id"] == second["ingestion_id"]
+
+
+@pytest.mark.asyncio
+async def test_oss_temporary_unavailability_is_explicit_503(monkeypatch):
+    monkeypatch.setattr(source_router, "_require_source_write_capability", AsyncMock(return_value="org-a"))
+    monkeypatch.setattr(
+        source_router.source_service,
+        "ingest_oss_documents",
+        AsyncMock(side_effect=RuntimeError("OSS returned 503")),
+    )
+    with pytest.raises(Exception) as exc_info:
+        await source_router.sync_alibaba_oss(_Request(b""))
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail["error"] == "ALIBABA_OSS_UNAVAILABLE"
+
+
+@pytest.mark.asyncio
+async def test_source_qwen_unavailable_is_visible_without_fabricating_compilation(monkeypatch):
+    class _Repository:
+        async def update_ingestion(self, ingestion, *, stage, error=None, **fields):
+            return ingestion.model_copy(update={"stage": stage, "error": error, **fields})
+
+        async def reconcile_memory(self, memory):
+            return memory
+
+        async def upsert_connection(self, connection):
+            return connection
+
+    connection = SourceConnection(
+        provider=SourceProvider.SLACK,
+        org_id="org-a",
+        title="Slack incidents",
+        status=ConnectionStatus.CONNECTED,
+    )
+    monkeypatch.setattr(source_service_module, "configured_connections", lambda **_: [connection])
+    monkeypatch.setattr(source_service_module.settings, "QWEN_API_KEY", "")
+    ingestion = SourceIngestion(
+        ingestion_id="qwen-unavailable-1",
+        provider=SourceProvider.SLACK,
+        org_id="org-a",
+        external_id="event-1",
+        source_type="slack_message",
+        source_name="Slack",
+        excerpt="SEV-2 incident remains open.",
+        raw_payload_sha256="a" * 64,
+        auth_verified=True,
+    )
+
+    result = await SourceService(repository=_Repository()).process(ingestion)
+
+    assert result.stage.value == "decision_ready"
+    assert result.qwen_status == "unavailable"
+    assert result.memory_id is not None
 
 
 @pytest.mark.asyncio

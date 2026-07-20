@@ -200,6 +200,49 @@ def create_mcp_server(
             org_id=principal.org_id,
         )
 
+    @server.tool()
+    async def write_operational_note(
+        note_id: str,
+        agent_id: str,
+        subject: str,
+        claim: str,
+        evidence_refs: list[str],
+        scope: str = "",
+        ctx: Context = None,
+    ) -> dict:
+        """Write an evidence-linked shared note; never execute an external action."""
+        principal = require_mcp_scope(ctx, MCP_WRITE_SCOPE)
+        try:
+            return await tools.write_operational_note(
+                note_id=note_id,
+                agent_id=agent_id,
+                subject=subject,
+                claim=claim,
+                evidence_refs=evidence_refs,
+                scope=scope,
+                org_id=principal.org_id,
+            )
+        except ValueError as exc:
+            from mcp.server.fastmcp.exceptions import ToolError
+
+            raise ToolError(str(exc)) from exc
+
+    @server.tool()
+    async def query_cross_agent_memory(
+        subject: str = "",
+        scope: str = "",
+        top_k: int = 10,
+        ctx: Context = None,
+    ) -> dict:
+        """Read shared cross-agent notes and their source-backed lineage."""
+        principal = require_mcp_scope(ctx, MCP_READ_SCOPE)
+        return await tools.query_cross_agent_memory(
+            subject=subject,
+            scope=scope,
+            top_k=top_k,
+            org_id=principal.org_id,
+        )
+
     return server
 
 

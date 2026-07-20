@@ -75,6 +75,33 @@ async def test_release_check_requires_review_when_required_source_is_missing(mon
     assert any("slack_message" in item["reason"] for item in response["run"]["decision_brief"]["missing_evidence"])
 
 
+@pytest.mark.asyncio
+async def test_release_check_requires_review_for_same_time_conflicting_runbooks(monkeypatch):
+    now = datetime.now(timezone.utc)
+    first = _source(
+        SourceProvider.ALIBABA_OSS,
+        "Fulfillment workers require at least 24 MiB of memory.",
+        "alibaba_oss_object",
+    ).model_copy(update={"occurred_at": now, "raw_payload_sha256": "a" * 64})
+    second = _source(
+        SourceProvider.ALIBABA_OSS,
+        "Fulfillment workers require at least 32 MiB of memory.",
+        "alibaba_oss_object",
+    ).model_copy(update={"occurred_at": now, "raw_payload_sha256": "b" * 64})
+    records = [
+        _source(SourceProvider.SLACK, "SEV-2 OOM: pause promotion.", "slack_message"),
+        first,
+        second,
+        _source(SourceProvider.GITHUB, "+NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32", "github_pull_request"),
+    ]
+    monkeypatch.setattr(source_service, "repository", _Repository(records))
+
+    response = await nexaflow.release_check(_Request())
+
+    assert response["run"]["decision_brief"]["verdict"] == "review_required"
+    assert response["source_selection"]["alibaba_oss"] is None
+
+
 def test_parsers_need_real_nexaflow_markers():
     assert nexaflow._runbook_minimum("Fulfillment workers require at least 24 MiB.") == 24
     assert nexaflow._github_memory_value("+NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8") == 8

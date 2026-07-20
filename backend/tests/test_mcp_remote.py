@@ -241,6 +241,53 @@ async def test_mcp_tool_scope_and_human_action_gate(monkeypatch):
     assert result["external_action_permitted"] is False
 
 
+@pytest.mark.asyncio
+async def test_cross_agent_tools_use_distinct_scopes_and_key_org(monkeypatch):
+    async def fake_write(**kwargs):
+        return {
+            "org_id_seen": kwargs["org_id"],
+            "human_approval_required": True,
+            "external_action_permitted": False,
+        }
+
+    async def fake_query(**kwargs):
+        return {"org_id_seen": kwargs["org_id"], "agent_ids": ["sales-agent"]}
+
+    monkeypatch.setattr(mcp_server_module.tools, "write_operational_note", fake_write)
+    monkeypatch.setattr(mcp_server_module.tools, "query_cross_agent_memory", fake_query)
+    server = mcp_server_module.create_mcp_server(
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    )
+    write = server._tool_manager.get_tool("write_operational_note").fn
+    query = server._tool_manager.get_tool("query_cross_agent_memory").fn
+
+    with pytest.raises(ToolError, match="mcp:write"):
+        await write(
+            note_id="note-1",
+            agent_id="sales-agent",
+            subject="Acme",
+            claim="blocker",
+            evidence_refs=["source-1"],
+            ctx=_FakeContext(_principal("org-a", mcp_auth.MCP_READ_SCOPE)),
+        )
+    written = await write(
+        note_id="note-1",
+        agent_id="sales-agent",
+        subject="Acme",
+        claim="blocker",
+        evidence_refs=["source-1"],
+        ctx=_FakeContext(_principal("org-a", mcp_auth.MCP_WRITE_SCOPE)),
+    )
+    queried = await query(
+        subject="Acme",
+        ctx=_FakeContext(_principal("org-a", mcp_auth.MCP_READ_SCOPE)),
+    )
+
+    assert written["org_id_seen"] == "org-a"
+    assert written["external_action_permitted"] is False
+    assert queried["org_id_seen"] == "org-a"
+
+
 def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
     monkeypatch.setattr(settings, "MCP_REMOTE_ENABLED", True)
     monkeypatch.setattr(settings, "MCP_REQUIRE_API_KEY", True)
@@ -300,6 +347,8 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
             "check_intercept",
             "evaluate_workflow",
             "compile_experience",
+            "write_operational_note",
+            "query_cross_agent_memory",
         }
 
         # The stray org_id is ignored; the key is the only organization source.

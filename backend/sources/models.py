@@ -116,3 +116,19 @@ class RealityMemory(BaseModel):
     expires_at: datetime | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class OperationalNote(BaseModel):
+    """An agent-authored, evidence-linked note shared across an organization."""
+
+    note_id: str
+    org_id: str
+    agent_id: str
+    subject: str
+    scope: str = ""
+    claim: str
+    evidence_refs: list[str] = Field(default_factory=list)
+    memory_id: str | None = None
+    qwen_generated: bool = False
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)

@@ -72,11 +72,37 @@ caller-supplied organization ID.
 | mcp:check | check_intercept | Run a pre-flight memory and safety check. |
 | mcp:workflow | evaluate_workflow | Return the source-aware DecisionBrief. |
 | mcp:write | compile_experience | Compile a deliberate resolved experience into durable skill memory. |
+| mcp:write | write_operational_note | Write an evidence-linked agent note into shared Reality Memory. |
+| mcp:read | query_cross_agent_memory | Read shared notes, linked evidence, and memory lineage. |
 
 MCP cannot record a human outcome or run a deployment, refund, feature-flag
 change, GitHub write, OSS write, or Slack post. OAuth 2.1 dynamic registration,
 per-company secret-vault onboarding, and self-serve provider installation are
 roadmap items, not shipped claims.
+
+### Cross-agent handoff example
+
+The writing agent must reference evidence already present in the same
+organization. The API key supplies the organization; the caller cannot choose
+one.
+
+~~~json
+{
+  "name": "write_operational_note",
+  "arguments": {
+    "note_id": "sales-acme-001",
+    "agent_id": "sales-agent",
+    "subject": "Acme fulfillment blocker",
+    "scope": "acme",
+    "claim": "Acme release concern is tied to the open fulfillment OOM incident.",
+    "evidence_refs": ["slack-ingestion-id-from-query_evidence"]
+  }
+}
+~~~
+
+A second agent calls query_cross_agent_memory with subject Acme. The response
+includes the shared note, Reality Memory ID, evidence excerpt, freshness, and
+the explicit no-external-action boundary.
 
 ## Status language
 

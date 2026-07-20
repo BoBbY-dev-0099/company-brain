@@ -21,6 +21,8 @@
 - [ ] The NexaFlow overview labels each source with its actual runtime status.
 - [ ] An authenticated MCP client can initialize, list tools, inspect memory,
       query evidence, and evaluate a workflow; invalid or cross-org keys fail.
+- [ ] A scoped MCP write/read rehearsal shows one agent writing an
+      evidence-linked note and another agent reading the same provenance.
 - [ ] Source status is called connected only after server configuration is
       complete. Otherwise the UI says setup_required.
 - [ ] Slack HMAC, GitHub signing, OSS prefix scope, memory supersession,
