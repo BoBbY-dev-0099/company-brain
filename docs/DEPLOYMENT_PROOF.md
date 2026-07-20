@@ -43,6 +43,17 @@ curl -fsS http://127.0.0.1/api/health
 curl -fsS http://127.0.0.1/api/demo/readiness
 ```
 
+After DNS and TLS are live, the repository includes a non-secret capture helper:
+
+```bash
+BASE_URL=https://brain.veriflowai.me bash deploy/capture-proof.sh
+```
+
+It stores health, readiness, integration-catalog, and HTTPS-header responses
+under a timestamped `docs/assets/` directory. It does not call MCP or write
+provider data; API-key and Workbench screenshots still require manual
+redaction.
+
 When the DNS A record resolves to the same ECS public IP, issue TLS:
 
 ```bash

@@ -243,9 +243,9 @@ If any required source is missing, stale, unavailable, unsigned, out of scope,
 or not safely parseable, the result is review_required. NexaFlow never
 converts missing evidence into a safe or suspended verdict.
 
-## Demo script (90 seconds to 3 minutes)
+## Demo script (2 minutes 30 seconds)
 
-### 0:00-0:20 - State the problem
+### 0:00-0:10 - State the problem
 
 Open the console and say:
 
@@ -253,7 +253,7 @@ Open the console and say:
 > spread across Slack and the runbook. NexaFlow checks the company memory before
 > anyone acts.
 
-### 0:20-0:55 - Show the three sources
+### 0:10-0:30 - Show the three sources
 
 Point to the server-derived source cards and the persisted evidence timeline:
 
@@ -261,7 +261,7 @@ Point to the server-derived source cards and the persisted evidence timeline:
 - OSS policy: 24 MiB minimum;
 - GitHub merged PR: 8 MiB.
 
-### 0:55-1:20 - Run the decision
+### 0:30-0:50 - Run the decision
 
 Click **Run release safety check**. The console returns:
 
@@ -270,26 +270,43 @@ Click **Run release safety check**. The console returns:
 
 Point out the 24 MiB versus 8 MiB comparison and the open incident.
 
-### 1:20-1:50 - Prove memory and Qwen
+### 0:50-1:10 - Prove memory and Qwen
 
 Open Reality Memory and Audit proof. Show the source IDs, freshness, Qwen
 status/rationale, memory lineage, and SAG trace. Explain that Qwen compiles
 source records while the final gate is deterministic and auditable.
 
-### 1:50-2:20 - Prove the safety boundary
+### 1:10-1:25 - Prove the safety boundary
 
 Show Human confirmation required and:
 
 > The recommendation is real, but no deployment, Slack post, GitHub change, or
 > OSS write was executed.
 
-### 2:20-3:00 - Optional engineering proof
+### 1:25-1:45 - Prove the agent boundary
 
-Show the authenticated Streamable HTTP MCP contract and the readiness endpoint.
-If time permits, show the cross-agent handoff: one agent writes an
-evidence-linked Acme blocker note and a second agent queries it. The same
-DecisionBrief and provenance can be consumed by agents without granting either
-agent execution authority.
+Show the authenticated Streamable HTTP MCP contract. One agent writes an
+evidence-linked Acme blocker note; a second agent queries the same provenance.
+Both agents can read the DecisionBrief, but neither can execute the release.
+
+### 1:45-2:05 - Optional multimodal proof
+
+Submit a dashboard screenshot through the authenticated Qwen-VL adapter. Show
+the typed observation, image SHA-256, confidence, and review flag. If Qwen-VL
+is unavailable, show the explicit unavailable state; do not substitute a
+guessed metric.
+
+### 2:05-2:20 - Optional edge proof
+
+Show the edge cache returning the latest server-issued memory as `fresh` (or
+`stale` when disconnected), with `human_approval_required=true` and
+`external_action_permitted=false`.
+
+### 2:20-2:30 - Deployment proof
+
+Show the deployed build SHA, Qwen health, public HTTPS console, and an
+authenticated MCP request. These four frames are captured only after ECS is
+running; local Docker is not presented as cloud proof.
 
 ## Local rehearsal
 
@@ -320,10 +337,12 @@ The verified local gate includes:
 - source-org isolation and no caller-controlled organization;
 - MCP scope and cross-organization checks;
 - no-external-action enforcement;
-- backend tests: 9 passed for the current NexaFlow/GitHub/operator path;
+- backend tests: 93 passed, 5 intentionally skipped without Mongo integration;
+- Mongo integration tests: 5 passed;
 - production frontend build: passed;
 - clean Docker API, worker, MongoDB, and nginx boot;
-- browser-facing release-check request: HTTP 200, verdict suspended.
+- edge profile smoke: `fresh` snapshot, stale fallback, and no-action boundary;
+- browser-facing local release-check request: HTTP 200, verdict suspended.
 
 ## Deployment proof
 
