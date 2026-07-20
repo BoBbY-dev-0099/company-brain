@@ -245,13 +245,13 @@ export default function NexaFlowConsole() {
               <p className="font-mono text-[10px] font-bold uppercase tracking-[.2em] text-[#16745a]">How Company Brain works</p>
               <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-[-.045em] sm:text-4xl">One memory checkpoint. Four explicit handoffs.</h2>
             </div>
-            <p className="max-w-xl text-sm leading-7 text-[#667069]">The model interprets evidence; deterministic safety rules decide; a named owner confirms. That separation is what makes the result useful inside an existing agent workflow.</p>
+            <p className="max-w-xl text-sm leading-7 text-[#667069]">Every handoff is visible: the source event that arrived, the Qwen claim it produced, the deterministic SAG predicate that ran, and the human owner who receives the recommendation.</p>
           </div>
           <div className="mt-8 grid gap-3 md:grid-cols-4">
-            <HandoffCard number="01" title="Receive" detail="Signed, scoped source events become immutable evidence with freshness and provenance." icon={<Database className="h-5 w-5" />} />
-            <HandoffCard number="02" title="Remember" detail="Qwen compiles claims and keeps the source lineage instead of flattening context into chat." icon={<Sparkles className="h-5 w-5" />} />
-            <HandoffCard number="03" title="Check" detail="SAG compares current reality with the approved policy and missing-evidence predicates." icon={<Route className="h-5 w-5" />} />
-            <HandoffCard number="04" title="Confirm" detail="The owner receives a recommendation. Company Brain never deploys, posts, or changes systems." icon={<UserRound className="h-5 w-5" />} />
+            <HandoffCard number="01" title="Receive" label="Input" detail="Slack, policy, and code events are normalized with source, timestamp, excerpt, freshness, and provenance." icon={<Database className="h-5 w-5" />} />
+            <HandoffCard number="02" title="Remember" label="Qwen output" detail="Qwen compiles a source-linked operational claim. It preserves the evidence IDs and says when compilation is unavailable." icon={<Sparkles className="h-5 w-5" />} />
+            <HandoffCard number="03" title="Check" label="SAG output" detail="SAG evaluates current reality against the approved memory and returns a deterministic verdict with its trace." icon={<Route className="h-5 w-5" />} />
+            <HandoffCard number="04" title="Confirm" label="Boundary" detail="A named owner receives the recommendation. Company Brain never deploys, posts, or changes systems." icon={<UserRound className="h-5 w-5" />} />
           </div>
         </section>
 
@@ -299,8 +299,8 @@ function CheckpointStep({ number, icon, title, detail, state }: { number: string
   return <div className={`flex items-center gap-3 rounded-xl border p-3 ${tone}`}><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${dot}`}>{state === "done" ? <CheckCircle2 className="h-4 w-4" /> : icon}</span><div className="min-w-0"><div className="flex items-center gap-2"><span className="font-mono text-[9px] font-bold text-[#8a928c]">{number}</span><p className="text-sm font-semibold">{title}</p></div><p className="truncate text-xs text-[#69736d]">{detail}</p></div></div>
 }
 
-function HandoffCard({ number, title, detail, icon }: { number: string; title: string; detail: string; icon: ReactNode }) {
-  return <article className="rounded-2xl border border-dashed border-[#c9c5bb] bg-[#fffdf8] p-4"><div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold tracking-[.16em] text-[#8b918a]">{number}</span><span className="grid h-9 w-9 place-items-center rounded-full bg-[#edf5eb] text-[#16745a]">{icon}</span></div><h3 className="mt-6 text-base font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-[#667069]">{detail}</p></article>
+function HandoffCard({ number, title, label, detail, icon }: { number: string; title: string; label: string; detail: string; icon: ReactNode }) {
+  return <article className="rounded-2xl border border-dashed border-[#c9c5bb] bg-[#fffdf8] p-4"><div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold tracking-[.16em] text-[#8b918a]">{number}</span><span className="grid h-9 w-9 place-items-center rounded-full bg-[#edf5eb] text-[#16745a]">{icon}</span></div><p className="mt-6 font-mono text-[10px] font-bold uppercase tracking-[.14em] text-[#16745a]">{label}</p><h3 className="mt-1 text-base font-semibold">{title}</h3><p className="mt-2 text-sm leading-6 text-[#667069]">{detail}</p></article>
 }
 
 function ComparisonRow({ label, before, after }: { label: string; before: string; after: string }) {
