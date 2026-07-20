@@ -17,8 +17,6 @@ from fastapi.responses import JSONResponse
 
 from backend.brain.store import get_db
 from backend.config import settings
-from backend.demo.state import is_canonical_demo_org
-from backend.demo.judge_session import COOKIE_NAME, parse_judge_session
 
 logger = logging.getLogger(__name__)
 
@@ -34,36 +32,6 @@ _PUBLIC_PATHS = {
     "/docs",
     "/openapi.json",
 }
-
-_MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-_JUDGE_SANDBOX_PATHS = {
-    "/demo/mcp-session",
-    "/workflow-runs",
-    "/workflow-sources",
-    "/source-connections",
-    "/source-events",
-    "/reality-memory",
-    "/reality-overview",
-    "/reality/replay/incident",
-    "/demo-company/run",
-}
-
-
-def _judge_session_path(path: str) -> bool:
-    return (
-        path in _JUDGE_SANDBOX_PATHS
-        or path.startswith("/workflow-runs/")
-        or path.startswith("/demo-company/nexaflow/")
-    )
-
-
-def _canonical_fixture_write_blocked(request: Request) -> bool:
-    """Keep API-key holders from accidentally changing the judge fixture."""
-    return (
-        request.method in _MUTATING_METHODS
-        and is_canonical_demo_org(str(getattr(request.state, "org_id", "")))
-    )
-
 
 async def _verify_agent_api_key(api_key: str) -> tuple[str, str]:
     """Verify an agent API key against MongoDB.
@@ -103,14 +71,6 @@ async def auth_middleware(request: Request, call_next: Any) -> Any:
             org_id, _key_id = await _verify_agent_api_key(api_key)
             request.state.org_id = org_id
             request.state.auth_type = "agent"
-            if _canonical_fixture_write_blocked(request):
-                return JSONResponse(
-                    {
-                        "error": "Canonical judge fixture is immutable",
-                        "detail": "Use the sandbox org for exploratory writes.",
-                    },
-                    status_code=409,
-                )
             return await call_next(request)
         except HTTPException:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
@@ -119,18 +79,9 @@ async def auth_middleware(request: Request, call_next: Any) -> Any:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     # Hackathon open mode — UI shares the clean demo org.
-    judge_session = parse_judge_session(request.cookies.get(COOKIE_NAME)) if _judge_session_path(path) else None
-    request.state.org_id = judge_session.org_id if judge_session else settings.DEMO_ORG_ID
-    request.state.auth_type = "judge_sandbox" if judge_session else "open"
-    request.state.user_id = "demo"
-    if _canonical_fixture_write_blocked(request):
-        return JSONResponse(
-            {
-                "error": "Canonical judge fixture is immutable",
-                "detail": "Set DEMO_ORG_ID to the sandbox for interactive use.",
-            },
-            status_code=409,
-        )
+    request.state.org_id = settings.DEMO_ORG_ID
+    request.state.auth_type = "open"
+    request.state.user_id = "nexaflow-console"
     return await call_next(request)
 
 

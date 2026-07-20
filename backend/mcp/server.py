@@ -18,8 +18,6 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import ValidationError
 
 from backend.config import settings
-from backend.demo.judge_session import is_judge_sandbox_org
-from backend.demo.state import assert_demo_org_mutable
 from backend.mcp import tools
 from backend.mcp.auth import (
     MCP_CHECK_SCOPE,
@@ -35,16 +33,6 @@ from backend.workflows.service import WorkflowService, WorkflowTemplateNotFoundE
 
 logger = logging.getLogger(__name__)
 workflow_service = WorkflowService()
-
-
-def _require_mutable_org(principal: MCPPrincipal) -> None:
-    """Keep the canonical judge fixture free of MCP-triggered writes."""
-    try:
-        assert_demo_org_mutable(principal.org_id)
-    except ValueError as exc:
-        from mcp.server.fastmcp.exceptions import ToolError
-
-        raise ToolError(str(exc)) from exc
 
 
 def _split_configured_values(value: Any) -> list[str]:
@@ -138,9 +126,6 @@ def create_mcp_server(
         requires a human confirmation outside MCP before a company action.
         """
         principal = require_mcp_scope(ctx, MCP_CHECK_SCOPE)
-        # Intercept evaluation can log/suspend/re-activate memory, so it is not
-        # permitted against the immutable canonical judge fixture.
-        _require_mutable_org(principal)
         result = await tools.check_intercept(
             agent_id=agent_id,
             decision_text=decision_text,
@@ -168,7 +153,6 @@ def create_mcp_server(
         workflow engine as the REST API, and persists no human outcome.
         """
         principal = require_mcp_scope(ctx, MCP_WORKFLOW_SCOPE)
-        _require_mutable_org(principal)
         try:
             request = WorkflowRunRequest(
                 template_id=template_id,
@@ -183,7 +167,6 @@ def create_mcp_server(
             run = await workflow_service.run_workflow(
                 request,
                 org_id=principal.org_id,
-                is_judge_sandbox=is_judge_sandbox_org(principal.org_id),
                 execution_origin="mcp",
             )
         except WorkflowTemplateNotFoundError as exc:
@@ -207,7 +190,6 @@ def create_mcp_server(
         execute any external company action.
         """
         principal = require_mcp_scope(ctx, MCP_WRITE_SCOPE)
-        _require_mutable_org(principal)
         return await tools.compile_experience(
             event_id=event_id,
             agent_id=agent_id,
@@ -215,6 +197,49 @@ def create_mcp_server(
             content=content,
             outcome=outcome,
             metadata=None,
+            org_id=principal.org_id,
+        )
+
+    @server.tool()
+    async def write_operational_note(
+        note_id: str,
+        agent_id: str,
+        subject: str,
+        claim: str,
+        evidence_refs: list[str],
+        scope: str = "",
+        ctx: Context = None,
+    ) -> dict:
+        """Write an evidence-linked shared note; never execute an external action."""
+        principal = require_mcp_scope(ctx, MCP_WRITE_SCOPE)
+        try:
+            return await tools.write_operational_note(
+                note_id=note_id,
+                agent_id=agent_id,
+                subject=subject,
+                claim=claim,
+                evidence_refs=evidence_refs,
+                scope=scope,
+                org_id=principal.org_id,
+            )
+        except ValueError as exc:
+            from mcp.server.fastmcp.exceptions import ToolError
+
+            raise ToolError(str(exc)) from exc
+
+    @server.tool()
+    async def query_cross_agent_memory(
+        subject: str = "",
+        scope: str = "",
+        top_k: int = 10,
+        ctx: Context = None,
+    ) -> dict:
+        """Read shared cross-agent notes and their source-backed lineage."""
+        principal = require_mcp_scope(ctx, MCP_READ_SCOPE)
+        return await tools.query_cross_agent_memory(
+            subject=subject,
+            scope=scope,
+            top_k=top_k,
             org_id=principal.org_id,
         )
 

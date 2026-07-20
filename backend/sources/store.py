@@ -15,6 +15,7 @@ from backend.sources.models import (
     IngestionStage,
     RealityMemory,
     RealityMemoryStatus,
+    OperationalNote,
     SourceConnection,
     SourceIngestion,
 )
@@ -56,6 +57,15 @@ class SourceRepository:
         )
         await db.reality_memories.create_index([("claim", TEXT), ("subject", TEXT)])
         await db.reality_memories.create_index("expires_at", expireAfterSeconds=0)
+        await db.operational_notes.create_index(
+            [("org_id", ASCENDING), ("note_id", ASCENDING)],
+            unique=True,
+            name="unique_operational_note",
+        )
+        await db.operational_notes.create_index(
+            [("org_id", ASCENDING), ("updated_at", DESCENDING)],
+            name="operational_note_recency",
+        )
         self._indexes_ready = True
 
     async def claim(self, ingestion: SourceIngestion) -> tuple[bool, SourceIngestion]:
@@ -111,6 +121,74 @@ class SourceRepository:
         output: list[SourceIngestion] = []
         async for doc in cursor:
             output.append(SourceIngestion.model_validate(_clean(doc)))
+        return output
+
+    async def get_operational_note(self, org_id: str, note_id: str) -> OperationalNote | None:
+        await self._ensure_indexes()
+        doc = await brain_store.get_db().operational_notes.find_one(
+            {"org_id": org_id, "note_id": note_id}
+        )
+        clean = _clean(doc)
+        return OperationalNote.model_validate(clean) if clean else None
+
+    async def save_operational_note(self, note: OperationalNote) -> OperationalNote:
+        """Persist an idempotent note without allowing cross-org replacement."""
+        await self._ensure_indexes()
+        existing = await self.get_operational_note(note.org_id, note.note_id)
+        if existing is not None:
+            if (
+                existing.agent_id != note.agent_id
+                or existing.subject != note.subject
+                or existing.scope != note.scope
+                or existing.claim != note.claim
+                or existing.evidence_refs != note.evidence_refs
+            ):
+                raise ValueError("Operational note ID already exists with different content.")
+            return existing
+        try:
+            await brain_store.get_db().operational_notes.insert_one(note.model_dump(mode="python"))
+        except DuplicateKeyError:
+            # Two agents may publish the same id concurrently. Re-read the
+            # winner and apply the same content-conflict guard as the fast path.
+            existing = await self.get_operational_note(note.org_id, note.note_id)
+            if existing is None:
+                raise RuntimeError("Operational note claim conflicted without a stored note")
+            if (
+                existing.agent_id != note.agent_id
+                or existing.subject != note.subject
+                or existing.scope != note.scope
+                or existing.claim != note.claim
+                or existing.evidence_refs != note.evidence_refs
+            ):
+                raise ValueError("Operational note ID already exists with different content.")
+            return existing
+        return note
+
+    async def list_operational_notes(
+        self,
+        org_id: str,
+        *,
+        subject: str | None = None,
+        scope: str | None = None,
+        limit: int = 20,
+    ) -> list[OperationalNote]:
+        await self._ensure_indexes()
+        query: dict[str, Any] = {"org_id": org_id}
+        if subject and subject.strip():
+            query["$or"] = [
+                {"subject": {"$regex": re.escape(subject.strip()), "$options": "i"}},
+                {"claim": {"$regex": re.escape(subject.strip()), "$options": "i"}},
+            ]
+        if scope and scope.strip():
+            query["scope"] = scope.strip()
+        cursor = (
+            brain_store.get_db().operational_notes.find(query)
+            .sort("updated_at", DESCENDING)
+            .limit(max(1, min(limit, 100)))
+        )
+        output: list[OperationalNote] = []
+        async for doc in cursor:
+            output.append(OperationalNote.model_validate(_clean(doc)))
         return output
 
     async def pending(self, limit: int = 20) -> list[SourceIngestion]:

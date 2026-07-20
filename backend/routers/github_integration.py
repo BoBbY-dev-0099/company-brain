@@ -15,7 +15,6 @@ from backend.brain import store
 from backend.config import settings
 from backend.core import compiler, propagator
 from backend.core.schema import RawEvent
-from backend.demo.state import assert_demo_org_mutable
 from backend.services import rsa_audit
 
 logger = logging.getLogger(__name__)
@@ -92,59 +91,6 @@ async def _mark_failed(event: RawEvent, org_id: str, status: str, exc: Exception
             event.event_id,
             update_exc,
         )
-
-
-async def _create_release_safety_workflow(
-    event: RawEvent,
-    org_id: str,
-    saved_skill: Any,
-) -> tuple[str, str]:
-    """Send a real GitHub intake through the same workflow contract as the UI.
-
-    A PR alone deliberately yields ``review_required`` unless it carries the
-    live runtime evidence required by Release Safety.  That is the safe,
-    honest behavior: a source connection must not invent telemetry.
-    """
-    from backend.workflows.models import EvidenceInput, WorkflowRunRequest
-    from backend.workflows.service import WorkflowService
-
-    metadata = event.metadata or {}
-    context_keys = (
-        "worker_memory_mb",
-        "runbook_validated",
-        "deployment_window_open",
-    )
-    live_context = {key: metadata[key] for key in context_keys if key in metadata}
-    run = await WorkflowService(enable_qwen_compilation=False).run_workflow(
-        WorkflowRunRequest(
-            template_id="release-safety",
-            fixture=False,
-            evidence=[
-                EvidenceInput(
-                    source_type="github_pull_request",
-                    source_name="GitHub",
-                    external_id=str(metadata.get("github_delivery_id") or event.event_id),
-                    url=metadata.get("html_url"),
-                    occurred_at=event.occurred_at,
-                    excerpt=event.content[:6_000],
-                    metadata={
-                        "event_id": event.event_id,
-                        "repo": metadata.get("repo"),
-                        "pr_number": metadata.get("pr_number"),
-                        "commit_sha": metadata.get("commit_sha"),
-                        "source_payload_sha256": metadata.get("source_payload_sha256"),
-                    },
-                )
-            ],
-            live_context=live_context,
-            # The intake has already compiled and durably stored this exact PR.
-            # The workflow service attaches its source-linked provenance rather
-            # than calling Qwen a second time or creating a duplicate skill.
-            compiled_skill_id=saved_skill.skill_id,
-        ),
-        org_id=org_id,
-    )
-    return run.run_id, run.decision_brief.status.value
 
 
 async def _complete_intake(
@@ -247,30 +193,6 @@ async def _complete_intake(
             detail={"error": "GITHUB_SSE_FAILED", "detail": str(exc)[:400]},
         ) from exc
 
-    if not event_doc.get("workflow_run_id"):
-        try:
-            workflow_run_id, workflow_status = await _create_release_safety_workflow(
-                event,
-                org_id,
-                saved_skill,
-            )
-            event_doc = await store.update_event_ingestion(
-                event.event_id,
-                org_id,
-                "workflow_persisted",
-                skill_compiled=saved_skill.skill_id,
-                audit_id=event_doc.get("audit_id"),
-                workflow_run_id=workflow_run_id,
-                workflow_status=workflow_status,
-            ) or event_doc
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("GitHub PR workflow persistence failed")
-            await _mark_failed(event, org_id, "workflow_failed", exc)
-            raise HTTPException(
-                status_code=500,
-                detail={"error": "GITHUB_WORKFLOW_FAILED", "detail": str(exc)[:400]},
-            ) from exc
-
     event_doc = await store.update_event_ingestion(
         event.event_id,
         org_id,
@@ -351,17 +273,9 @@ async def github_pr_webhook(
     if not _allowed_repo(repo):
         return Response(status_code=204)
 
-    # Real source adapters share the explicitly configured source org.  The
-    # public judge UI and its immutable fixture remain separate from real
-    # connector evidence.
-    org_id = getattr(request.state, "org_id", None) or settings.SOURCE_ORG_ID
-    try:
-        assert_demo_org_mutable(org_id)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={"error": "CANONICAL_DEMO_IMMUTABLE", "detail": str(exc)},
-        ) from exc
+    # Webhook evidence always belongs to the configured NexaFlow source org;
+    # callers cannot override it through an open browser request or API key.
+    org_id = settings.SOURCE_ORG_ID
 
     pr_number = pr.get("number")
     title = pr.get("title") or ""
@@ -395,7 +309,10 @@ async def github_pr_webhook(
         raise HTTPException(status_code=422, detail={"error": "GITHUB_DIFF_URL_MISSING"})
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # GitHub may redirect a pull-request diff URL from api.github.com to
+        # github.com. Follow that read-only redirect so a valid merged PR is
+        # not reported as a webhook failure.
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             diff_resp = await client.get(
                 diff_url,
                 headers={

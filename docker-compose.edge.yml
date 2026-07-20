@@ -1,0 +1,28 @@
+# Optional warehouse/field-node profile. It is a read-only cache, not a
+# second action executor. The central API remains the source of truth.
+services:
+  nexaflow-edge:
+    profiles: ["edge"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexaflow-edge-cache
+    restart: unless-stopped
+    command: ["uvicorn", "backend.edge:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+    environment:
+      EDGE_CACHE_PATH: /opt/company-brain/edge-cache/overview.json
+      CENTRAL_BASE_URL: ${CENTRAL_BASE_URL:-}
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-300}
+    volumes:
+      - nexaflow_edge_cache:/opt/company-brain/edge-cache
+    ports:
+      - "127.0.0.1:${EDGE_PORT:-8100}:8000"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  nexaflow_edge_cache:

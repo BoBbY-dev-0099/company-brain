@@ -7,6 +7,7 @@ In-process backend integrations import these functions directly to avoid transpo
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
@@ -18,6 +19,7 @@ from backend.core.schema import (
     InterceptResult,
     RawEvent,
 )
+from backend.sources.models import RealityMemory
 from backend.sources.store import get_source_repository
 
 logger = logging.getLogger(__name__)
@@ -171,6 +173,152 @@ async def query_evidence(
     }
 
 
+async def write_operational_note(
+    note_id: str,
+    agent_id: str,
+    subject: str,
+    claim: str,
+    evidence_refs: list[str],
+    scope: str = "",
+    org_id: str = "default",
+) -> dict[str, Any]:
+    """Write an evidence-linked note that another agent can safely read.
+
+    This creates a non-Qwen-generated Reality Memory claim. It is deliberately
+    separate from resolved-experience compilation and cannot execute actions.
+    Every evidence reference must belong to the API-key-resolved organization.
+    """
+    values = {
+        "note_id": note_id.strip(),
+        "agent_id": agent_id.strip(),
+        "subject": subject.strip(),
+        "claim": claim.strip(),
+        "scope": scope.strip(),
+    }
+    if not all(values[key] for key in ("note_id", "agent_id", "subject", "claim")):
+        raise ValueError("note_id, agent_id, subject, and claim are required")
+    refs = list(dict.fromkeys(str(item).strip() for item in evidence_refs if str(item).strip()))
+    if not refs:
+        raise ValueError("At least one evidence reference is required")
+    repository = get_source_repository()
+    for ref in refs:
+        record = await repository.get_ingestion_by_id(org_id, ref)
+        if record is None:
+            raise ValueError(f"Evidence reference is not available in this organization: {ref}")
+        if record.availability != "available":
+            raise ValueError(f"Evidence reference is unavailable: {ref}")
+
+    existing = await repository.get_operational_note(org_id, values["note_id"])
+    if existing is not None:
+        if (
+            existing.agent_id != values["agent_id"]
+            or existing.subject != values["subject"][:160]
+            or existing.scope != values["scope"][:240]
+            or existing.claim != values["claim"][:2000]
+            or existing.evidence_refs != refs
+        ):
+            raise ValueError("Operational note ID already exists with different content.")
+        return {
+            "note": existing.model_dump(mode="json"),
+            "memory_id": existing.memory_id,
+            "idempotent": True,
+            "human_approval_required": True,
+            "external_action_permitted": False,
+        }
+
+    claim_key = f"agent-note:{values['scope']}:{values['subject']}".strip(":").lower()
+    stable = hashlib.sha256(
+        f"{org_id}|{values['note_id']}|{values['claim']}".encode("utf-8")
+    ).hexdigest()[:24]
+    memory = await repository.reconcile_memory(
+        RealityMemory(
+            memory_id=f"memory-note-{stable}",
+            org_id=org_id,
+            claim_key=claim_key,
+            subject=values["subject"][:160],
+            predicate="agent_reports",
+            scope=values["scope"][:240],
+            claim=values["claim"][:2000],
+            source_ingestion_ids=refs,
+            source_evidence_ids=refs,
+            qwen_rationale="Agent-authored operational note; Qwen did not generate this claim.",
+            qwen_generated=False,
+        )
+    )
+    from backend.sources.models import OperationalNote
+
+    note = await repository.save_operational_note(
+        OperationalNote(
+            note_id=values["note_id"],
+            org_id=org_id,
+            agent_id=values["agent_id"],
+            subject=values["subject"][:160],
+            scope=values["scope"][:240],
+            claim=values["claim"][:2000],
+            evidence_refs=refs,
+            memory_id=memory.memory_id,
+            qwen_generated=False,
+        )
+    )
+    return {
+        "note": note.model_dump(mode="json"),
+        "memory_id": memory.memory_id,
+        "memory_status": memory.status.value,
+        "source_evidence_ids": refs,
+        "qwen_generated": False,
+        "idempotent": False,
+        "human_approval_required": True,
+        "external_action_permitted": False,
+    }
+
+
+async def query_cross_agent_memory(
+    subject: str = "",
+    scope: str = "",
+    top_k: int = 10,
+    org_id: str = "default",
+) -> dict[str, Any]:
+    """Read shared agent notes and their Reality Memory lineage."""
+    repository = get_source_repository()
+    notes = await repository.list_operational_notes(
+        org_id,
+        subject=subject,
+        scope=scope,
+        limit=top_k,
+    )
+    memories = await repository.list_memories(
+        org_id,
+        query=subject or None,
+        include_superseded=True,
+        limit=top_k,
+    )
+    evidence_ids = list(dict.fromkeys(ref for note in notes for ref in note.evidence_refs))
+    evidence = []
+    for evidence_id in evidence_ids:
+        item = await repository.get_ingestion_by_id(org_id, evidence_id)
+        if item is not None:
+            evidence.append(
+                {
+                    "ingestion_id": item.ingestion_id,
+                    "provider": item.provider.value,
+                    "source_name": item.source_name,
+                    "excerpt": item.excerpt,
+                    "freshness": item.freshness,
+                    "availability": item.availability,
+                    "raw_payload_sha256": item.raw_payload_sha256,
+                }
+            )
+    return {
+        "notes": [note.model_dump(mode="json") for note in notes],
+        "memories": [memory.model_dump(mode="json") for memory in memories],
+        "evidence": evidence,
+        "agent_ids": sorted({note.agent_id for note in notes}),
+        "org_id": org_id,
+        "human_approval_required": True,
+        "external_action_permitted": False,
+    }
+
+
 def attestation() -> dict[str, Any]:
     """Describe the current audit boundary without inventing an attestation."""
     import hashlib
@@ -200,6 +348,14 @@ def attestation() -> dict[str, Any]:
         {
             "name": "query_evidence",
             "purpose": "Inspect immutable source-event evidence summaries",
+        },
+        {
+            "name": "write_operational_note",
+            "purpose": "Write an evidence-linked note into shared Reality Memory",
+        },
+        {
+            "name": "query_cross_agent_memory",
+            "purpose": "Read shared agent notes with provenance",
         },
     ]
     measurement = hashlib.sha256(b"company-brain-build-metadata-v1").hexdigest()

@@ -14,6 +14,8 @@ from backend.core.schema import utc_now
 class SourceProvider(str, Enum):
     GITHUB = "github"
     SLACK = "slack"
+    ALIBABA_OSS = "alibaba_oss"
+    # Kept for migration of pre-OSS records; new ingestion never emits it.
     GOOGLE_DRIVE = "google_drive"
     WEB = "web"
 
@@ -112,5 +114,21 @@ class RealityMemory(BaseModel):
     superseded_by: str | None = None
     is_ephemeral: bool = False
     expires_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class OperationalNote(BaseModel):
+    """An agent-authored, evidence-linked note shared across an organization."""
+
+    note_id: str
+    org_id: str
+    agent_id: str
+    subject: str
+    scope: str = ""
+    claim: str
+    evidence_refs: list[str] = Field(default_factory=list)
+    memory_id: str | None = None
+    qwen_generated: bool = False
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

@@ -1,6 +1,6 @@
-# Alibaba Cloud deployment proof
+# NexaFlow Alibaba Cloud deployment proof
 
-This is the judge-facing deployment packet for Company Brain. Local Docker is
+This is the judge-facing deployment packet for NexaFlow. Local Docker is
 a useful validation gate, but it is not evidence of an Alibaba Cloud
 deployment. Do not mark the artifacts below complete until the exact checked
 out commit is running on ECS or SAS and the public HTTPS route has been tested.
@@ -43,6 +43,17 @@ curl -fsS http://127.0.0.1/api/health
 curl -fsS http://127.0.0.1/api/demo/readiness
 ```
 
+After DNS and TLS are live, the repository includes a non-secret capture helper:
+
+```bash
+BASE_URL=https://brain.veriflowai.me bash deploy/capture-proof.sh
+```
+
+It stores health, readiness, integration-catalog, and HTTPS-header responses
+under a timestamped `docs/assets/` directory. It does not call MCP or write
+provider data; API-key and Workbench screenshots still require manual
+redaction.
+
 When the DNS A record resolves to the same ECS public IP, issue TLS:
 
 ```bash
@@ -68,16 +79,57 @@ curl -fsS https://brain.veriflowai.me/api/demo/readiness
 curl -fsS https://brain.veriflowai.me/api/integration-catalog
 ```
 
-The readiness response must show the deployed build SHA, `judge-demo-v1`, Qwen
-configuration status, and canonical fixture counts. The catalog should only
-report Slack, Drive, or GitHub as `connected` after the exact server-side
-configuration for that adapter is complete; it reports verified web and the
-REST workflow boundary separately and MCP only after authenticated HTTPS is
-enabled.
+The readiness response must show the deployed build SHA, NexaFlow scenario
+version, Qwen configuration status, and the source/decision counts for the
+configured `nexaflow-demo` organization. The catalog should only report Slack,
+Alibaba OSS, or GitHub as `connected` after the exact server-side configuration
+for that adapter is complete; it reports verified web and the REST workflow
+boundary separately and MCP only after authenticated HTTPS is enabled.
 
 To exercise MCP, use a scoped `X-Brain-Api-Key` against the canonical endpoint
 `https://brain.veriflowai.me/mcp/`. The public legacy `/mcp/sse` path should
 return `410`; it is not a valid production connector.
+
+## Verified public run
+
+On 20 July 2026, the exact commit `89c2735baa26129ecc833316457b87bd6a20e16f`
+was deployed to the NexaFlow ECS host and verified from outside the host.
+
+- Public health: `status=ok`, MongoDB connected to `companybrain_nexaflow`,
+  Qwen configured, embeddings healthy.
+- Public overview: 3 persisted source records, 3 Reality Memory records, 19
+  workflow runs, and Slack, Alibaba OSS, and GitHub all `connected/healthy` for
+  `nexaflow-demo`.
+- Aggregate release check: `suspended`; runbook minimum `24 MiB`, merged
+  configuration `8 MiB`, linked incident `open`, owner `NexaFlow engineering
+  release owner`.
+- Safety boundary: the response explicitly states that no deployment, Slack
+  post, GitHub change, or OSS write was executed.
+- Legacy transport: `GET /mcp/sse` returns `410`.
+- Authenticated MCP: initialize, `tools/list`, `query_evidence`, and
+  `check_intercept` were exercised with a temporary scoped key; all 8 tools
+  were listed and the check returned `external_action_permitted=false`,
+  `human_approval_required=true`, and `auto_execute=false`. The temporary key
+  was revoked after the test.
+
+The captured non-secret HTTP responses for this verified build are versioned under
+[`docs/assets/deployment-proof-20260720T101644Z`](assets/deployment-proof-20260720T101644Z/):
+
+- [`health.json`](assets/deployment-proof-20260720T101644Z/health.json)
+- [`readiness.json`](assets/deployment-proof-20260720T101644Z/readiness.json)
+- [`integration-catalog.json`](assets/deployment-proof-20260720T101644Z/integration-catalog.json)
+- [`https-headers.txt`](assets/deployment-proof-20260720T101644Z/https-headers.txt)
+
+### Post-capture judge proof
+
+The proof bundle above records the earlier public build. The current judge route
+was subsequently redeployed at commit
+`eb6e2e628ba375665e247e31817c0a8b477c4cbb`. Its additional regression proof is
+the server-owned `POST /api/nexaflow/case-matrix` endpoint: five private cases
+were compiled by `qwen-plus` and returned the expected suspended,
+human-approval, and review-required outcomes. The endpoint marks every run
+ephemeral and confirms that canonical memory, confidence, and external systems
+were not changed.
 
 ## Evidence to capture
 
@@ -98,10 +150,11 @@ Place redacted images in `docs/assets/` and link them below only after capture.
 
 | Artifact | Required state | Link |
 | --- | --- | --- |
-| Alibaba Workbench Overview | Pending capture on deployed ECS/SAS | Add after capture |
-| Container, health, readiness, and build SHA | Pending capture on deployed ECS/SAS | Add after capture |
-| Public Decision Queue over HTTPS | Pending DNS, TLS, and browser rehearsal | Add after capture |
-| HTTPS/MCP integration catalog proof | Pending authenticated endpoint check | Add after capture |
+| Alibaba Workbench Overview | Pending manual redacted screenshot | Capture from the Alibaba console in `Running` state before submission |
+| Container, health, readiness, and build SHA | Captured from deployed ECS | [health](assets/deployment-proof-20260720T101644Z/health.json) · [readiness](assets/deployment-proof-20260720T101644Z/readiness.json) |
+| Public NexaFlow Console over HTTPS | Browser route verified; screenshot still requires manual capture | [live console](https://brain.veriflowai.me/) |
+| HTTPS/MCP integration catalog proof | Captured; authenticated MCP smoke verified | [catalog](assets/deployment-proof-20260720T101644Z/integration-catalog.json) · [headers](assets/deployment-proof-20260720T101644Z/https-headers.txt) |
 
-This document intentionally makes no claim that the DNS hostname, TLS
-certificate, or public deployment is live until those artifacts are attached.
+The public DNS hostname, TLS certificate, and ECS deployment are verified. The
+Workbench screenshot and short demo video remain manual submission artifacts;
+redact account identifiers, IP addresses, API keys, and provider secrets.

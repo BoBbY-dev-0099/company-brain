@@ -580,16 +580,6 @@ async def get_intercept_stats(org_id: str = "default") -> dict[str, Any]:
     }
 
 
-async def seed_demo_data(org_id: str = "default") -> dict[str, Any]:
-    """Idempotent org-scoped demo seed used by the API endpoint.
-
-    Returns a clean result dict. Callers should backfill embeddings after seed.
-    """
-    from backend.demo import seed_data
-
-    return await seed_data.seed_for_org(org_id)
-
-
 async def backfill_embeddings_for_org(org_id: str = "default") -> int:
     """Backfill embeddings for all active skills in an org that lack them."""
     from backend.core import compiler

@@ -1,7 +1,8 @@
-"""Source adapter, Reality Memory, and controlled replay HTTP surface."""
+"""Read-only source ledger plus signed/read-only connector ingress."""
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import uuid
@@ -11,11 +12,8 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, HttpUrl
 
-from backend.config import settings
 from backend.brain import store as brain_store
-from backend.demo.judge_session import is_judge_sandbox_org
-from backend.demo.integration_lab import run_northstar_lab
-from backend.demo.nexaflow_lab import run_nexaflow_scenario, scenario_catalog
+from backend.config import settings
 from backend.sources.adapters import (
     fetch_verified_web_evidence,
     redact_slack_payload,
@@ -26,6 +24,7 @@ from backend.sources.adapters import (
 )
 from backend.sources.models import SourceIngestion, SourceProvider
 from backend.sources.service import configured_connections, source_service
+from backend.sources.vision import extract_observation
 
 
 router = APIRouter(tags=["sources"])
@@ -42,10 +41,7 @@ async def _require_source_write_capability(request: Request) -> str:
     record = await brain_store.get_db()["api_keys"].find_one({"api_key": raw_key, "revoked_at": None})
     permissions = str((record or {}).get("permissions", "")).split()
     if "mcp:write" not in permissions:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="A source-sync request requires an API key with mcp:write.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A source write requires mcp:write.")
     return _org(request)
 
 
@@ -55,23 +51,27 @@ class VerifiedWebRequest(BaseModel):
     memory_key: str | None = Field(default=None, max_length=160)
 
 
+class VisionEvidenceRequest(BaseModel):
+    """Base64 image request for an authenticated, read-only evidence adapter."""
+
+    image_base64: str = Field(min_length=16, max_length=6_000_000)
+    mime_type: str = Field(default="image/png", pattern=r"^image/(?:png|jpeg|webp)$")
+    label: str = Field(default="Operational dashboard screenshot", max_length=120)
+    memory_key: str | None = Field(default="nexaflow:vision:operational-metric", max_length=160)
+
+
 @router.get("/source-connections")
 async def get_source_connections(request: Request) -> dict[str, Any]:
     org_id = _org(request)
     configured = configured_connections(org_id=org_id)
-    try:
-        stored = await source_service.repository.stored_connections(org_id)
-    except RuntimeError:
-        stored = {}
-    output = []
+    stored = await source_service.repository.stored_connections(org_id)
     for item in configured:
-        prior = stored.get(item.provider.value)
-        if prior:
-            item.last_success_at = prior.last_success_at
-            item.last_error = prior.last_error
-            item.health = prior.health
-        output.append(item.model_dump(mode="json"))
-    return {"connections": output}
+        previous = stored.get(item.provider.value)
+        if previous:
+            item.last_success_at = previous.last_success_at
+            item.last_error = previous.last_error
+            item.health = previous.health
+    return {"connections": [item.model_dump(mode="json") for item in configured]}
 
 
 @router.get("/source-events")
@@ -93,25 +93,13 @@ async def get_reality_memory(
     return {"memories": [item.model_dump(mode="json") for item in memories]}
 
 
-@router.get("/reality-overview")
-async def get_reality_overview(request: Request) -> dict[str, Any]:
-    org_id = _org(request)
-    events = await source_service.repository.list_ingestions(org_id, limit=8)
-    memories = await source_service.repository.list_memories(org_id, include_superseded=True, limit=8)
-    return {
-        "connections": (await get_source_connections(request))["connections"],
-        "events": [item.model_dump(mode="json") for item in events],
-        "memories": [item.model_dump(mode="json") for item in memories],
-        "mode": "judge_sandbox" if is_judge_sandbox_org(org_id) else "sandbox",
-    }
-
-
 @router.post("/integrations/slack/events")
 async def slack_events(
     request: Request,
     x_slack_signature: str | None = Header(default=None),
     x_slack_request_timestamp: str | None = Header(default=None),
 ) -> dict[str, Any]:
+    """Persist a verified, allowlisted event before acknowledging Slack."""
     raw = await request.body()
     if not settings.SLACK_SIGNING_SECRET.strip():
         raise HTTPException(status_code=503, detail={"error": "SLACK_NOT_CONFIGURED"})
@@ -132,17 +120,16 @@ async def slack_events(
         return {"ok": True, "accepted": False}
     event = payload.get("event") or {}
     event_id = str(payload.get("event_id") or "")
+    text = str(event.get("text") or "").strip()
     if not event_id:
         raise HTTPException(status_code=422, detail={"error": "SLACK_EVENT_ID_MISSING"})
-    channel = str(event.get("channel") or "")
-    text = str(event.get("text") or "").strip()
     if not text:
         return {"ok": True, "accepted": False}
-    org_id = settings.SOURCE_ORG_ID
+    channel = str(event.get("channel") or "")
     ingestion = SourceIngestion(
         ingestion_id=f"slack-{hashlib.sha256(event_id.encode()).hexdigest()[:24]}",
         provider=SourceProvider.SLACK,
-        org_id=org_id,
+        org_id=settings.SOURCE_ORG_ID,
         external_id=event_id,
         source_type="slack_message",
         source_name="Slack #ops-incidents",
@@ -155,7 +142,7 @@ async def slack_events(
             "team_id": payload.get("team_id"),
             "channel_id": channel,
             "thread_ts": event.get("thread_ts") or event.get("ts"),
-            "memory_subject": "Operations incident",
+            "memory_subject": "NexaFlow operations incident",
             "memory_predicate": "reports",
             "memory_scope": channel,
         },
@@ -165,13 +152,13 @@ async def slack_events(
     return {"ok": True, "accepted": claimed, "ingestion_id": stored.ingestion_id}
 
 
-@router.post("/integrations/google-drive/sync")
-async def sync_google_drive(request: Request) -> dict[str, Any]:
+@router.post("/integrations/alibaba-oss/sync")
+async def sync_alibaba_oss(request: Request) -> dict[str, Any]:
     org_id = await _require_source_write_capability(request)
     try:
-        accepted = await source_service.ingest_drive_documents(org_id=org_id)
+        accepted = await source_service.ingest_oss_documents(org_id=org_id)
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail={"error": "GOOGLE_DRIVE_UNAVAILABLE", "detail": str(exc)}) from exc
+        raise HTTPException(status_code=503, detail={"error": "ALIBABA_OSS_UNAVAILABLE", "detail": str(exc)}) from exc
     return {"accepted": len(accepted), "ingestion_ids": [item.ingestion_id for item in accepted]}
 
 
@@ -184,6 +171,9 @@ async def fetch_web(request: Request, body: VerifiedWebRequest) -> dict[str, Any
         raise HTTPException(status_code=422, detail={"error": "WEB_EVIDENCE_REJECTED", "detail": str(exc)}) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail={"error": "WEB_EVIDENCE_FETCH_FAILED", "detail": str(exc)[:300]}) from exc
+    from urllib.parse import urlsplit
+
+    host = str(urlsplit(payload["url"]).hostname or "")
     ingestion = SourceIngestion(
         ingestion_id=f"web-{uuid.uuid4().hex}",
         provider=SourceProvider.WEB,
@@ -196,170 +186,65 @@ async def fetch_web(request: Request, body: VerifiedWebRequest) -> dict[str, Any
         raw_payload_sha256=payload["content_sha256"],
         raw_payload={"url": payload["url"], "content_type": payload["content_type"]},
         auth_verified=True,
-        metadata={
-            "content_type": payload["content_type"],
-            "memory_subject": body.label,
-            "memory_predicate": "states",
-            "memory_scope": urlsplit_host(payload["url"]),
-            "memory_key": body.memory_key or "",
-        },
-        acl_scope=[f"host:{urlsplit_host(payload['url'])}", "read_only"],
+        metadata={"content_type": payload["content_type"], "memory_subject": body.label, "memory_predicate": "states", "memory_scope": host, "memory_key": body.memory_key or ""},
+        acl_scope=[f"host:{host}", "read_only"],
     )
     claimed, stored = await source_service.accept(ingestion)
     return {"accepted": claimed, "ingestion": stored.model_dump(mode="json")}
 
 
-def urlsplit_host(value: str) -> str:
-    from urllib.parse import urlsplit
-
-    return str(urlsplit(value).hostname or "")
-
-
-@router.post("/reality/replay/incident")
-async def replay_incident(request: Request) -> dict[str, Any]:
-    """Run a deterministic source fixture through the real source pipeline.
-
-    This accepts no caller evidence and writes only to the browser-scoped
-    sandbox when one exists.  It gives judges a complete, replayable source →
-    memory trace without pretending their browser is connected to Slack/Drive.
-    """
-    org_id = _org(request)
-    now = datetime.now(timezone.utc)
-    fixture = [
-        {
-            "provider": SourceProvider.SLACK,
-            "external": "fixture-slack-export-incident-v1",
-            "source_type": "slack_message",
-            "source_name": "Slack #ops-incidents",
-            "excerpt": "SEV-2: export-worker started OOM-killing after the latest deployment. Pause the release until the memory limit is restored.",
-            "metadata": {"memory_subject": "export-worker", "memory_predicate": "incident", "memory_scope": "production", "memory_key": "export-worker-incident"},
-        },
-        {
-            "provider": SourceProvider.GOOGLE_DRIVE,
-            "external": "fixture-drive-export-runbook-v1",
-            "source_type": "google_drive_document",
-            "source_name": "Google Drive — Export service runbook",
-            "excerpt": "Approved runbook: export-worker requires at least 16 MiB memory. A lower effective limit requires explicit SRE validation before release.",
-            "metadata": {"memory_subject": "export-worker", "memory_predicate": "minimum memory", "memory_scope": "production", "memory_key": "export-worker-minimum-memory"},
-        },
-        {
-            "provider": SourceProvider.GITHUB,
-            "external": "fixture-github-pr-842-v1",
-            "source_type": "github_pull_request",
-            "source_name": "GitHub PR #842",
-            "excerpt": "Merged PR #842 changes EXPORT_WORKER_MEMORY_MB from 25 to 8.",
-            "metadata": {"memory_subject": "export-worker", "memory_predicate": "configured memory", "memory_scope": "production", "memory_key": "export-worker-configured-memory", "changed_field": "worker_memory_mb", "previous_value": 25, "current_value": 8},
-        },
-    ]
-    events = []
-    for item in fixture:
-        external = f"{item['external']}:{org_id}"
-        ingestion = SourceIngestion(
-            ingestion_id=f"fixture-{hashlib.sha256(external.encode()).hexdigest()[:24]}",
-            provider=item["provider"],
-            org_id=org_id,
-            external_id=external,
-            source_type=item["source_type"],
-            source_name=item["source_name"],
-            occurred_at=now,
-            excerpt=item["excerpt"],
-            raw_payload_sha256=sha256_payload(item),
-            raw_payload={"fixture": "incident-to-release-v1", "provider": item["provider"].value},
-            auth_verified=True,
-            metadata={**item["metadata"], "fixture": True},
-            acl_scope=["fixture", "judge_sandbox"],
-        )
-        claimed, stored = await source_service.accept(ingestion)
-        if claimed or stored.stage.value != "decision_ready":
-            stored = await source_service.process(stored)
-        events.append(stored)
-    evidence = [
-        {
-            "source_type": "slack_message",
-            "source_name": fixture[0]["source_name"],
-            "external_id": events[0].external_id,
-            "occurred_at": now.isoformat(),
-            "excerpt": fixture[0]["excerpt"],
-            "metadata": {"source_ingestion_id": events[0].ingestion_id},
-        },
-        {
-            "source_type": "google_drive_document",
-            "source_name": fixture[1]["source_name"],
-            "external_id": events[1].external_id,
-            "occurred_at": now.isoformat(),
-            "excerpt": fixture[1]["excerpt"],
-            "metadata": {"source_ingestion_id": events[1].ingestion_id},
-        },
-        {
-            "source_type": "github_pull_request",
-            "source_name": fixture[2]["source_name"],
-            "external_id": events[2].external_id,
-            "occurred_at": now.isoformat(),
-            "excerpt": fixture[2]["excerpt"],
-            "metadata": {"source_ingestion_id": events[2].ingestion_id, **fixture[2]["metadata"]},
-        },
-        {
-            "source_type": "runtime_metric",
-            "source_name": "Runtime telemetry",
-            "external_id": "fixture-export-worker-memory-v1",
-            "occurred_at": now.isoformat(),
-            "excerpt": "export-worker effective memory limit is 8 MiB after the deployment.",
-            "metadata": {"source": "fixture runtime telemetry"},
-        },
-    ]
-    return {
-        "mode": "judge_sandbox" if is_judge_sandbox_org(org_id) else "sandbox",
-        "events": [item.model_dump(mode="json") for item in events],
-        "workflow": {
-            "template_id": "release-safety",
-            "evidence": evidence,
-            "live_context": {"worker_memory_mb": 8, "runbook_validated": False, "deployment_window_open": True},
-        },
-    }
-
-
-@router.post("/demo-company/run")
-async def run_demo_company(request: Request) -> dict[str, Any]:
-    """Run the Northstar synthetic company through real source processing.
-
-    A browser must first create a judge sandbox session. This prevents fixture
-    clicks from changing the open demo organization, canonical counts, skills,
-    or another visitor's source/memory ledger.
-    """
-    org_id = _org(request)
-    if not is_judge_sandbox_org(org_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Start a private sandbox before running the synthetic company lab.",
-        )
-    return await run_northstar_lab(org_id=org_id)
-
-
-@router.get("/demo-company/nexaflow/scenarios")
-async def get_nexaflow_scenarios() -> dict[str, Any]:
-    """Publish the server-owned, fixture-labelled NexaFlow test scenarios."""
-    return {
-        "company": "NexaFlow Logistics",
-        "mode": "synthetic_company_fixture",
-        "scenarios": scenario_catalog(),
-        "boundary": (
-            "These are browser-private fixture records. They exercise Slack, Drive, "
-            "GitHub, and verified-web-shaped evidence without contacting a real workspace, "
-            "CRM, profile provider, or external company."
-        ),
-    }
-
-
-@router.post("/demo-company/nexaflow/{scenario_id}")
-async def run_nexaflow_demo_scenario(request: Request, scenario_id: str) -> dict[str, Any]:
-    """Run one temporal-memory scenario in the current browser-private sandbox."""
-    org_id = _org(request)
-    if not is_judge_sandbox_org(org_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Start a private sandbox before running a NexaFlow scenario.",
-        )
+@router.post("/integrations/vision/evidence")
+async def ingest_vision_evidence(request: Request, body: VisionEvidenceRequest) -> dict[str, Any]:
+    """Persist Qwen vision output as evidence; never persist the original image."""
+    org_id = await _require_source_write_capability(request)
     try:
-        return await run_nexaflow_scenario(scenario_id=scenario_id, org_id=org_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="NexaFlow scenario not found") from exc
+        image = base64.b64decode(body.image_base64, validate=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail={"error": "INVALID_IMAGE_BASE64"}) from exc
+    try:
+        observation = await extract_observation(image, body.mime_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"error": "VISION_EVIDENCE_REJECTED", "detail": str(exc)}) from exc
+    digest = hashlib.sha256(image).hexdigest()
+    qwen_status = str(observation.get("qwen_status") or "unavailable")
+    summary = str(observation.get("summary") or "Vision extraction unavailable; no metric was asserted.")
+    claim = str(observation.get("memory_claim") or "No image-derived operational claim is available.")
+    excerpt = (
+        f"{summary} Metric: {observation.get('metric_name') or 'not detected'} "
+        f"{observation.get('metric_value') if observation.get('metric_value') is not None else 'n/a'} "
+        f"{observation.get('metric_unit') or ''}. Confidence: {observation.get('confidence', 'low')}."
+    )[:4000]
+    ingestion = SourceIngestion(
+        ingestion_id=f"vision-{digest[:24]}",
+        provider=SourceProvider.WEB,
+        org_id=org_id,
+        external_id=digest,
+        source_type="vision_observation",
+        source_name=body.label,
+        occurred_at=datetime.now(timezone.utc),
+        excerpt=excerpt,
+        raw_payload_sha256=digest,
+        raw_payload={"mime_type": body.mime_type, "image_sha256": digest, "observation": observation},
+        auth_verified=True,
+        metadata={
+            "modality": "image",
+            "vision_model": observation.get("model"),
+            "vision_status": qwen_status,
+            "vision_claim": claim,
+            "memory_subject": body.label,
+            "memory_predicate": "observes",
+            "memory_scope": "vision",
+            "memory_key": body.memory_key or "nexaflow:vision:operational-metric",
+        },
+        acl_scope=["authenticated_agent", "read_only", "image_digest_only"],
+        qwen_status=qwen_status,
+    )
+    claimed, stored = await source_service.accept(ingestion)
+    return {
+        "accepted": claimed,
+        "qwen_status": qwen_status,
+        "observation": observation,
+        "image_sha256": digest,
+        "original_image_persisted": False,
+        "ingestion": stored.model_dump(mode="json"),
+    }

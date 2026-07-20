@@ -39,7 +39,6 @@ Company Brain/
 # --- Internal working docs (verification reports / drafts, not part of the shipped code) ---
 E2E_VERIFICATION_REPORT.md
 E2E_VERIFICATION_REPORT_RERUN.md
-SUBMISSION_WRITEUP.md
 
 # --- Ad hoc local test fixtures / logs ---
 decision.json

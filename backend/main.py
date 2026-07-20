@@ -31,8 +31,6 @@ from backend.core.schema import (
     SSEEvent,
     SSEEventType,
 )
-from backend.demo import seed_data
-from backend.demo.state import build_demo_readiness
 from backend.mcp import tools as brain_tools
 from backend.mcp.auth import (
     DEFAULT_MCP_API_KEY_PERMISSIONS,
@@ -44,7 +42,9 @@ from backend.middleware.auth import (
     auth_middleware,
     resolve_org_from_token,
 )
+from backend.sources.service import source_service
 from backend.sources.runtime_config import load_runtime_config
+from backend.workflows.service import WorkflowService
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -67,18 +67,6 @@ class CreateApiKeyRequest(BaseModel):
 class LiveConfigUpdateRequest(BaseModel):
     export_chunk_size_mb: Optional[int] = None
     metadata: Optional[dict[str, Any]] = None
-
-
-class MockGithubWebhookRequest(BaseModel):
-    config: dict[str, Any] = Field(default_factory=dict)
-
-
-class SeedDemoDataResponse(BaseModel):
-    seeded: bool
-    org_id: str
-    skill_count: int = Field(default=0)
-    reason: Optional[str] = None
-    embeddings_backfilled: int = Field(default=0)
 
 
 async def _ttl_sweeper() -> None:
@@ -140,32 +128,14 @@ async def _brain_lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("Loaded encrypted operator source configuration for: %s", ", ".join(sorted(restored)))
     except Exception as exc:  # noqa: BLE001
         logger.warning("Could not load operator source configuration: %s", exc)
-    # Seed the clean demo org used by open UI (not the polluted local `default`).
-    # Order inside seed_for_org / seed_demo_stage: Skill → Config=25 → Horror intercept.
-    seeded = await seed_data.seed_for_org(settings.DEMO_ORG_ID)
-    logger.info("Sandbox seed result: %s", seeded)
-    if settings.JUDGE_DEMO_ORG_ID != settings.DEMO_ORG_ID:
-        # Controlled, idempotent fixture bootstrap. Workflow fixtures are
-        # regenerated from versioned code; public actions cannot write here.
-        judge_seeded = await seed_data.seed_for_org(settings.JUDGE_DEMO_ORG_ID)
-        logger.info("Canonical judge fixture seed result: %s", judge_seeded)
+    # NexaFlow is intentionally empty until signed/read-only source adapters
+    # deliver evidence. No startup fixture or browser click manufactures data.
     try:
-        filled = await _backfill_org_embeddings(settings.DEMO_ORG_ID)
+        filled = await _backfill_org_embeddings(settings.SOURCE_ORG_ID)
         if filled:
-            logger.info("Backfilled %d embeddings for demo org %s", filled, settings.DEMO_ORG_ID)
+            logger.info("Backfilled %d embeddings for NexaFlow org %s", filled, settings.SOURCE_ORG_ID)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Demo org embedding backfill failed: %s", exc)
-    if settings.JUDGE_DEMO_ORG_ID != settings.DEMO_ORG_ID:
-        try:
-            filled = await _backfill_org_embeddings(settings.JUDGE_DEMO_ORG_ID)
-            if filled:
-                logger.info(
-                    "Backfilled %d embeddings for canonical judge org %s",
-                    filled,
-                    settings.JUDGE_DEMO_ORG_ID,
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Canonical judge embedding backfill failed: %s", exc)
+        logger.warning("NexaFlow embedding backfill failed: %s", exc)
 
     embedding_status = await check_embedding_health()
     if not embedding_status["healthy"]:
@@ -270,6 +240,7 @@ from backend.routers import audit as audit_router
 from backend.routers import benchmark as benchmark_router
 from backend.routers import github_integration as github_router
 from backend.routers import integration_catalog as integration_catalog_router
+from backend.routers import nexaflow as nexaflow_router
 from backend.routers import operator_integrations as operator_integrations_router
 from backend.routers import sag as sag_router
 from backend.routers import sources as sources_router
@@ -281,6 +252,7 @@ app.include_router(benchmark_router.router)
 app.include_router(github_router.router)
 app.include_router(integration_catalog_router.router)
 app.include_router(operator_integrations_router.router)
+app.include_router(nexaflow_router.router)
 app.include_router(sag_router.router)
 app.include_router(sources_router.router)
 app.include_router(workflows_router.router)
@@ -353,12 +325,50 @@ async def health() -> dict[str, Any]:
 
 @app.get("/demo/readiness")
 async def demo_readiness() -> dict[str, Any]:
-    """Return server-observed deployment facts for the judge route."""
-    return await build_demo_readiness(
-        qwen_configured=bool(settings.QWEN_API_KEY),
-        embedding_healthy=getattr(app.state, "embedding_healthy", None),
-        build_sha=settings.BUILD_SHA,
-    )
+    """Return non-secret deployment and canonical NexaFlow counts.
+
+    Readiness is deliberately scoped to the server-selected source organization.
+    It reports persisted records rather than browser-derived or optimistic demo
+    state, while still returning a useful zero-count response when MongoDB is
+    unavailable during boot.
+    """
+    evidence_count = 0
+    memory_count = 0
+    active_memory_count = 0
+    workflow_run_count = 0
+    database_status = "unavailable"
+    try:
+        org_id = settings.SOURCE_ORG_ID
+        evidence = await source_service.repository.list_ingestions(org_id, limit=1000)
+        memories = await source_service.repository.list_memories(
+            org_id,
+            include_superseded=True,
+            limit=1000,
+        )
+        runs = await WorkflowService().list_runs(org_id=org_id, limit=1000)
+        evidence_count = len(evidence)
+        memory_count = len(memories)
+        active_memory_count = sum(1 for memory in memories if getattr(memory.status, "value", memory.status) == "active")
+        workflow_run_count = len(runs)
+        database_status = "connected"
+    except Exception as exc:  # noqa: BLE001
+        # Health/readiness must remain inspectable while MongoDB is starting.
+        logger.warning("readiness counts unavailable: %s", exc)
+    return {
+        "mode": "nexaflow_real_source_local",
+        "build_sha": settings.BUILD_SHA,
+        "scenario_version": settings.DEMO_SCENARIO_VERSION,
+        "qwen_configured": bool(settings.QWEN_API_KEY),
+        "embedding_healthy": getattr(app.state, "embedding_healthy", None),
+        "source_org_id": settings.SOURCE_ORG_ID,
+        "database_status": database_status,
+        "canonical_counts": {
+            "evidence": evidence_count,
+            "memories": memory_count,
+            "active_memories": active_memory_count,
+            "workflow_runs": workflow_run_count,
+        },
+    }
 
 
 # ---------- events / compilation ----------
@@ -674,65 +684,17 @@ async def post_live_config_route(
     return await _apply_live_config(org_id, patch, run_sag=True)
 
 
-@app.post("/integrations/mock-webhook/github")
-async def mock_github_webhook(
-    request: Request, body: MockGithubWebhookRequest
-) -> dict[str, Any]:
-    """Stub: external system pushes live config (e.g. export chunk size)."""
-    org_id = _get_org_id(request)
-    cfg = body.config or {}
-    if not cfg:
-        raise HTTPException(status_code=422, detail="config object required")
-    result = await _apply_live_config(org_id, cfg, run_sag=True)
-    return {"ok": True, "source": "mock-webhook/github", **result}
-
-
-@app.post("/settings/seed-demo-data", response_model=SeedDemoDataResponse)
-async def seed_demo_data_route(request: Request) -> SeedDemoDataResponse:
-    """Idempotent org-scoped demo seed for the current org (open demo or API key).
-
-    Uses the same org_id resolution as every other endpoint. Reuses the full
-    SAG-enabled demo seed and backfills embeddings so SAG/intercept works
-    immediately on fresh orgs.
-    """
-    org_id = _get_org_id(request)
-    existing = await store.get_skill_count(active_only=False, org_id=org_id)
-    if existing > 0:
-        backfilled = await _backfill_org_embeddings(org_id)
-        return SeedDemoDataResponse(
-            seeded=False,
-            org_id=org_id,
-            skill_count=existing,
-            reason="already seeded",
-            embeddings_backfilled=backfilled,
-        )
-    result = await store.seed_demo_data(org_id=org_id)
-    backfilled = await _backfill_org_embeddings(org_id)
-    return SeedDemoDataResponse(
-        seeded=True,
-        org_id=org_id,
-        skill_count=result.get("skills_inserted", 0),
-        embeddings_backfilled=backfilled,
-    )
-
-
 # ---------- root ----------
 
 @app.get("/")
 async def root() -> dict[str, Any]:
     return {
-        "service": "Company Brain",
-        "track": "MemoryAgent (Qwen Cloud Hackathon 2026)",
+        "service": "NexaFlow",
+        "mode": "local_real_source_rehearsal",
         "endpoints": [
-            "/health", "/events", "/decisions/check",
-            "/brain/skills", "/brain/skills/{skill_id}",
-            "/brain/intercepts", "/brain/events",
-            "/sessions/{user_id}", "/stream",
-            "/mcp/", "/mcp/attestation",
-            "/settings/api-keys", "/settings/metrics", "/settings/seed-demo-data",
-            "/workflow-templates", "/workflow-runs/{run_id}", "/workflow-sources",
-            "/source-connections", "/source-events", "/reality-memory", "/reality-overview",
-            "/integrations/slack/events", "/integrations/google-drive/sync", "/integrations/web/fetch",
-            "/demo/readiness",
+            "/health", "/nexaflow/overview", "/nexaflow/release-check",
+            "/source-connections", "/source-events", "/reality-memory",
+            "/integrations/slack/events", "/integrations/github/pr",
+            "/operator/integrations/setup", "/mcp/",
         ],
     }

@@ -35,7 +35,13 @@ def _normalise_base_url(value: str) -> str:
 def _public_endpoint(path: str) -> str:
     """Return a public endpoint when configured, otherwise a stable API path."""
     base_url = _normalise_base_url(settings.PUBLIC_BASE_URL)
-    return f"{base_url}{path}" if base_url else path
+    return f"{base_url}/api{path}" if base_url else path
+
+
+def _public_mcp_endpoint() -> str:
+    """MCP is intentionally served at the public root, not below ``/api``."""
+    base_url = _normalise_base_url(settings.PUBLIC_BASE_URL)
+    return f"{base_url}/mcp/" if base_url else "/mcp/"
 
 
 def _github_configuration() -> dict[str, bool]:
@@ -74,27 +80,33 @@ def build_integration_catalog() -> dict[str, Any]:
     base_url = _normalise_base_url(settings.PUBLIC_BASE_URL)
     fresh_timestamp = workflow_now().isoformat()
     workflow_example_body = {
-        "template_id": "release-safety",
+        "template_id": "nexaflow-release-safety",
         "evidence": [
+            {
+                "source_type": "alibaba_oss_object",
+                "source_name": "Alibaba Cloud OSS runbook",
+                "external_id": "nexaflow-runbook-v1",
+                "occurred_at": fresh_timestamp,
+                "excerpt": "Fulfillment workers require at least 24 MiB of memory before promotion.",
+            },
+            {
+                "source_type": "slack_message",
+                "source_name": "Slack #ops-incidents",
+                "external_id": "nexaflow-sev2-1",
+                "occurred_at": fresh_timestamp,
+                "excerpt": "SEV-2 is resolved; fulfillment promotion may resume.",
+            },
             {
                 "source_type": "github_pull_request",
                 "source_name": "GitHub",
-                "external_id": "acme/service#42",
+                "external_id": "nexaflow-logistics-demo#42",
                 "occurred_at": fresh_timestamp,
-                "excerpt": "Merged PR #42 updates the export worker deployment configuration.",
-            },
-            {
-                "source_type": "runtime_metric",
-                "source_name": "Runtime telemetry",
-                "external_id": "export-worker-memory",
-                "occurred_at": fresh_timestamp,
-                "excerpt": "export-worker effective memory limit is 25 MiB.",
+                "excerpt": "Merged configuration sets NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32.",
             },
         ],
         "live_context": {
-            "worker_memory_mb": 25,
-            "runbook_validated": True,
-            "deployment_window_open": True,
+            "configured_memory_meets_runbook": True,
+            "linked_incident_open": False,
         },
     }
     workflow_example_json = json.dumps(workflow_example_body, separators=(",", ":"))
@@ -104,7 +116,7 @@ def build_integration_catalog() -> dict[str, Any]:
     }
     github = source_connections["github"]
     slack = source_connections["slack"]
-    drive = source_connections["google_drive"]
+    oss = source_connections["alibaba_oss"]
     web = source_connections["web"]
 
     boundaries: list[dict[str, Any]] = [
@@ -112,7 +124,7 @@ def build_integration_catalog() -> dict[str, Any]:
             "id": "evidence",
             "title": github.title,
             "status": github.status.value,
-            "description": "Signed merged-PR intake persists raw evidence, Qwen memory, audit record, source lineage, and a workflow decision.",
+            "description": "Signed merged-PR intake persists raw evidence, Qwen memory, audit record, and source lineage. The aggregate NexaFlow check owns the release decision.",
             "connector": "github_merged_pull_request",
             "endpoint": github.endpoint,
             "requirements": [
@@ -135,15 +147,15 @@ def build_integration_catalog() -> dict[str, Any]:
             "scope": "Read-only selected-channel evidence, not workspace-wide search.",
         },
         {
-            "id": "google_drive",
-            "title": drive.title,
-            "status": drive.status.value,
-            "description": "A read-only service account syncs only documents in one folder explicitly shared with it and keeps modification provenance.",
-            "connector": "google_drive_shared_folder",
-            "endpoint": drive.endpoint,
-            "requirements": ["Service-account JSON mounted on the server", "One explicitly shared folder", "Drive read-only scope"],
-            "configuration": drive.configuration,
-            "scope": "No Google OAuth self-service flow or Drive write capability is claimed.",
+            "id": "alibaba_oss",
+            "title": oss.title,
+            "status": oss.status.value,
+            "description": "A read-only RAM identity syncs only objects under one private OSS runbook prefix and keeps object-version provenance.",
+            "connector": "alibaba_oss_runbook_prefix",
+            "endpoint": oss.endpoint,
+            "requirements": ["Private OSS bucket", "Configured runbook prefix", "RAM identity with oss:ListObjects and oss:GetObject only"],
+            "configuration": oss.configuration,
+            "scope": "No OSS write capability or public bucket access is claimed.",
         },
         {
             "id": "web",
@@ -209,7 +221,7 @@ def build_integration_catalog() -> dict[str, Any]:
                 "the server, not the caller, resolves organization identity from its API key."
             ),
             "transport": "streamable-http",
-            "endpoint": _public_endpoint("/mcp/"),
+            "endpoint": _public_mcp_endpoint(),
             "tools": [
                 {"name": "recall_skills", "permission": "mcp:read"},
                 {"name": "inspect_memory", "permission": "mcp:read"},

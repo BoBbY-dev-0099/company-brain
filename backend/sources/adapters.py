@@ -99,6 +99,125 @@ def utc_from_epoch(value: Any) -> datetime:
         return datetime.now(timezone.utc)
 
 
+class AlibabaOSSAdapter:
+    """Read-only Alibaba Cloud OSS adapter for the NexaFlow runbook prefix.
+
+    OSS credentials are loaded from encrypted operator configuration and are
+    never returned to browser clients. The adapter only lists and reads
+    objects; it does not upload, overwrite, delete, or publish them.
+    """
+
+    @staticmethod
+    def configured() -> bool:
+        return bool(
+            settings.ALIBABA_OSS_REGION.strip()
+            and settings.ALIBABA_OSS_ENDPOINT.strip()
+            and settings.ALIBABA_OSS_BUCKET.strip()
+            and settings.ALIBABA_OSS_PREFIX.strip()
+            and settings.ALIBABA_OSS_ACCESS_KEY_ID.strip()
+            and settings.ALIBABA_OSS_ACCESS_KEY_SECRET.strip()
+        )
+
+    @staticmethod
+    def _extension_allowed(key: str) -> bool:
+        extensions = {
+            value.lower().lstrip(".")
+            for value in split_config(settings.ALIBABA_OSS_ALLOWED_EXTENSIONS)
+        }
+        suffix = Path(key).suffix.lower().lstrip(".")
+        return bool(suffix and suffix in extensions)
+
+    @staticmethod
+    def _endpoint() -> str:
+        endpoint = settings.ALIBABA_OSS_ENDPOINT.strip()
+        return endpoint if endpoint.startswith("http") else f"https://{endpoint}"
+
+    @staticmethod
+    def _bucket() -> Any:
+        try:
+            import oss2
+        except ImportError as exc:  # pragma: no cover - dependency is installed in Docker
+            raise RuntimeError("Alibaba OSS SDK is not installed") from exc
+        if not AlibabaOSSAdapter.configured():
+            raise RuntimeError("Alibaba Cloud OSS is not configured")
+        auth = oss2.Auth(
+            settings.ALIBABA_OSS_ACCESS_KEY_ID.strip(),
+            settings.ALIBABA_OSS_ACCESS_KEY_SECRET.strip(),
+        )
+        prefix = settings.ALIBABA_OSS_PREFIX.strip()
+        if not prefix.endswith("/"):
+            settings.ALIBABA_OSS_PREFIX = f"{prefix}/"
+        return oss2.Bucket(auth, AlibabaOSSAdapter._endpoint(), settings.ALIBABA_OSS_BUCKET.strip())
+
+    @staticmethod
+    def _key(document: dict[str, Any]) -> str:
+        key = str(document.get("key") or "").strip()
+        prefix = settings.ALIBABA_OSS_PREFIX.strip()
+        if not key or key.endswith("/") or not key.startswith(prefix):
+            raise RuntimeError("OSS object is outside the configured read-only prefix")
+        return key
+
+    def _list_documents_sync(self) -> list[dict[str, Any]]:
+        import oss2
+
+        bucket = self._bucket()
+        prefix = settings.ALIBABA_OSS_PREFIX.strip()
+        documents: list[dict[str, Any]] = []
+        for item in oss2.ObjectIterator(bucket, prefix=prefix):
+            key = str(getattr(item, "key", "") or "")
+            if not key or key.endswith("/") or not self._extension_allowed(key):
+                continue
+            headers = bucket.head_object(key).headers
+            documents.append(
+                {
+                    "key": key,
+                    "etag": str(getattr(item, "etag", "") or "").strip('"'),
+                    "size": int(getattr(item, "size", 0) or 0),
+                    "last_modified": utc_from_epoch(getattr(item, "last_modified", None)).isoformat(),
+                    "content_type": str(headers.get("Content-Type") or headers.get("content-type") or ""),
+                    "bucket": settings.ALIBABA_OSS_BUCKET.strip(),
+                    "region": settings.ALIBABA_OSS_REGION.strip(),
+                }
+            )
+        documents.sort(key=lambda item: str(item.get("last_modified") or ""))
+        return documents
+
+    async def list_documents(self, modified_after: str | None = None) -> list[dict[str, Any]]:
+        documents = await asyncio.to_thread(self._list_documents_sync)
+        if not modified_after:
+            return documents
+        cutoff = datetime.fromisoformat(modified_after.replace("Z", "+00:00"))
+        return [
+            item
+            for item in documents
+            if datetime.fromisoformat(str(item["last_modified"])) > cutoff
+        ]
+
+    def _read_document_sync(self, document: dict[str, Any]) -> bytes:
+        bucket = self._bucket()
+        key = self._key(document)
+        size = int(document.get("size") or 0)
+        if size > settings.ALIBABA_OSS_MAX_FILE_BYTES:
+            raise RuntimeError("OSS runbook object exceeds ALIBABA_OSS_MAX_FILE_BYTES")
+        response = bucket.get_object(key)
+        content = response.read(settings.ALIBABA_OSS_MAX_FILE_BYTES + 1)
+        if len(content) > settings.ALIBABA_OSS_MAX_FILE_BYTES:
+            raise RuntimeError("OSS runbook object exceeds ALIBABA_OSS_MAX_FILE_BYTES")
+        return content
+
+    async def read_document(self, document: dict[str, Any]) -> str:
+        content = await asyncio.to_thread(self._read_document_sync, document)
+        key = self._key(document)
+        if Path(key).suffix.lower() == ".pdf":
+            try:
+                from pypdf import PdfReader
+
+                return "\n".join(page.extract_text() or "" for page in PdfReader(BytesIO(content)).pages)[:20000]
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"Could not extract text from OSS PDF: {exc}") from exc
+        return content.decode("utf-8", errors="replace")[:20000]
+
+
 class GoogleDriveAdapter:
     """Small read-only Drive client using the service-account JWT flow.
 

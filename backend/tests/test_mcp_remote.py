@@ -75,32 +75,33 @@ def _valid_release_evidence(*, age_hours: float = 0) -> list[dict]:
     occurred_at = workflow_now() - timedelta(hours=age_hours)
     return [
         {
-            "source_type": "github_pull_request",
-            "source_name": "GitHub",
-            "external_id": "org/repo#42",
+            "source_type": "google_drive_document",
+            "source_name": "Google Drive",
+            "external_id": "nexaflow-runbook-1",
             "occurred_at": occurred_at.isoformat(),
-            "excerpt": "Merged change lowers worker memory from 25 MiB to 8 MiB.",
-            "metadata": {
-                "changed_field": "worker_memory_mb",
-                "previous_value": 25,
-                "current_value": 8,
-            },
+            "excerpt": "Fulfillment workers require at least 24 MiB.",
         },
         {
-            "source_type": "runtime_metric",
-            "source_name": "Runtime telemetry",
-            "external_id": "worker-memory",
+            "source_type": "slack_message",
+            "source_name": "Slack #ops-incidents",
+            "external_id": "nexaflow-sev2-1",
             "occurred_at": occurred_at.isoformat(),
-            "excerpt": "Worker effective limit is now 8 MiB.",
+            "excerpt": "SEV-2 remains open; pause promotion.",
+        },
+        {
+            "source_type": "github_pull_request",
+            "source_name": "GitHub",
+            "external_id": "nexaflow-logistics-demo#42",
+            "occurred_at": occurred_at.isoformat(),
+            "excerpt": "Merged NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8.",
         },
     ]
 
 
 def _release_context() -> dict:
     return {
-        "worker_memory_mb": 8,
-        "runbook_validated": False,
-        "deployment_window_open": True,
+        "configured_memory_meets_runbook": False,
+        "linked_incident_open": True,
     }
 
 
@@ -179,7 +180,7 @@ async def test_evaluate_workflow_returns_auditable_briefs_and_never_uses_caller_
     context = _FakeContext(principal)
 
     valid = await evaluate(
-        template_id="release-safety",
+        template_id="nexaflow-release-safety",
         evidence=_valid_release_evidence(),
         live_context={**_release_context(), "org_id": "org-b"},
         ctx=context,
@@ -189,7 +190,7 @@ async def test_evaluate_workflow_returns_auditable_briefs_and_never_uses_caller_
     assert valid["decision_brief"]["human_approval_required"] is True
 
     stale = await evaluate(
-        template_id="release-safety",
+        template_id="nexaflow-release-safety",
         evidence=_valid_release_evidence(age_hours=200),
         live_context=_release_context(),
         ctx=context,
@@ -198,7 +199,7 @@ async def test_evaluate_workflow_returns_auditable_briefs_and_never_uses_caller_
     assert any(item["field"] == "freshness" for item in stale["decision_brief"]["missing_evidence"])
 
     missing = await evaluate(
-        template_id="release-safety",
+        template_id="nexaflow-release-safety",
         evidence=[],
         live_context=_release_context(),
         ctx=context,
@@ -240,6 +241,53 @@ async def test_mcp_tool_scope_and_human_action_gate(monkeypatch):
     assert result["external_action_permitted"] is False
 
 
+@pytest.mark.asyncio
+async def test_cross_agent_tools_use_distinct_scopes_and_key_org(monkeypatch):
+    async def fake_write(**kwargs):
+        return {
+            "org_id_seen": kwargs["org_id"],
+            "human_approval_required": True,
+            "external_action_permitted": False,
+        }
+
+    async def fake_query(**kwargs):
+        return {"org_id_seen": kwargs["org_id"], "agent_ids": ["sales-agent"]}
+
+    monkeypatch.setattr(mcp_server_module.tools, "write_operational_note", fake_write)
+    monkeypatch.setattr(mcp_server_module.tools, "query_cross_agent_memory", fake_query)
+    server = mcp_server_module.create_mcp_server(
+        transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False)
+    )
+    write = server._tool_manager.get_tool("write_operational_note").fn
+    query = server._tool_manager.get_tool("query_cross_agent_memory").fn
+
+    with pytest.raises(ToolError, match="mcp:write"):
+        await write(
+            note_id="note-1",
+            agent_id="sales-agent",
+            subject="Acme",
+            claim="blocker",
+            evidence_refs=["source-1"],
+            ctx=_FakeContext(_principal("org-a", mcp_auth.MCP_READ_SCOPE)),
+        )
+    written = await write(
+        note_id="note-1",
+        agent_id="sales-agent",
+        subject="Acme",
+        claim="blocker",
+        evidence_refs=["source-1"],
+        ctx=_FakeContext(_principal("org-a", mcp_auth.MCP_WRITE_SCOPE)),
+    )
+    queried = await query(
+        subject="Acme",
+        ctx=_FakeContext(_principal("org-a", mcp_auth.MCP_READ_SCOPE)),
+    )
+
+    assert written["org_id_seen"] == "org-a"
+    assert written["external_action_permitted"] is False
+    assert queried["org_id_seen"] == "org-a"
+
+
 def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
     monkeypatch.setattr(settings, "MCP_REMOTE_ENABLED", True)
     monkeypatch.setattr(settings, "MCP_REQUIRE_API_KEY", True)
@@ -251,7 +299,6 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
             mcp_auth.MCP_WORKFLOW_SCOPE,
         ),
         "key-org-b": _principal("org-b", mcp_auth.MCP_READ_SCOPE),
-        "key-judge": _principal("judge-sandbox:mcp", mcp_auth.MCP_WORKFLOW_SCOPE),
     }
 
     async def fake_authenticate(api_key: str):
@@ -300,6 +347,8 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
             "check_intercept",
             "evaluate_workflow",
             "compile_experience",
+            "write_operational_note",
+            "query_cross_agent_memory",
         }
 
         # The stray org_id is ignored; the key is the only organization source.
@@ -338,7 +387,7 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
                 {
                     "name": "evaluate_workflow",
                     "arguments": {
-                        "template_id": "release-safety",
+                        "template_id": "nexaflow-release-safety",
                         "evidence": _valid_release_evidence(),
                         "live_context": _release_context(),
                     },
@@ -348,27 +397,6 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
         evaluated_result = _tool_result(evaluated)
         assert evaluated_result["org_id"] == "org-a"
         assert evaluated_result["execution_origin"] == "mcp"
-
-        sandbox_evaluated = client.post(
-            "/mcp/",
-            headers=_headers("key-judge"),
-            json=_jsonrpc(
-                "tools/call",
-                8,
-                {
-                    "name": "evaluate_workflow",
-                    "arguments": {
-                        "template_id": "release-safety",
-                        "evidence": _valid_release_evidence(),
-                        "live_context": _release_context(),
-                    },
-                },
-            ),
-        )
-        sandbox_result = _tool_result(sandbox_evaluated)
-        assert sandbox_result["org_id"] == "judge-sandbox:mcp"
-        assert sandbox_result["is_judge_sandbox"] is True
-        assert sandbox_result["execution_origin"] == "mcp"
 
         recall_b = client.post(
             "/mcp/",

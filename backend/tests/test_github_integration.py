@@ -75,6 +75,7 @@ async def test_merged_pr_persists_raw_event_audit_and_sse_before_success(monkeyp
     secret = "webhook-secret"
     monkeypatch.setattr(github.settings, "GITHUB_WEBHOOK_SECRET", secret)
     monkeypatch.setattr(github.settings, "GITHUB_TOKEN", "github-token")
+    monkeypatch.setattr(github.settings, "SOURCE_ORG_ID", "github-test")
     monkeypatch.setattr(github.httpx, "AsyncClient", lambda **_: _DiffClient())
 
     calls: list[str] = []
@@ -126,13 +127,6 @@ async def test_merged_pr_persists_raw_event_audit_and_sse_before_success(monkeyp
         calls.append("propagate")
         assert skill.skill_id == compiled.skill_id
 
-    async def create_workflow(event, org_id, saved_skill):
-        calls.append("workflow")
-        assert event.metadata["source"] == "github_pr"
-        assert org_id == "github-test"
-        assert saved_skill.skill_id == compiled.skill_id
-        return "workflow-42", "review_required"
-
     monkeypatch.setattr(github.store, "get_event", get_event)
     monkeypatch.setattr(github.store, "claim_event", claim_event)
     monkeypatch.setattr(github.store, "get_skill", AsyncMock(return_value=None))
@@ -142,7 +136,6 @@ async def test_merged_pr_persists_raw_event_audit_and_sse_before_success(monkeyp
     monkeypatch.setattr(github.store, "upsert_public_audit_key", upsert_key)
     monkeypatch.setattr(github.compiler, "compile_event_to_skill", compile_event)
     monkeypatch.setattr(github.propagator, "propagate_skill", propagate)
-    monkeypatch.setattr(github, "_create_release_safety_workflow", create_workflow)
     monkeypatch.setattr(
         github.rsa_audit,
         "sign_decision",
@@ -168,8 +161,8 @@ async def test_merged_pr_persists_raw_event_audit_and_sse_before_success(monkeyp
     assert result["duplicate"] is False
     assert result["skill_id"] == compiled.skill_id
     assert result["audit_id"] == "audit-42"
-    assert result["workflow_run_id"] == "workflow-42"
-    assert result["workflow_status"] == "review_required"
+    assert result["workflow_run_id"] is None
+    assert result["workflow_status"] is None
     assert result["ingestion_status"] == "completed"
     assert calls == [
         "get_event",
@@ -182,8 +175,6 @@ async def test_merged_pr_persists_raw_event_audit_and_sse_before_success(monkeyp
         "update:audited",
         "propagate",
         "update:sse_propagated",
-        "workflow",
-        "update:workflow_persisted",
         "update:completed",
     ]
 

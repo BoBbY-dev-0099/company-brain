@@ -1,181 +1,248 @@
 # Company Brain
 
-Source-backed Reality Memory for consequential company decisions, built for the Qwen Cloud Global AI Hackathon.
+**Submission writeup:** [SUBMISSION_WRITEUP.md](SUBMISSION_WRITEUP.md) · **Technical appendix:** [HACKATHON_WRITEUP.md](HACKATHON_WRITEUP.md)
 
-> Company Brain does not replace a company’s agents or systems. It is the governed memory checkpoint they call before consequential actions.
+Company Brain is a local-first operational memory system. In the NexaFlow demo,
+a real Slack incident, a
+read-only Alibaba Cloud OSS runbook, and a signed GitHub merged pull request become
+source-backed Qwen Reality Memory before one governed decision is made:
 
-Open the public judge route at `/`. It runs a complete incident-to-release trace:
+> Suspend the fulfillment release when the merged worker-memory setting is
+> below the approved runbook minimum, or a related incident remains open.
 
 ```mermaid
 flowchart LR
-  S["Slack · Drive · GitHub · verified web"] --> E["Immutable normalized evidence"]
-  E --> M["Qwen Reality Memory\nclaims · provenance · freshness"]
-  M --> G["MCP / REST gateway\ndeterministic SAG"]
-  G --> H["Human-confirmed outcome"]
-  H --> M
+  S["Slack #ops-incidents"] --> E["Immutable evidence ledger"]
+  D["Alibaba Cloud OSS runbook"] --> E
+  G["GitHub merged PR"] --> E
+  E --> M["Qwen Reality Memory\nprovenance and supersession"]
+  M --> R["Release safety check\ndeterministic SAG"]
+  R --> H["Engineering owner\nhuman-required action"]
 ```
 
-The first fold shows the source posture, current risk, and a single **Run incident-to-release check** action. It proves the flow with a private, expiring sandbox; it never deploys, refunds, changes a flag, or posts to Slack.
+For the clean-room positioning against adjacent company-brain patterns, see
+the [architecture comparison](docs/ARCHITECTURE.md#positioning-against-adjacent-company-brain-patterns).
+The complete judge-facing flow is shown in the [NexaFlow Reality Layer architecture diagram](docs/nexaflow-reality-architecture.svg).
 
-## Judge walkthrough (90 seconds)
-
-1. Open [the Reality Console](https://brain.veriflowai.me/). The four source tiles use backend-derived runtime labels, not optimistic client state.
-2. Click **Run incident-to-release check**. The trace must advance in order: source evidence, Qwen Reality Memory, MCP decision gateway, then human owner.
-3. Read the returned recommendation: the release is suspended because the incident, runbook, GitHub change, and runtime value no longer agree.
-4. Inspect the evidence rows for observed/retrieved times, freshness, availability, ACL scope, payload hash, and Qwen status. Open **Audit proof** for complete server responses.
-5. Open `/play/workflow` to show the same authenticated MCP contract in a temporary judge sandbox; use Money Safety and Rollout Safety as short reuse proof.
-
-The live deployment is self-identifying: `GET /api/demo/readiness` reports its build SHA, Qwen health, scenario version, canonical counts, and sandbox-isolation status. Do not use a screenshot or README claim as a substitute for that response.
+The root route is the **Company Brain Live Operations Console**. It is intentionally
+empty until the real test company sends evidence; it has no synthetic fallback,
+no browser-provided organization ID, and no fake green verdict.
 
 ## What is shipped
 
-| Layer | What it does | Truthful boundary |
-| --- | --- | --- |
-| Evidence adapters | Accepts signed Slack messages, reads a restricted Drive folder, records signed GitHub merged-PR intake, and fetches explicit allowlisted HTTPS URLs. | No browser credentials, no generic connector marketplace, no broad web search. |
-| Reality Memory | Keeps Qwen-compiled claims with source links, retrieval time, freshness, availability, ACL scope, and explicit supersession. | A missing Qwen key is shown as `unavailable`; no model result is fabricated. |
-| Decision gateway | Returns a common `DecisionBrief` through REST or authenticated Streamable HTTP MCP. Deterministic SAG evaluates fresh evidence and live context. | MCP has no tool for external execution. |
-| Human outcome | Records the accountable owner’s sandbox outcome and keeps reinforcement gated behind a human-confirmed result. | Sandbox data expires and cannot alter canonical demo counts or another judge’s data. |
+- Signed Slack Events API intake, restricted to one configured workspace and
+  `#ops-incidents`; NexaFlow never posts to Slack.
+- Read-only Alibaba Cloud OSS sync restricted to one private bucket prefix;
+  it supports Markdown, text files, and PDFs and never writes to OSS.
+- Signed GitHub merged-PR intake for an explicit repository allowlist. It
+  persists the raw event, Qwen-compiled skill, audit record, source record,
+  and memory provenance before it is available to the release check.
+- A source ledger and Qwen Reality Memory layer with freshness, raw-payload
+  hash, ACL scope, Qwen status, and auditable supersession.
+- One aggregate `POST /nexaflow/release-check` endpoint. The server—not the
+  browser—selects the latest ready NexaFlow Slack, OSS, and GitHub evidence.
+- Deterministic SAG. Missing, stale, unavailable, or unparsable evidence is
+  `review_required`; it is never presented as a suspension or a safe release.
+- Authenticated Streamable HTTP MCP for read/audit proof. MCP does not deploy,
+  change GitHub or OSS, or post to Slack. Human confirmation remains outside
+  MCP.
+- Optional authenticated Qwen-VL evidence intake stores a typed observation and
+  image digest only; unavailable vision is explicit and review-required.
+- Optional edge profile serves a stale-aware, read-only cache for intermittent
+  connectivity without local action execution.
 
-### Supported source states
+This is a selected-workspace local rehearsal, not a connector marketplace,
+self-service OAuth product, autonomous executor, or generic workflow builder.
 
-`connected` means server configuration is complete; `setup_required` means it is not configured; `contract_ready` is a supported API contract; `fixture` is demo evidence; `preview` is not yet production-ready. The backend, not the frontend, supplies these labels at `GET /integration-catalog`.
+## Local-first quick start
 
-The UI includes three compact reusable proof cases:
-
-- **Release Safety** — a Slack incident, Drive runbook, GitHub change, and runtime metric suspend a release.
-- **Money Safety** — contract or policy evidence stops an automatic refund.
-- **Rollout Safety** — reliability evidence holds a feature expansion.
-
-## Qwen’s role
-
-`qwen-plus` compiles normalized source evidence into a memory candidate and rationale. `text-embedding-v3` supports existing semantic skill recall. The final safety verdict is intentionally deterministic: SAG evaluates required evidence, freshness, and live context after the model step, so a judge can inspect why the recommendation changed.
-
-## MCP connection
-
-The canonical endpoint is `https://brain.veriflowai.me/mcp/` when deployed. Every request requires `X-Brain-Api-Key`; the key resolves the organization, so callers cannot supply an organization ID.
-
-| Scope | Tools |
-| --- | --- |
-| `mcp:read` | `recall_skills`, `inspect_memory`, `query_evidence` |
-| `mcp:check` | `check_intercept` |
-| `mcp:workflow` | `evaluate_workflow` |
-| `mcp:write` | `compile_experience`, authenticated Drive sync, authenticated verified-web fetch |
-
-`evaluate_workflow` returns the same source-aware `DecisionBrief` as `POST /workflow-runs`. It may recommend a human action; it cannot perform a company action. See [`real-workflow/`](real-workflow/) for a small remote-MCP client.
-
-## Source configuration
-
-The public judge UI accepts neither credentials nor an organization ID. The
-Integration Studio can be operator-unlocked only when the deployment sets both
-`INTEGRATION_ADMIN_TOKEN` and `INTEGRATION_CONFIG_ENCRYPTION_KEY`. In that
-mode, the operator form posts over same-origin HTTPS, secrets are encrypted
-before MongoDB persistence, only redacted configuration returns to the browser,
-and the API plus worker load the same values. This is a deployment-admin setup
-path for a selected test workspace, not self-serve multi-company OAuth.
-
-| Provider | Required server configuration | Read boundary |
-| --- | --- | --- |
-| Slack | `SLACK_SIGNING_SECRET`, `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_CHANNEL_IDS` | Signed Events API input, exact team and `#ops-incidents` channel allowlist, five-minute replay window; never posts to Slack. |
-| Google Drive | `GOOGLE_SERVICE_ACCOUNT_JSON` or `GOOGLE_SERVICE_ACCOUNT_FILE`, `GOOGLE_DRIVE_FOLDER_ID` | One explicitly shared folder; Google Docs, text, and PDFs only; never writes to Drive. |
-| GitHub | `GITHUB_WEBHOOK_SECRET`, `GITHUB_TOKEN`, `GITHUB_REPOS` | Signed merged-PR intake and repository allowlist. |
-| Verified Web | `WEB_EVIDENCE_ALLOWED_HOSTS` | API-key authenticated, HTTPS-only explicit fetch; blocks private IPs, unsafe redirects, unsupported MIME types, and oversize bodies. |
-
-For frontend operator setup, set the two unlock variables above, open
-`/app/connect`, unlock the operator panel, save one provider, then run its
-read-only connectivity test. Slack test never posts; GitHub test reads one
-allowlisted repository; Drive test lists allowed files; Web verifies its saved
-host allowlist. The setup form never re-renders a saved secret.
-
-Copy [`.env.example`](.env.example) to `.env`; leave source values blank unless the server is genuinely configured. The Docker `worker` consumes durable source events and performs the optional Drive polling sync.
-
-## Local run
+The local rehearsal remains the safest way to iterate. The verified public
+deployment is now running on Alibaba ECS at
+`https://brain.veriflowai.me/`; stop the instance when you are not recording
+or rehearsing the judge demo to control cost.
 
 ```powershell
 Copy-Item .env.example .env
-# Set QWEN_API_KEY in .env if you want live Qwen compilation.
+# Set QWEN_API_KEY in .env. Do not commit .env.
 docker compose --profile full up --build -d
 curl http://localhost/api/health
-curl http://localhost/api/demo/readiness
 ```
 
-For development without Docker, start MongoDB as a replica set, install `requirements.txt`, run `uvicorn backend.main:app --reload`, then run `npm.cmd install` and `npm.cmd run dev` in `frontend/`.
-
-## Verification
+For a fresh local rehearsal, the helper below creates the operator unlock and
+encryption values without printing them, recreates the API and worker, and
+refreshes nginx so the setup page is ready in one command:
 
 ```powershell
-# Backend unit and contract coverage
-python -m pytest backend/tests -q
+powershell -ExecutionPolicy Bypass -File scripts/start-local.ps1
+```
 
-# Production UI bundle
+Use this helper only locally. Production deployments must provide
+`INTEGRATION_ADMIN_TOKEN` and `INTEGRATION_CONFIG_ENCRYPTION_KEY` through their
+secret-management process.
+
+Docker Compose creates a new `companybrain_nexaflow` database and separate
+`nexaflow_mongodb_*` volumes. It does not remove or reuse the old demo volume.
+
+Open `http://localhost/`. The console will show `setup required` until the
+three real providers are configured. Open `http://localhost/setup` to unlock
+operator configuration. The browser uses the unlock token only to send
+settings over same-origin HTTPS; provider secrets are encrypted before
+persistence and are never returned.
+
+## Create the NexaFlow test company
+
+Use new, dedicated resources so this rehearsal cannot affect a real company.
+
+### 1. Start a temporary HTTPS callback URL
+
+With the local stack running:
+
+```powershell
+ngrok http 80
+```
+
+Copy the `https://...ngrok-free.dev` forwarding URL to `PUBLIC_BASE_URL` in
+`.env`, then restart API and worker:
+
+```powershell
+docker compose --profile full up -d --force-recreate api worker
+```
+
+Use the two exact callback URLs in provider setup:
+
+- Slack: `https://<ngrok-host>/api/integrations/slack/events`
+- GitHub: `https://<ngrok-host>/api/integrations/github/pr`
+
+Keep ngrok running while testing. The URL is temporary; update
+`PUBLIC_BASE_URL` whenever it changes.
+
+### 2. Slack: `NexaFlow Logistics Demo`
+
+1. Create a Slack workspace named **NexaFlow Logistics Demo** and public
+   channel **#ops-incidents**.
+2. Create a Slack app from scratch for this workspace.
+3. In **OAuth & Permissions**, add the bot scope **`channels:history`**. This
+   is the only message-history scope needed for Slack's `message.channels`
+   event. Install the app to the workspace and copy its **Bot User OAuth
+   Token** (`xoxb-...`) if you want the optional auth test in `/setup`.
+4. In **Event Subscriptions**, enable events and set the request URL to the
+   Slack callback above. Slack will send a signed URL verification request.
+5. Under **Subscribe to bot events**, select only `message.channels`, then
+   invite the app to **#ops-incidents**. The app must be a member of that
+   public channel to receive its messages.
+6. Copy the **Signing Secret** from **Basic Information**. To obtain the
+   workspace/team ID, run this locally with the bot token (or read `team_id`
+   from a received Slack event):
+
+   ```powershell
+   $headers = @{ Authorization = "Bearer xoxb-your-token" }
+   Invoke-RestMethod -Method Post -Uri https://slack.com/api/auth.test -Headers $headers
+   ```
+
+   Copy the returned `team_id`. Copy the channel ID from the channel's Slack
+   URL (`C...`) or its channel details, then paste `team_id`, `channel_ids`,
+   `signing_secret`, and optional `bot_token` into `/setup` → Slack.
+7. Click **Save**, then **Test connection**. A successful test means the
+   server is ready for a signed event; the real message below is the ingestion
+   proof.
+8. Send the real test message:
+
+   ```text
+   SEV-2: fulfillment workers are OOM. Pause promotion for the release until the incident is resolved.
+   ```
+
+The signed event is persisted first and the worker then compiles Qwen memory.
+
+### 3. Alibaba Cloud OSS: `nexaflow-operations-hk-2026`
+
+1. In the Alibaba Cloud OSS console, create a private **Standard LRS** bucket
+   in the same region as ECS, preferably **China (Hong Kong)** for this demo.
+   Keep Block Public Access enabled and use a private ACL.
+2. Create the prefix `runbooks/` and upload
+   `runbooks/fulfillment-release-policy.md` from this repository.
+3. In RAM, create a programmatic user such as `nexaflow-oss-reader`. Attach a
+   custom policy that grants only `oss:ListObjects` for the `runbooks/` prefix
+   and `oss:GetObject` for `runbooks/*`. Do not grant Put, Delete, or FullAccess.
+4. Copy the OSS region, HTTPS endpoint, bucket name, and prefix into
+   `/setup` → Alibaba OSS. Paste the RAM AccessKey values only into the
+   operator form; they are encrypted server-side and never returned.
+5. Run the read-only connection test, then click **Sync OSS now**. The source
+   worker polls the same prefix in the background.
+
+### 4. GitHub: `nexaflow-logistics-demo`
+
+1. Create a dedicated **private** repository named
+   `nexaflow-logistics-demo`.
+2. Add a file such as `deploy/fulfillment.env` containing:
+
+   ```bash
+   NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32
+   ```
+
+3. Create a fine-grained personal access token with an expiration date. Set
+   **Repository access** to **Only select repositories** and select this repo.
+   Grant only these repository permissions: **Contents: Read-only**,
+   **Pull requests: Read-only**, and the default **Metadata: Read-only**.
+4. In `/setup` → GitHub, save the exact `owner/nexaflow-logistics-demo`
+   allowlist, a new webhook secret, and the read-only token. Run the read-only
+   test.
+5. In GitHub **Settings → Webhooks**, add the GitHub callback URL, choose JSON,
+   use the same webhook secret, and subscribe only to **Pull requests**.
+6. Create and merge a PR changing the setting from `32` to `8`:
+
+   ```diff
+   -NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32
+   +NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8
+   ```
+
+GitHub validates the signature, fetches the merged diff with the read-only
+token, persists/compiles/audits the intake, and mirrors it into the shared
+source ledger.
+
+## The one demo script
+
+1. Confirm the console has a `decision_ready` event from Slack, OSS, and
+   GitHub. `Qwen unavailable` is displayed honestly if no valid Qwen key is
+   present.
+2. Click **Run release safety check**.
+3. NexaFlow parses `24 MiB` from OSS, `8 MiB` from the merged PR, and the
+   open SEV-2 Slack message.
+4. The result is **suspended**. It cites all three sources, the Reality Memory
+   lineage, the deterministic SAG trace, the engineering release owner, and a
+   human-required next action.
+5. Expand **Audit proof** to show the exact server-derived records and parser
+   output. No external action has occurred.
+6. Click **Run Qwen case proof** to compile five ephemeral alternate realities:
+   safe/resolved, open incident, missing policy, stale policy, and the memory
+   regression. The Qwen model/status is shown beside each deterministic SAG
+   verdict; these runs never change canonical memory.
+
+To rehearse missing/stale paths safely, remove or let one required source age
+out; the same endpoint returns `review_required` instead of inventing a
+decision.
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/nexaflow/overview` | Read-only console state for `nexaflow-demo`. |
+| `POST` | `/nexaflow/release-check` | Aggregate Slack + OSS + GitHub release decision. |
+| `POST` | `/nexaflow/case-matrix` | Five ephemeral Qwen + SAG regression cases for judge proof. |
+| `POST` | `/integrations/slack/events` | Signed, allowlisted Slack ingress. |
+| `POST` | `/integrations/github/pr` | Signed merged pull-request ingress. |
+| `POST` | `/operator/integrations/alibaba_oss/sync-now` | Operator-authenticated, read-only Alibaba OSS sync. |
+| `GET` | `/source-events` | Read-only normalized evidence ledger. |
+| `GET` | `/reality-memory` | Active and superseded Qwen Reality Memory. |
+| `POST` | `/mcp/` | Authenticated Streamable HTTP MCP transport. |
+
+## Verify locally
+
+```powershell
+python -m pytest backend/tests/test_sources.py backend/tests/test_github_integration.py backend/tests/test_operator_integrations.py -q
 cd frontend
 npm.cmd run build
 ```
 
-The source test suite covers Slack HMAC/replay and channel restrictions, Drive content-version ingestion, verified-web SSRF rejection, sandbox expiry, temporal memory boundaries, workflow safety, and MCP scopes. The public rehearsal must also confirm that the visual trace renders the server response after every stage; it must never fabricate a verdict or Qwen completion in the browser.
-
-## Synthetic company integration lab
-
-`/play/integration-lab` creates **Northstar Logistics**, a browser-private,
-expiring fixture company. It runs a synthetic Slack incident, Drive runbook v2
-then v3, and a merged GitHub PR through the real source ledger and Qwen memory
-pipeline before calling MCP `evaluate_workflow`. It also exposes the real
-signature/replay, duplicate-delivery, temporal-supersession, and private-web
-guard results. It is deliberately labelled fixture evidence and contacts no
-real Slack workspace, Drive folder, or GitHub repository.
-
-## NexaFlow temporal-memory lab
-
-`/play/nexaflow` is the companion synthetic-company lab built around four
-operational questions that a real company must answer carefully:
-
-- **Conflicting enterprise SLA:** a historical policy conflicts with a newer
-  sales announcement, so Company Brain flags the old value instead of silently
-  treating it as current.
-- **Stale decision-maker:** a historical account contact is superseded by newer
-  departure and handoff evidence; the earlier record remains auditable.
-- **Sales to Customer Success handoff:** a Sales handoff and a later GitHub
-  latency fix update the context read by the next agent through MCP
-  `inspect_memory`.
-- **No confirmed commitment:** generic material and an unsigned template do
-  not prove an Acme-specific promise, so the system identifies the missing
-  executed-contract or written-commitment evidence.
-
-Every scenario uses a private, expiring browser sandbox and passes fixture
-records through the normal immutable source ledger and Qwen Reality Memory
-compiler. The final conclusion is deterministic and evidence-bound: Qwen is
-never presented as having established an unsupported commitment. Fixture CRM
-and public-profile records are clearly labelled as such; this does not claim a
-live CRM or profile-provider connector. The lab also does not claim Qwen
-vision/audio processing or an edge cache, because those capabilities are not
-implemented in this submission.
-
-## Useful endpoints
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/demo/readiness` | Build SHA, Qwen health, scenario version, and canonical counts. |
-| `GET` | `/source-connections` | Server-derived source health and allowed scope. |
-| `GET` | `/source-events` | Immutable normalized evidence for the scoped organization. |
-| `GET` | `/reality-memory` | Active and superseded source-backed memory. |
-| `GET` | `/demo-company/nexaflow/scenarios` | Server-owned NexaFlow fixture scenario catalog. |
-| `POST` | `/demo-company/nexaflow/{scenario_id}` | Run one private NexaFlow source-to-memory scenario. |
-| `POST` | `/integrations/slack/events` | Signed Slack event intake. |
-| `POST` | `/integrations/google-drive/sync` | Scoped, API-key authenticated Drive sync. |
-| `POST` | `/integrations/web/fetch` | Scoped, API-key authenticated verified URL fetch. |
-| `POST` | `/workflow-runs` | Evaluate an evidence/live-context workflow. |
-| `POST` | `/workflow-runs/{id}/outcome` | Record a human-confirmed outcome. |
-| `GET` | `/integration-catalog` | Truthful integration capability catalog. |
-| `POST` | `/mcp/` | Authenticated Streamable HTTP MCP transport. |
-
-## Submission material
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Connection guide](CONNECT.md)
-- [Hackathon write-up](HACKATHON_WRITEUP.md)
-- [Deployment proof checklist](docs/DEPLOYMENT_PROOF.md)
-- [Pre-submit checklist](docs/SUBMISSION_CHECKLIST.md)
-- [MIT License](LICENSE)
-
-## Scope and safety
-
-This is a production-shaped hackathon build, not a claim of self-serve OAuth onboarding, a connector marketplace, general enterprise RBAC, autonomous execution, or verified hardware attestation on every host. OAuth 2.1 and per-company secret-vault onboarding are documented next steps. Hardware attestation is reported only when the running host verifies it; otherwise decisions retain the explicit RSA audit fallback.
+For the final local acceptance, also verify Slack and GitHub’s delivery logs,
+OSS sync, Docker health, and the root console in a desktop and mobile browser.
+No provider secret is committed or exposed in the browser.
