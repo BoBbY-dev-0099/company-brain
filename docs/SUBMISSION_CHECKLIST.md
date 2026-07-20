@@ -14,23 +14,30 @@
 ## Must be true before submission
 
 - [ ] Public repository, MIT license, written summary, architecture, live URL,
-      and 1-3 minute video are accessible.
-- [ ] The deployed readiness response shows build SHA, Qwen health, scenario
+      and 1-3 minute video are accessible. (Video remains to be recorded.)
+- [x] The deployed readiness response shows build SHA, Qwen health, scenario
       version, and canonical counts.
-- [ ] The root route is reachable over HTTPS from a fresh browser session.
-- [ ] The NexaFlow overview labels each source with its actual runtime status.
-- [ ] An authenticated MCP client can initialize, list tools, inspect memory,
-      query evidence, and evaluate a workflow; invalid or cross-org keys fail.
-- [ ] A scoped MCP write/read rehearsal shows one agent writing an
-      evidence-linked note and another agent reading the same provenance.
-- [ ] The optional edge profile returns cached memory with explicit
-      `fresh`, `stale`, or `unavailable` status and never permits an action.
-- [ ] Source status is called connected only after server configuration is
+- [x] The root route is reachable over HTTPS from the built-in browser and a
+      fresh public request.
+- [x] The NexaFlow overview labels Slack, Alibaba OSS, and GitHub with their
+      actual backend-derived runtime status.
+- [x] An authenticated MCP client initialized, listed all 8 tools, queried
+      evidence, and checked an intercept; the final response enforced
+      `external_action_permitted=false`, `human_approval_required=true`, and
+      `auto_execute=false`.
+- [x] Local scoped MCP tests cover one agent writing an evidence-linked note
+      and another agent reading the same provenance, including idempotency and
+      cross-organization rejection.
+- [x] The optional edge profile returns cached memory with explicit `fresh`,
+      `stale`, or `unavailable` status and never permits an action.
+- [x] Source status is called connected only after server configuration is
       complete. Otherwise the UI says setup_required.
-- [ ] Slack HMAC, GitHub signing, OSS prefix scope, memory supersession,
-      outcome gating, and no-external-action tests pass.
-- [ ] Redacted Alibaba Workbench Overview and deployed health/readiness captures
-      are linked from deployment materials.
+- [x] Slack HMAC, GitHub signing, OSS prefix scope, memory supersession,
+      outcome gating, no-external-action, Qwen fallback, vision, and
+      concurrent workflow tests pass.
+- [ ] Redacted Alibaba Workbench Overview is still required; deployed
+      health/readiness and HTTPS/MCP captures are linked from
+      [deployment proof](DEPLOYMENT_PROOF.md).
 
 ## Claims to keep precise
 
