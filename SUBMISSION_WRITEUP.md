@@ -113,8 +113,10 @@ callbacks and the server-side OSS worker are the only source-write paths.
 
 ## 3. The judge-ready NexaFlow story
 
-The demo company is **NexaFlow Logistics**. Its fulfillment release is about
-to be promoted.
+The demo company is **NexaFlow Logistics**, a controlled fictional company
+whose Slack event, OSS runbook, and GitHub pull request are real provider
+artifacts in dedicated test accounts. Its fulfillment release is about to be
+promoted.
 
 ### Three real source signals
 
@@ -396,7 +398,7 @@ proceed, while the human confirmation boundary remains intact.
 
 The current local verification includes:
 
-- **95 backend tests passed**, with five Mongo integration tests explicitly
+- **96 backend tests passed**, with five Mongo integration tests explicitly
   skipped unless `RUN_MONGO_TESTS=1` is enabled;
 - signed Slack challenge, replay-window, channel, and idempotency coverage;
 - signed merged GitHub webhook, repository allowlist, diff, and idempotency
@@ -416,15 +418,24 @@ The current local verification includes:
 - real NexaFlow release-check flow returning `suspended` for the 24 MiB versus
   8 MiB mismatch and open incident.
 
-The public deployment reports:
+### Deployment evidence and availability
 
-```text
-Build SHA: 90c3688a0032f0086b223b9eb1b1d687e11ef405
-Database: connected
-Qwen: configured
-Embeddings: healthy
-HTTPS: enabled
-```
+The public deployment evidence is versioned rather than presented as a
+permanently-live service claim:
+
+- On 20 July 2026, public health, readiness, integration-catalog, HTTPS, and
+  authenticated MCP checks were captured for deployed commit
+  `89c2735baa26129ecc833316457b87bd6a20e16f`.
+- The subsequent judge-route revision at
+  `eb6e2e628ba375665e247e31817c0a8b477c4cbb` added the server-owned, ephemeral
+  Qwen case matrix proof.
+- The submitted Alibaba Workbench image shows the ECS instance in its running
+  state. The deployment packet contains the non-secret HTTP captures and image
+  links.
+
+The ECS instance is activated for scheduled demonstrations or on request to
+control hackathon credits. The repository and local reproduction guide remain
+available when the public route is offline.
 
 ---
 

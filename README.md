@@ -12,6 +12,15 @@ source-backed Qwen Reality Memory before one governed decision is made:
 > Suspend the fulfillment release when the merged worker-memory setting is
 > below the approved runbook minimum, or a related incident remains open.
 
+This is a 2 AM class of failure: a release pipeline can see a valid code change
+while the incident message that should invalidate it is sitting in a different
+system. Neither source is wrong. The release becomes unsafe because no one
+joined the current facts before the consequential action.
+
+NexaFlow is a controlled integration rehearsal: its Slack event, OSS runbook,
+and GitHub pull request are real provider artifacts in dedicated test accounts;
+the company scenario itself is intentionally fictional.
+
 ```mermaid
 flowchart LR
   S["Slack #ops-incidents"] --> E["Immutable evidence ledger"]
@@ -56,12 +65,47 @@ no browser-provided organization ID, and no fake green verdict.
 This is a selected-workspace local rehearsal, not a connector marketplace,
 self-service OAuth product, autonomous executor, or generic workflow builder.
 
+## How Qwen Cloud is used
+
+Qwen is part of the evidence-to-memory path, not a chat layer added after the
+decision.
+
+| Qwen model | Bounded responsibility | Safety boundary |
+| --- | --- | --- |
+| `qwen-plus` | Compiles normalized source evidence into a structured Reality Memory candidate with rationale and source linkage. The compiler requests strict JSON Schema output, then validates the result server-side. | Qwen cannot choose the organization, replace source evidence, or authorize an external action. Unavailable or invalid compilation is visible. |
+| `text-embedding-v3` | Retrieves related source-backed memory for an agent or workflow. | Retrieval retains provenance, freshness, and active/superseded/review-required status; similarity is never a safety verdict. |
+| `qwen-vl-plus` (optional visual adapter) | Extracts a typed observation from authenticated, redacted image evidence. The ledger retains an image digest and observation, not the original image. | This is a separate evidence adapter, not the proof for the three-source NexaFlow release case. Unavailable vision produces no metric and requires review. |
+
+The final decision remains deterministic: Qwen interprets evidence; SAG evaluates
+the configured rule; a named human owns any external consequence. The detailed
+Qwen-VL and edge-cache extension is documented in the
+[technical appendix](HACKATHON_WRITEUP.md#multimodal-and-edge-extension).
+
+## Safety boundaries a judge can inspect
+
+The repository makes the important failure cases explicit instead of assuming
+that a model response is trustworthy.
+
+| Attempt or failure mode | Enforced boundary | Verification in the repository |
+| --- | --- | --- |
+| Forged or stale Slack event | HMAC signature, five-minute replay window, configured team/channel scope, and idempotent ingestion. | [Slack source tests](backend/tests/test_sources.py) |
+| Wrong GitHub repository or duplicate delivery | Signed webhook, merged-PR requirement, explicit repository allowlist, and delivery idempotency. | [GitHub intake tests](backend/tests/test_github_integration.py) |
+| Browser or MCP caller tries to select another organization | The server resolves the NexaFlow source org or MCP organization; the caller-supplied value is ignored and scoped reads are isolated. | [NexaFlow tests](backend/tests/test_nexaflow.py) and [MCP tests](backend/tests/test_mcp_remote.py) |
+| Missing, stale, unavailable, conflicting, or unparsable evidence | The deterministic result becomes `review_required`; it never becomes a fabricated safe verdict. | [Workflow tests](backend/tests/test_workflows.py) and [NexaFlow tests](backend/tests/test_nexaflow.py) |
+| Model output or agent request attempts to create action authority | Structured output is validated server-side; MCP scopes and the human-action gate keep `auto_execute` disabled and external execution out of the tool surface. | [Compiler guard test](backend/tests/test_compiler.py) and [MCP tests](backend/tests/test_mcp_remote.py) |
+
+The test suite also includes an in-memory 100-concurrent-workflow check for
+unique run IDs and organization-isolated run storage. It is an isolation test,
+not a claim of production load certification.
+
 ## Local-first quick start
 
-The local rehearsal remains the safest way to iterate. The verified public
-deployment is now running on Alibaba ECS at
-`https://brain.veriflowai.me/`; stop the instance when you are not recording
-or rehearsing the judge demo to control cost.
+The local rehearsal remains the safest way to iterate. Company Brain is
+deployed on Alibaba ECS at `https://brain.veriflowai.me/`. To control hackathon
+credits, the instance is activated for scheduled demonstration windows or on
+request rather than claimed as permanently live. See the
+[judge reproduction guide](docs/JUDGE_REPRODUCTION.md) and
+[deployment proof](docs/DEPLOYMENT_PROOF.md) for the verified public snapshots.
 
 ```powershell
 Copy-Item .env.example .env

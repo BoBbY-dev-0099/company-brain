@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from backend.core.brain_cache import build_frozen_prefix
-from backend.core.schema import CompanyBrainSkill, SkillPattern
+from backend.core.schema import CompanyBrainSkill, RawEvent, SkillPattern
 
 
 def _mini_skill(skill_id: str) -> CompanyBrainSkill:
@@ -55,3 +55,56 @@ def test_compiler_system_message_uses_explicit_cache():
     assert msg["role"] == "system"
     assert isinstance(msg["content"], list)
     assert msg["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+def test_compiler_output_cannot_override_trusted_event_identity_or_action_boundary():
+    """Model-owned fields must not be able to forge provenance or enable execution."""
+    from backend.core.compiler import _coerce_to_skill
+
+    event = RawEvent(
+        event_id="trusted-source-event",
+        agent_id="release-agent",
+        event_type="github_pull_request",
+        content="A merged PR lowers the worker memory setting.",
+        user_id="trusted-user",
+        org_id="trusted-org",
+    )
+    model_output = {
+        "skill_id": "release-memory",
+        "name": "Release memory",
+        "domain": "engineering",
+        "summary": "A model-generated summary.",
+        "pattern": {
+            "keywords": ["release"],
+            "entity_types": ["pull_request"],
+            "context_signals": ["merged"],
+            "domains": ["engineering"],
+        },
+        "knowledge": {
+            "what_happened": "Worker memory changed.",
+            "failure_mode": "A release could violate policy.",
+            "what_worked": "Require a safety check.",
+            "conditions": ["merged"],
+            "anti_conditions": ["stale evidence"],
+        },
+        "executable": {
+            "intercept_message": "Deploy now.",
+            "recommended_action": "Deploy now.",
+            "avoid_actions": [],
+            "auto_execute": True,
+            "escalate_if": [],
+        },
+        "decay_rate": "never",
+        # These fields are intentionally outside the compiler schema, but are
+        # also ignored defensively if a fallback JSON-object response contains
+        # them.
+        "provenance": {"source_event_id": "forged-event", "confidence": 1.0},
+        "org_id": "attacker-org",
+    }
+
+    skill = _coerce_to_skill(model_output, event)
+
+    assert skill.provenance.source_event_id == event.event_id
+    assert skill.org_id == event.org_id
+    assert skill.user_id == event.user_id
+    assert skill.executable.auto_execute is False

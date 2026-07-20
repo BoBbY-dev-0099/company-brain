@@ -347,7 +347,7 @@ The verified local gate includes:
 - source-org isolation and no caller-controlled organization;
 - MCP scope and cross-organization checks;
 - no-external-action enforcement;
-- backend tests: 95 passed, 5 intentionally skipped without Mongo integration;
+- backend tests: 96 passed, 5 intentionally skipped without Mongo integration;
 - Mongo integration tests: 5 passed;
 - Qwen case matrix: 5 ephemeral compilations, with suspended,
   proceed-with-human-approval, and review-required outcomes;
@@ -372,9 +372,16 @@ The verified local gate includes:
 
 The code includes the Alibaba ECS Docker/TLS deployment path, nginx
 configuration, certificate renewal services, readiness/build metadata, and
-authenticated MCP forwarding. The current public deployment is verified at
-`https://brain.veriflowai.me/` on build
-`eb6e2e628ba375665e247e31817c0a8b477c4cbb`:
+authenticated MCP forwarding. Public verification is recorded as versioned
+snapshots at `https://brain.veriflowai.me/`, rather than as a claim that the
+cost-controlled ECS instance is permanently live:
+
+- `89c2735baa26129ecc833316457b87bd6a20e16f` is the captured public
+  health/readiness, integration-catalog, HTTPS, and MCP verification snapshot;
+- `eb6e2e628ba375665e247e31817c0a8b477c4cbb` is the subsequent judge-route
+  revision with the server-owned Qwen case-matrix regression proof.
+
+The recorded deployment behavior includes:
 
 - runtime health/readiness reports MongoDB `companybrain_nexaflow` connected,
   Qwen configured, embeddings healthy, and the canonical NexaFlow counts;
@@ -384,9 +391,10 @@ authenticated MCP forwarding. The current public deployment is verified at
   the deployed endpoint, including the no-external-action boundary;
 - the legacy public `/mcp/sse` route returns `410`.
 
-The local acceptance run is not presented as cloud deployment proof. Before
-submission, capture the redacted Alibaba Workbench Overview with the instance
-in `Running` state and record the 1–3 minute demo video. Do not expose account
+The local acceptance run is not presented as cloud deployment proof. The
+redacted Alibaba Workbench Overview is captured in the deployment packet;
+capture a new image whenever a later deployment needs to be tied to a new
+build. Record the 1-3 minute demo video separately. Do not expose account
 identifiers, IP addresses, API keys, or provider secrets.
 
 See docs/DEPLOYMENT_PROOF.md for the exact capture manifest.
@@ -427,13 +435,13 @@ adapters are the next product layer after the hackathon.
 | Innovation and AI creativity | Qwen Reality Memory makes source-backed operational claims temporal, attributable, and supersedable instead of treating memory as a flat chat history. |
 | Technical depth and engineering | Signed adapters, durable ingestion, Mongo persistence, Qwen compilation, embeddings, temporal reconciliation, deterministic SAG, scoped MCP, Docker worker architecture, and tests. |
 | Problem value and impact | Prevents a concrete class of unsafe releases caused by an open incident or policy/configuration mismatch. |
-| Presentation and documentation | One primary console, one memorable end-to-end story, visible evidence-to-decision trace, audit proof, architecture, local setup, and deployment capture plan. |
+| Presentation and documentation | One primary console, one memorable end-to-end story, visible evidence-to-decision trace, audit proof, architecture, local setup, and versioned deployment evidence. |
 
 ## Submission links
 
 - Repository: https://github.com/BoBbY-dev-0099/company-brain
-- Judge route (verified): https://brain.veriflowai.me/
-- Verified build: `eb6e2e628ba375665e247e31817c0a8b477c4cbb`
+- Judge route (scheduled activation): https://brain.veriflowai.me/
+- Verified deployment snapshots: `89c2735baa26129ecc833316457b87bd6a20e16f` and `eb6e2e628ba375665e247e31817c0a8b477c4cbb`
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [standalone SVG](docs/nexaflow-reality-architecture.svg)
 - Setup guide: CONNECT.md
 - Deployment proof: docs/DEPLOYMENT_PROOF.md
