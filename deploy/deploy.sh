@@ -30,7 +30,13 @@ else
   (
     cd "$APP_DIR"
     git fetch origin "$BRANCH"
-    git checkout "$BRANCH"
+    # Older provisioned hosts may only have the default local branch. Create
+    # the requested local branch from FETCH_HEAD when it is not present.
+    if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+      git checkout "$BRANCH"
+    else
+      git checkout -b "$BRANCH" FETCH_HEAD
+    fi
     git pull --ff-only origin "$BRANCH"
   )
 fi
