@@ -305,8 +305,11 @@ Show the edge cache returning the latest server-issued memory as `fresh` (or
 ### 2:20-2:30 - Deployment proof
 
 Show the deployed build SHA, Qwen health, public HTTPS console, and an
-authenticated MCP request. These four frames are captured only after ECS is
-running; local Docker is not presented as cloud proof.
+authenticated MCP request. The public ECS runtime is already verified at
+`https://brain.veriflowai.me/`; local Docker is not presented as cloud proof.
+The only remaining manual submission artifacts are a redacted Alibaba
+Workbench Overview screenshot with the instance running and the short demo
+video.
 
 ## Local rehearsal
 
@@ -337,28 +340,42 @@ The verified local gate includes:
 - source-org isolation and no caller-controlled organization;
 - MCP scope and cross-organization checks;
 - no-external-action enforcement;
-- backend tests: 93 passed, 5 intentionally skipped without Mongo integration;
+- backend tests: 94 passed, 5 intentionally skipped without Mongo integration;
 - Mongo integration tests: 5 passed;
 - production frontend build: passed;
 - clean Docker API, worker, MongoDB, and nginx boot;
 - edge profile smoke: `fresh` snapshot, stale fallback, and no-action boundary;
-- browser-facing local release-check request: HTTP 200, verdict suspended.
+- browser-facing local release-check request: HTTP 200, verdict suspended;
+- public ECS health/readiness: HTTP 200, Qwen configured, embeddings healthy,
+  scenario `nexaflow-live-v1`, and 3 evidence / 3 memories / 19 workflow runs;
+- public browser rehearsal: connected Slack, Alibaba OSS, and GitHub tiles,
+  suspended release decision, named owner, human-confirmation boundary, and
+  expandable audit proof;
+- authenticated Streamable HTTP MCP: initialize, `tools/list` (8 tools),
+  `query_evidence`, and `check_intercept`; the response confirmed
+  `external_action_permitted=false`, `human_approval_required=true`, and
+  `auto_execute=false`.
 
 ## Deployment proof
 
 The code includes the Alibaba ECS Docker/TLS deployment path, nginx
 configuration, certificate renewal services, readiness/build metadata, and
-authenticated MCP forwarding. Final submission artifacts must be captured from
-the verified commit running on ECS or SAS:
+authenticated MCP forwarding. The current public deployment is verified at
+`https://brain.veriflowai.me/` on build
+`89c2735baa26129ecc833316457b87bd6a20e16f`:
 
-1. Alibaba Workbench Overview showing the running instance;
-2. redacted runtime health/readiness response with build SHA and Qwen status;
-3. public HTTPS console in a fresh browser session;
-4. authenticated MCP and integration-catalog proof.
+- runtime health/readiness reports MongoDB `companybrain_nexaflow` connected,
+  Qwen configured, embeddings healthy, and the canonical NexaFlow counts;
+- the public HTTPS console returns the real suspended release decision from
+  the three persisted source records;
+- authenticated MCP and integration-catalog behavior were exercised against
+  the deployed endpoint, including the no-external-action boundary;
+- the legacy public `/mcp/sse` route returns `410`.
 
-The local acceptance run is not presented as cloud deployment proof. The final
-public hostname and deployment screenshots must be rechecked after the ECS
-rollout.
+The local acceptance run is not presented as cloud deployment proof. Before
+submission, capture the redacted Alibaba Workbench Overview with the instance
+in `Running` state and record the 1–3 minute demo video. Do not expose account
+identifiers, IP addresses, API keys, or provider secrets.
 
 See docs/DEPLOYMENT_PROOF.md for the exact capture manifest.
 
@@ -403,8 +420,8 @@ adapters are the next product layer after the hackathon.
 ## Submission links
 
 - Repository: https://github.com/BoBbY-dev-0099/company-brain
-- Expected judge route after final ECS/TLS verification:
-  https://brain.veriflowai.me/
+- Judge route (verified): https://brain.veriflowai.me/
+- Verified build: `89c2735baa26129ecc833316457b87bd6a20e16f`
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [standalone SVG](docs/nexaflow-reality-architecture.svg)
 - Setup guide: CONNECT.md
 - Deployment proof: docs/DEPLOYMENT_PROOF.md

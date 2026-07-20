@@ -55,8 +55,10 @@ self-service OAuth product, autonomous executor, or generic workflow builder.
 
 ## Local-first quick start
 
-ECS is deliberately out of scope for this workflow. Keep it stopped while the
-local rehearsal is being built and verified.
+The local rehearsal remains the safest way to iterate. The verified public
+deployment is now running on Alibaba ECS at
+`https://brain.veriflowai.me/`; stop the instance when you are not recording
+or rehearsing the judge demo to control cost.
 
 ```powershell
 Copy-Item .env.example .env

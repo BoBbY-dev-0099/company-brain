@@ -92,13 +92,14 @@ return `410`; it is not a valid production connector.
 
 ## Verified public run
 
-On 20 July 2026, the exact commit `b66099e620fe450e525b65fe744f168a3a1e6b5c`
+On 20 July 2026, the exact commit `89c2735baa26129ecc833316457b87bd6a20e16f`
 was deployed to the NexaFlow ECS host and verified from outside the host.
 
 - Public health: `status=ok`, MongoDB connected to `companybrain_nexaflow`,
   Qwen configured, embeddings healthy.
-- Public overview: 3 persisted source records, 3 Reality Memory records, and
-  Slack, Alibaba OSS, and GitHub all `connected/healthy` for `nexaflow-demo`.
+- Public overview: 3 persisted source records, 3 Reality Memory records, 19
+  workflow runs, and Slack, Alibaba OSS, and GitHub all `connected/healthy` for
+  `nexaflow-demo`.
 - Aggregate release check: `suspended`; runbook minimum `24 MiB`, merged
   configuration `8 MiB`, linked incident `open`, owner `NexaFlow engineering
   release owner`.
@@ -111,7 +112,7 @@ was deployed to the NexaFlow ECS host and verified from outside the host.
   `human_approval_required=true`, and `auto_execute=false`. The temporary key
   was revoked after the test.
 
-The captured non-secret HTTP responses are versioned under
+The captured non-secret HTTP responses for this verified build are versioned under
 [`docs/assets/deployment-proof-20260720T101644Z`](assets/deployment-proof-20260720T101644Z/):
 
 - [`health.json`](assets/deployment-proof-20260720T101644Z/health.json)
@@ -138,10 +139,11 @@ Place redacted images in `docs/assets/` and link them below only after capture.
 
 | Artifact | Required state | Link |
 | --- | --- | --- |
-| Alibaba Workbench Overview | Pending manual redacted screenshot | Capture from the Alibaba console before submission |
+| Alibaba Workbench Overview | Pending manual redacted screenshot | Capture from the Alibaba console in `Running` state before submission |
 | Container, health, readiness, and build SHA | Captured from deployed ECS | [health](assets/deployment-proof-20260720T101644Z/health.json) · [readiness](assets/deployment-proof-20260720T101644Z/readiness.json) |
 | Public NexaFlow Console over HTTPS | Browser route verified; screenshot still requires manual capture | [live console](https://brain.veriflowai.me/) |
 | HTTPS/MCP integration catalog proof | Captured; authenticated MCP smoke verified | [catalog](assets/deployment-proof-20260720T101644Z/integration-catalog.json) · [headers](assets/deployment-proof-20260720T101644Z/https-headers.txt) |
 
-This document intentionally makes no claim that the DNS hostname, TLS
-certificate, or public deployment is live until those artifacts are attached.
+The public DNS hostname, TLS certificate, and ECS deployment are verified. The
+Workbench screenshot and short demo video remain manual submission artifacts;
+redact account identifiers, IP addresses, API keys, and provider secrets.
