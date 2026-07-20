@@ -356,7 +356,7 @@ The verified local gate includes:
 - edge profile smoke: `fresh` snapshot, stale fallback, and no-action boundary;
 - browser-facing local release-check request: HTTP 200, verdict suspended;
 - public ECS health/readiness: HTTP 200, Qwen configured, embeddings healthy,
-  scenario `nexaflow-live-v1`, and 3 evidence / 3 memories / 20 workflow runs;
+  scenario `nexaflow-live-v1`, with 3 evidence records and 3 active memories;
 - public Qwen case proof: five server-owned, ephemeral scenarios completed with
   `qwen-plus`, covering suspension, human-approved continuation, and missing or
   stale evidence review;
@@ -374,7 +374,7 @@ The code includes the Alibaba ECS Docker/TLS deployment path, nginx
 configuration, certificate renewal services, readiness/build metadata, and
 authenticated MCP forwarding. The current public deployment is verified at
 `https://brain.veriflowai.me/` on build
-`7cc56b2ff13aced870ab3b7b1b980ab521c38f97`:
+`eb6e2e628ba375665e247e31817c0a8b477c4cbb`:
 
 - runtime health/readiness reports MongoDB `companybrain_nexaflow` connected,
   Qwen configured, embeddings healthy, and the canonical NexaFlow counts;
@@ -433,7 +433,7 @@ adapters are the next product layer after the hackathon.
 
 - Repository: https://github.com/BoBbY-dev-0099/company-brain
 - Judge route (verified): https://brain.veriflowai.me/
-- Verified build: `7cc56b2ff13aced870ab3b7b1b980ab521c38f97`
+- Verified build: `eb6e2e628ba375665e247e31817c0a8b477c4cbb`
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [standalone SVG](docs/nexaflow-reality-architecture.svg)
 - Setup guide: CONNECT.md
 - Deployment proof: docs/DEPLOYMENT_PROOF.md

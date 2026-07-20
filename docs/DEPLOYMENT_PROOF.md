@@ -124,7 +124,7 @@ The captured non-secret HTTP responses for this verified build are versioned und
 
 The proof bundle above records the earlier public build. The current judge route
 was subsequently redeployed at commit
-`7cc56b2ff13aced870ab3b7b1b980ab521c38f97`. Its additional regression proof is
+`eb6e2e628ba375665e247e31817c0a8b477c4cbb`. Its additional regression proof is
 the server-owned `POST /api/nexaflow/case-matrix` endpoint: five private cases
 were compiled by `qwen-plus` and returned the expected suspended,
 human-approval, and review-required outcomes. The endpoint marks every run
