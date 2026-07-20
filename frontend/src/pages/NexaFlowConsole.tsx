@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Activity, AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, FileText, Github, Loader2, MessageSquareText, RefreshCw, ShieldAlert, Sparkles } from "lucide-react"
 import { Link } from "react-router-dom"
 import { getNexaFlowOverview, runNexaFlowReleaseCheck, type DecisionRun, type NexaFlowDecision, type NexaFlowOverview, type RealityMemory, type SourceConnection, type SourceEvidence } from "../lib/api"
@@ -35,6 +35,7 @@ export default function NexaFlowConsole() {
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const decisionPanelRef = useRef<HTMLDivElement | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -64,6 +65,9 @@ export default function NexaFlowConsole() {
       setDecision(response)
       setOverview(await getNexaFlowOverview())
       setError(null)
+      // The decision is the judge's primary result. Bring it into view after
+      // the backend responds instead of leaving the new panel below the fold.
+      requestAnimationFrame(() => decisionPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }))
     } catch (reason) {
       setError(errorText(reason))
     } finally {
@@ -74,16 +78,16 @@ export default function NexaFlowConsole() {
   return <div className="min-h-screen bg-[#f6f4ef] text-[#17212b]">
     <header className="border-b border-[#ddd8ce] bg-[#f6f4ef]/95"><div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5"><Link to="/" className="flex items-center gap-2 font-semibold tracking-[-0.02em]"><span className="grid h-8 w-8 place-items-center rounded-lg bg-[#16386e] text-sm font-bold text-white">N</span>NexaFlow</Link><div className="flex items-center gap-4"><span className="hidden text-xs text-[#697585] sm:block">Local real-integration rehearsal</span><Link to="/setup" className="text-sm font-semibold text-[#174ea6]">Setup sources</Link><button type="button" onClick={() => void refresh()} className="inline-flex items-center gap-2 rounded-lg border border-[#ccd4df] bg-white px-3 py-2 text-sm font-semibold text-[#34455c]"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh</button></div></div></header>
     <main className="mx-auto max-w-6xl px-5 py-10">
-      <section className="grid gap-8 lg:grid-cols-[1.2fr_.8fr]"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#2364d2]">Live operations console</p><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-.055em] text-[#142234] sm:text-5xl">Stop a release when company reality changes.</h1><p className="mt-4 max-w-2xl text-base leading-7 text-[#5c6a7b]">NexaFlow turns real Slack, Alibaba OSS, and GitHub evidence into governed memory before an agent or release workflow acts.</p></div><div className="rounded-2xl border border-[#d5dbe3] bg-[#eef5ff] p-5"><p className="text-xs font-bold uppercase tracking-[.14em] text-[#3265ad]">One decision</p><p className="mt-2 text-lg font-semibold">Fulfillment release safety</p><p className="mt-2 text-sm leading-6 text-[#52647c]">The server selects the newest ready evidence. The browser supplies no organization, evidence, or verdict.</p><button type="button" disabled={running} onClick={() => void runCheck()} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#16386e] px-4 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-60">{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}{running ? "Checking real evidence..." : "Run release safety check"}</button></div></section>
+      <section className="grid gap-8 lg:grid-cols-[1.2fr_.8fr]"><div><p className="text-xs font-bold uppercase tracking-[.18em] text-[#2364d2]">Live operations console</p><h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-.055em] text-[#142234] sm:text-5xl">Stop a release when company reality changes.</h1><p className="mt-4 max-w-2xl text-base leading-7 text-[#5c6a7b]">NexaFlow turns real Slack, Alibaba OSS, and GitHub evidence into governed memory before an agent or release workflow acts.</p></div><div className="rounded-2xl border border-[#d5dbe3] bg-[#eef5ff] p-5"><p className="text-xs font-bold uppercase tracking-[.14em] text-[#3265ad]">One decision</p><p className="mt-2 text-lg font-semibold">Fulfillment release safety</p><p className="mt-2 text-sm leading-6 text-[#52647c]">The server selects the newest ready evidence. The browser supplies no organization, evidence, or verdict.</p><button type="button" disabled={running} onClick={() => void runCheck()} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#16386e] px-4 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-60">{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}{running ? "Checking real evidence..." : "Run release safety check"}</button>{decision && <div aria-live="polite" className="mt-4 rounded-xl border border-[#b9cbe6] bg-white/75 px-3 py-2 text-sm"><span className="font-semibold">Decision returned:</span> {titleStatus(decision.run.decision_brief.verdict)}</div>}</div></section>
 
       {error && <div className="mt-7 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>}
+      {activeRun && <div ref={decisionPanelRef}><DecisionPanel run={activeRun} parsing={decision?.parsing} boundary={decision?.boundary} /></div>}
       <section className="mt-9"><div className="mb-3 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[.14em] text-[#718096]">Source connections</p><h2 className="mt-1 text-xl font-semibold">Read-only company evidence</h2></div><span className="text-xs text-[#718096]">Backend-derived status</span></div><div className="grid gap-3 md:grid-cols-3">{(overview?.connections ?? []).filter((item) => item.provider !== "web").map((item) => <ConnectionCard key={item.provider} connection={item} />)}</div></section>
 
       <section className="mt-4 rounded-2xl border border-[#ddd8ce] bg-[#fffdfa] p-5"><p className="text-xs font-bold uppercase tracking-[.14em] text-[#718096]">The live path</p><div className="mt-4 grid gap-3 md:grid-cols-3"><FlowStep number="1" title="Connect sources" detail={`${configuredSources}/3 configured`} state={configuredSources === 3 ? "done" : "active"} /><FlowStep number="2" title="Build reality memory" detail={`${receivedSources}/3 source events received`} state={receivedSources === 3 ? "done" : configuredSources === 3 ? "active" : "waiting"} /><FlowStep number="3" title="Check the release" detail={activeRun ? titleStatus(activeRun.decision_brief.verdict) : "Waiting for real evidence"} state={activeRun ? (activeRun.decision_brief.verdict === "suspended" ? "risk" : "done") : "waiting"} /></div></section>
 
       {!loading && overview && !overview.release_check_ready && <section className="mt-6 rounded-2xl border border-amber-200 bg-[#fffaf0] p-5"><div className="flex gap-3"><AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" /><div><p className="font-semibold text-amber-950">Release check is waiting for real evidence</p><ul className="mt-2 space-y-1 text-sm leading-6 text-amber-900">{overview.readiness_reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul><Link to="/setup" className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#174ea6]">Configure the NexaFlow test company <ArrowRight className="h-4 w-4" /></Link></div></div></section>}
 
-      {activeRun && <DecisionPanel run={activeRun} parsing={decision?.parsing} boundary={decision?.boundary} />}
       <section className="mt-10 grid gap-6 lg:grid-cols-[1fr_.9fr]"><EvidenceTimeline evidence={evidence} /><MemoryLineage memories={memories} /></section>
       {activeRun && <AuditProof run={activeRun} decision={decision} evidence={evidence} memories={memories} />}
     </main>
