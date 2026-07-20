@@ -348,58 +348,7 @@ provider records, reinforcement state, or external systems.
 
 ---
 
-## 8. Confirmation evidence
-
-[Download the combined evidence pack](docs/assets/judge-proof/nexaflow-evidence-pack.pdf)
-
-### Alibaba Cloud deployment
-
-The deployed ECS instance provides the public HTTPS service and runs the API,
-source worker, MongoDB, and nginx TLS stack.
-
-![Alibaba ECS Workbench deployment - running instance](docs/assets/judge-proof/alibaba-ecs-workbench-running.png)
-
-For the single Alibaba deployment code-link field, use the ECS rollout script
-[`deploy/deploy.sh`](https://github.com/BoBbY-dev-0099/company-brain/blob/demo/reduce-worker-memory/deploy/deploy.sh#L2-L95).
-It provisions the application on the ECS host, starts the API, worker,
-MongoDB, and nginx TLS stack, and exposes the deployed build SHA. The
-read-only Alibaba OSS API implementation is supporting evidence in
-[`AlibabaOSSAdapter`](https://github.com/BoBbY-dev-0099/company-brain/blob/demo/reduce-worker-memory/backend/sources/adapters.py#L102-L202).
-
-### Alibaba OSS runbook
-
-The release policy is stored in the private Alibaba Cloud OSS bucket and is
-read by the backend through the read-only OSS adapter. This screenshot shows
-the exact `fulfillment-release-policy.md` object in the configured Hong Kong
-bucket.
-
-![Alibaba OSS runbook](docs/assets/judge-proof/alibaba-oss-runbook.png)
-
-### Qwen Cloud model calls
-
-Qwen Cloud request logs show successful `qwen-plus` compilation calls and
-`text-embedding-v3` retrieval calls used by the deployed workflow. The browser
-never receives the API key.
-
-![Qwen Cloud request logs](docs/assets/judge-proof/qwen-cloud-request-logs.png)
-
-### Persisted source evidence
-
-The console shows the source records received from GitHub, Alibaba OSS, and
-Slack, including freshness and Qwen compilation state.
-
-![Persisted source evidence](docs/assets/judge-proof/persisted-evidence.png)
-
-### Qwen Reality Memory
-
-The console exposes the Qwen-compiled claims and their provenance instead of
-flattening them into unexplained dashboard text.
-
-![Qwen Reality Memory proof](docs/assets/judge-proof/qwen-memory-proof.png)
-
----
-
-## 9. Verification
+## 8. Verification
 
 The current local verification includes:
 
@@ -431,7 +380,7 @@ HTTPS: enabled
 
 ---
 
-## 10. Demo flow
+## 9. Demo flow
 
 The strongest judge route is a short problem-to-proof story:
 
@@ -452,7 +401,7 @@ The memorable line is:
 
 ---
 
-## 11. Honest scope
+## 10. Honest scope
 
 Company Brain is production-shaped for this hackathon, but it does not claim:
 
@@ -484,5 +433,6 @@ changing that core contract.
 - Repository: <https://github.com/BoBbY-dev-0099/company-brain>
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Deployment proof: [docs/DEPLOYMENT_PROOF.md](docs/DEPLOYMENT_PROOF.md)
+- Full judge reproduction, including signed webhook setup: [docs/JUDGE_REPRODUCTION.md](docs/JUDGE_REPRODUCTION.md)
 - Setup guide: [CONNECT.md](CONNECT.md)
 - Release policy: [real-workflow/runbooks/fulfillment-release-policy.md](real-workflow/runbooks/fulfillment-release-policy.md)
