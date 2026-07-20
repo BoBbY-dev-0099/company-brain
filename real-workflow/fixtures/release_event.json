@@ -1,29 +1,30 @@
 {
-  "template_id": "release-safety",
+  "template_id": "nexaflow-release-safety",
   "evidence": [
+    {
+      "source_type": "google_drive_document",
+      "source_name": "Google Drive",
+      "external_id": "nexaflow-runbook-v1",
+      "occurred_at": "2026-07-19T09:00:00Z",
+      "excerpt": "Fulfillment workers require at least 24 MiB of memory before promotion."
+    },
+    {
+      "source_type": "slack_message",
+      "source_name": "Slack #ops-incidents",
+      "external_id": "nexaflow-sev2-1",
+      "occurred_at": "2026-07-19T09:01:00Z",
+      "excerpt": "SEV-2 is resolved; fulfillment promotion may resume."
+    },
     {
       "source_type": "github_pull_request",
       "source_name": "GitHub",
-      "external_id": "acme/service#842",
-      "occurred_at": "2026-07-19T09:00:00Z",
-      "excerpt": "Merged PR #842 changes EXPORT_WORKER_MEMORY_MB from 25 to 8.",
-      "metadata": {
-        "changed_field": "worker_memory_mb",
-        "previous_value": 25,
-        "current_value": 8
-      }
-    },
-    {
-      "source_type": "runtime_metric",
-      "source_name": "Runtime telemetry",
-      "external_id": "export-worker-memory",
-      "occurred_at": "2026-07-19T09:01:00Z",
-      "excerpt": "export-worker effective memory limit is 8 MiB after the deploy."
+      "external_id": "nexaflow-logistics-demo#42",
+      "occurred_at": "2026-07-19T09:02:00Z",
+      "excerpt": "Merged configuration sets NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=32."
     }
   ],
   "live_context": {
-    "worker_memory_mb": 8,
-    "runbook_validated": false,
-    "deployment_window_open": true
+    "configured_memory_meets_runbook": true,
+    "linked_incident_open": false
   }
 }

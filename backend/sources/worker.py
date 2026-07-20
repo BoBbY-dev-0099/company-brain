@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 async def run() -> None:
     await store.init_db()
     last_config_load = 0.0
-    last_drive_sync = 0.0
+    last_oss_sync = 0.0
     try:
         while True:
             processed = await source_service.process_pending()
@@ -30,17 +30,17 @@ async def run() -> None:
                     await load_runtime_config()
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("Could not refresh operator source configuration: %s", exc)
-            if now - last_drive_sync >= settings.GOOGLE_DRIVE_SYNC_INTERVAL_SECONDS:
-                last_drive_sync = now
+            if now - last_oss_sync >= settings.ALIBABA_OSS_SYNC_INTERVAL_SECONDS:
+                last_oss_sync = now
                 try:
-                    accepted = await source_service.ingest_drive_documents(org_id=settings.SOURCE_ORG_ID)
+                    accepted = await source_service.ingest_oss_documents(org_id=settings.SOURCE_ORG_ID)
                     if accepted:
-                        logger.info("accepted %d Drive document(s)", len(accepted))
+                        logger.info("accepted %d Alibaba OSS runbook object(s)", len(accepted))
                 except RuntimeError as exc:
                     if "not configured" not in str(exc):
-                        logger.warning("Drive sync unavailable: %s", exc)
+                        logger.warning("Alibaba OSS sync unavailable: %s", exc)
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception("Drive sync failed: %s", exc)
+                    logger.exception("Alibaba OSS sync failed: %s", exc)
             await asyncio.sleep(max(0.5, settings.SOURCE_WORKER_POLL_SECONDS))
     finally:
         await store.close()

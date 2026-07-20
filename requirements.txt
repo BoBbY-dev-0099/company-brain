@@ -16,3 +16,4 @@ slowapi>=0.1.9
 PyJWT>=2.8.0
 cryptography>=42.0.0
 pypdf>=5.0.0
+oss2==2.18.6

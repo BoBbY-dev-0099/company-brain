@@ -14,6 +14,8 @@ from backend.core.schema import utc_now
 class SourceProvider(str, Enum):
     GITHUB = "github"
     SLACK = "slack"
+    ALIBABA_OSS = "alibaba_oss"
+    # Kept for migration of pre-OSS records; new ingestion never emits it.
     GOOGLE_DRIVE = "google_drive"
     WEB = "web"
 

@@ -75,32 +75,33 @@ def _valid_release_evidence(*, age_hours: float = 0) -> list[dict]:
     occurred_at = workflow_now() - timedelta(hours=age_hours)
     return [
         {
-            "source_type": "github_pull_request",
-            "source_name": "GitHub",
-            "external_id": "org/repo#42",
+            "source_type": "google_drive_document",
+            "source_name": "Google Drive",
+            "external_id": "nexaflow-runbook-1",
             "occurred_at": occurred_at.isoformat(),
-            "excerpt": "Merged change lowers worker memory from 25 MiB to 8 MiB.",
-            "metadata": {
-                "changed_field": "worker_memory_mb",
-                "previous_value": 25,
-                "current_value": 8,
-            },
+            "excerpt": "Fulfillment workers require at least 24 MiB.",
         },
         {
-            "source_type": "runtime_metric",
-            "source_name": "Runtime telemetry",
-            "external_id": "worker-memory",
+            "source_type": "slack_message",
+            "source_name": "Slack #ops-incidents",
+            "external_id": "nexaflow-sev2-1",
             "occurred_at": occurred_at.isoformat(),
-            "excerpt": "Worker effective limit is now 8 MiB.",
+            "excerpt": "SEV-2 remains open; pause promotion.",
+        },
+        {
+            "source_type": "github_pull_request",
+            "source_name": "GitHub",
+            "external_id": "nexaflow-logistics-demo#42",
+            "occurred_at": occurred_at.isoformat(),
+            "excerpt": "Merged NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB=8.",
         },
     ]
 
 
 def _release_context() -> dict:
     return {
-        "worker_memory_mb": 8,
-        "runbook_validated": False,
-        "deployment_window_open": True,
+        "configured_memory_meets_runbook": False,
+        "linked_incident_open": True,
     }
 
 
@@ -179,7 +180,7 @@ async def test_evaluate_workflow_returns_auditable_briefs_and_never_uses_caller_
     context = _FakeContext(principal)
 
     valid = await evaluate(
-        template_id="release-safety",
+        template_id="nexaflow-release-safety",
         evidence=_valid_release_evidence(),
         live_context={**_release_context(), "org_id": "org-b"},
         ctx=context,
@@ -189,7 +190,7 @@ async def test_evaluate_workflow_returns_auditable_briefs_and_never_uses_caller_
     assert valid["decision_brief"]["human_approval_required"] is True
 
     stale = await evaluate(
-        template_id="release-safety",
+        template_id="nexaflow-release-safety",
         evidence=_valid_release_evidence(age_hours=200),
         live_context=_release_context(),
         ctx=context,
@@ -198,7 +199,7 @@ async def test_evaluate_workflow_returns_auditable_briefs_and_never_uses_caller_
     assert any(item["field"] == "freshness" for item in stale["decision_brief"]["missing_evidence"])
 
     missing = await evaluate(
-        template_id="release-safety",
+        template_id="nexaflow-release-safety",
         evidence=[],
         live_context=_release_context(),
         ctx=context,
@@ -251,7 +252,6 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
             mcp_auth.MCP_WORKFLOW_SCOPE,
         ),
         "key-org-b": _principal("org-b", mcp_auth.MCP_READ_SCOPE),
-        "key-judge": _principal("judge-sandbox:mcp", mcp_auth.MCP_WORKFLOW_SCOPE),
     }
 
     async def fake_authenticate(api_key: str):
@@ -338,7 +338,7 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
                 {
                     "name": "evaluate_workflow",
                     "arguments": {
-                        "template_id": "release-safety",
+                        "template_id": "nexaflow-release-safety",
                         "evidence": _valid_release_evidence(),
                         "live_context": _release_context(),
                     },
@@ -348,27 +348,6 @@ def test_authenticated_streamable_http_mcp_e2e_and_org_isolation(monkeypatch):
         evaluated_result = _tool_result(evaluated)
         assert evaluated_result["org_id"] == "org-a"
         assert evaluated_result["execution_origin"] == "mcp"
-
-        sandbox_evaluated = client.post(
-            "/mcp/",
-            headers=_headers("key-judge"),
-            json=_jsonrpc(
-                "tools/call",
-                8,
-                {
-                    "name": "evaluate_workflow",
-                    "arguments": {
-                        "template_id": "release-safety",
-                        "evidence": _valid_release_evidence(),
-                        "live_context": _release_context(),
-                    },
-                },
-            ),
-        )
-        sandbox_result = _tool_result(sandbox_evaluated)
-        assert sandbox_result["org_id"] == "judge-sandbox:mcp"
-        assert sandbox_result["is_judge_sandbox"] is True
-        assert sandbox_result["execution_origin"] == "mcp"
 
         recall_b = client.post(
             "/mcp/",

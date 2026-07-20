@@ -29,6 +29,11 @@ _PROVIDER_FIELDS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("repos",),
         ("webhook_secret", "token"),
     ),
+    "alibaba_oss": (
+        ("region", "endpoint", "bucket", "prefix"),
+        ("access_key_id", "access_key_secret"),
+    ),
+    # Kept for migration only. The judge-facing setup uses Alibaba OSS.
     "google_drive": (
         ("folder_id",),
         ("service_account_json",),
@@ -85,8 +90,8 @@ def _masked(value: str) -> str:
     if not value:
         return ""
     if len(value) <= 6:
-        return "••••••"
-    return f"{value[:3]}••••{value[-3:]}"
+        return "[redacted]"
+    return f"{value[:3]}...[redacted]...{value[-3:]}"
 
 
 def _apply(provider: str, public: dict[str, str], secret: dict[str, str]) -> None:
@@ -100,6 +105,13 @@ def _apply(provider: str, public: dict[str, str], secret: dict[str, str]) -> Non
         settings.GITHUB_REPOS = public.get("repos", "")
         settings.GITHUB_WEBHOOK_SECRET = secret.get("webhook_secret", "")
         settings.GITHUB_TOKEN = secret.get("token", "")
+    elif provider == "alibaba_oss":
+        settings.ALIBABA_OSS_REGION = public.get("region", "")
+        settings.ALIBABA_OSS_ENDPOINT = public.get("endpoint", "")
+        settings.ALIBABA_OSS_BUCKET = public.get("bucket", "")
+        settings.ALIBABA_OSS_PREFIX = public.get("prefix", "")
+        settings.ALIBABA_OSS_ACCESS_KEY_ID = secret.get("access_key_id", "")
+        settings.ALIBABA_OSS_ACCESS_KEY_SECRET = secret.get("access_key_secret", "")
     elif provider == "google_drive":
         settings.GOOGLE_DRIVE_FOLDER_ID = public.get("folder_id", "")
         settings.GOOGLE_SERVICE_ACCOUNT_JSON = secret.get("service_account_json", "")
@@ -133,6 +145,13 @@ def _validate(provider: str, public: dict[str, str], secret: dict[str, str]) -> 
         absent = sorted(required_keys - set(parsed)) if isinstance(parsed, dict) else sorted(required_keys)
         if absent:
             raise ValueError(f"service_account_json is missing: {', '.join(absent)}")
+    if provider == "alibaba_oss":
+        endpoint = public.get("endpoint", "").strip()
+        if not endpoint.startswith(("https://", "http://")):
+            raise ValueError("endpoint must be an OSS HTTP(S) endpoint")
+        prefix = public.get("prefix", "").strip()
+        if not prefix or not prefix.endswith("/"):
+            raise ValueError("prefix must end with /")
 
 
 def _redacted(provider: str, public: dict[str, str], secret: dict[str, str], updated_at: Any = None) -> dict[str, Any]:
@@ -219,27 +238,44 @@ async def save_runtime_config(provider: str, payload: dict[str, Any]) -> dict[st
 
 def setup_instructions() -> dict[str, Any]:
     """Static, safe setup detail rendered by the browser without secrets."""
+    base = settings.PUBLIC_BASE_URL.rstrip("/")
+    def endpoint(path: str) -> str:
+        return f"{base}/api{path}" if base else f"/api{path}"
     return {
         "enabled": operator_setup_enabled(),
+        "local_rehearsal": settings.LOCAL_REHEARSAL,
+        "operator_auth_required": not settings.LOCAL_REHEARSAL,
         "providers": {
             "slack": {
                 "fields": ["team_id", "channel_ids", "signing_secret", "bot_token"],
-                "endpoint": "/integrations/slack/events",
-                "steps": ["Create a Slack app", "Set the signed Events API request URL", "Install it to the chosen workspace and invite it to the incident channel"],
+                "endpoint": endpoint("/integrations/slack/events"),
+                "steps": [
+                    "Create a Slack app and add the bot scope channels:history",
+                    "Set the signed Events API request URL, then subscribe only to message.channels",
+                    "Install it, invite it to #ops-incidents, and paste team ID, channel ID, signing secret, and optional bot token",
+                ],
             },
             "github": {
                 "fields": ["repos", "webhook_secret", "token"],
-                "endpoint": "/integrations/github/pr",
-                "steps": ["Create a fine-grained read-only token", "Add a Pull requests webhook", "Use the exact repository allowlist"],
+                "endpoint": endpoint("/integrations/github/pr"),
+                "steps": [
+                    "Create a fine-grained token limited to this repository",
+                    "Grant Contents: read, Pull requests: read, and Metadata: read",
+                    "Add an HTTPS Pull requests webhook with the same secret and exact owner/repository allowlist",
+                ],
             },
-            "google_drive": {
-                "fields": ["folder_id", "service_account_json"],
-                "endpoint": "/integrations/google-drive/sync",
-                "steps": ["Enable Google Drive API", "Share one folder with the service-account Viewer email", "Paste the service-account JSON only into the operator form"],
+            "alibaba_oss": {
+                "fields": ["region", "endpoint", "bucket", "prefix", "access_key_id", "access_key_secret"],
+                "endpoint": endpoint("/integrations/alibaba-oss/sync"),
+                "steps": [
+                    "Create a private Standard LRS OSS bucket in the ECS region and keep Block Public Access enabled",
+                    "Upload the runbook under the configured prefix, for example runbooks/fulfillment-release-policy.md",
+                    "Create a RAM user with only oss:ListObjects on the prefix and oss:GetObject on prefix/*, then paste its AccessKey values here",
+                ],
             },
             "web": {
                 "fields": ["allowed_hosts"],
-                "endpoint": "/integrations/web/fetch",
+                "endpoint": endpoint("/integrations/web/fetch"),
                 "steps": ["Allowlist exact public HTTPS hosts", "Use an MCP write-scoped key for explicit fetches"],
             },
         },

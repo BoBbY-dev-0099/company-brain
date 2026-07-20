@@ -8,8 +8,8 @@ services:
       - "127.0.0.1:27017:27017"
     command: ["--replSet", "rs0", "--bind_ip_all", "--port", "27017"]
     volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
+      - nexaflow_mongodb_data:/data/db
+      - nexaflow_mongodb_config:/data/configdb
     healthcheck:
       test: |
         mongosh --quiet --eval "
@@ -38,8 +38,8 @@ services:
     environment:
       # directConnection without replicaSet avoids RS host advertisement issues
       # between the api container and the mongo service DNS name.
-      MONGODB_URI: mongodb://mongodb:27017/companybrain?directConnection=true
-      MONGODB_DB_NAME: companybrain
+      MONGODB_URI: mongodb://mongodb:27017/${MONGODB_DB_NAME:-companybrain_nexaflow}?directConnection=true
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-companybrain_nexaflow}
       HOST: 0.0.0.0
       PORT: "8000"
       # Set by deploy/deploy.sh from the checked-out Git commit. This is
@@ -66,8 +66,8 @@ services:
     env_file:
       - .env
     environment:
-      MONGODB_URI: mongodb://mongodb:27017/companybrain?directConnection=true
-      MONGODB_DB_NAME: companybrain
+      MONGODB_URI: mongodb://mongodb:27017/${MONGODB_DB_NAME:-companybrain_nexaflow}?directConnection=true
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-companybrain_nexaflow}
       AUDIT_PRIVATE_KEY_PATH: /opt/company-brain/secrets/audit_private.pem
       AUDIT_PUBLIC_KEY_PATH: /opt/company-brain/secrets/audit_public.pem
     volumes:
@@ -94,6 +94,6 @@ services:
       - api
 
 volumes:
-  mongodb_data:
-  mongodb_config:
+  nexaflow_mongodb_data:
+  nexaflow_mongodb_config:
   audit_secrets:

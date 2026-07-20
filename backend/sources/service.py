@@ -10,10 +10,9 @@ from typing import Any
 
 from backend.brain import store as brain_store
 from backend.config import settings
-from backend.demo.judge_session import is_judge_sandbox_org
 from backend.core import compiler, propagator
 from backend.core.schema import RawEvent
-from backend.sources.adapters import GoogleDriveAdapter, sha256_payload
+from backend.sources.adapters import AlibabaOSSAdapter, GoogleDriveAdapter, sha256_payload
 from backend.sources.models import (
     ConnectionStatus,
     IngestionStage,
@@ -50,9 +49,14 @@ def configured_connections(*, org_id: str) -> list[SourceConnection]:
         and settings.SLACK_ALLOWED_TEAM_ID.strip()
         and settings.SLACK_ALLOWED_CHANNEL_IDS.strip()
     )
-    drive_ready = GoogleDriveAdapter.configured()
+    oss_ready = AlibabaOSSAdapter.configured()
     web_ready = bool(settings.WEB_EVIDENCE_ALLOWED_HOSTS.strip())
     base = settings.PUBLIC_BASE_URL.rstrip("/")
+    # Public nginx serves the SPA at `/` and proxies FastAPI below `/api/`.
+    # Provider callbacks must use that public path, while direct local API
+    # callers can still use the relative FastAPI path when no base is set.
+    def public_api(path: str) -> str:
+        return f"{base}/api{path}" if base else path
     return [
         SourceConnection(
             provider=SourceProvider.SLACK,
@@ -60,7 +64,7 @@ def configured_connections(*, org_id: str) -> list[SourceConnection]:
             title="Slack incidents",
             status=ConnectionStatus.CONNECTED if slack_ready else ConnectionStatus.SETUP_REQUIRED,
             allowed_scope=["configured workspace", "#ops-incidents only"],
-            endpoint=f"{base}/integrations/slack/events" if base else "/integrations/slack/events",
+            endpoint=public_api("/integrations/slack/events"),
             health="ready" if slack_ready else "not_configured",
             configuration={
                 "signing_secret": bool(settings.SLACK_SIGNING_SECRET.strip()),
@@ -70,16 +74,17 @@ def configured_connections(*, org_id: str) -> list[SourceConnection]:
             },
         ),
         SourceConnection(
-            provider=SourceProvider.GOOGLE_DRIVE,
+            provider=SourceProvider.ALIBABA_OSS,
             org_id=org_id,
-            title="Google Drive policy",
-            status=ConnectionStatus.CONNECTED if drive_ready else ConnectionStatus.SETUP_REQUIRED,
-            allowed_scope=["one explicitly shared folder", "read-only"],
-            endpoint=f"{base}/integrations/google-drive/sync" if base else "/integrations/google-drive/sync",
-            health="ready" if drive_ready else "not_configured",
+            title="Alibaba OSS runbook",
+            status=ConnectionStatus.CONNECTED if oss_ready else ConnectionStatus.SETUP_REQUIRED,
+            allowed_scope=["one private bucket prefix", "read-only"],
+            endpoint=public_api("/integrations/alibaba-oss/sync"),
+            health="ready" if oss_ready else "not_configured",
             configuration={
-                "service_account": bool(settings.GOOGLE_SERVICE_ACCOUNT_JSON.strip() or settings.GOOGLE_SERVICE_ACCOUNT_FILE.strip()),
-                "shared_folder": bool(settings.GOOGLE_DRIVE_FOLDER_ID.strip()),
+                "bucket": bool(settings.ALIBABA_OSS_BUCKET.strip()),
+                "runbook_prefix": bool(settings.ALIBABA_OSS_PREFIX.strip()),
+                "access_key": bool(settings.ALIBABA_OSS_ACCESS_KEY_ID.strip() and settings.ALIBABA_OSS_ACCESS_KEY_SECRET.strip()),
                 "read_only": True,
             },
         ),
@@ -89,7 +94,7 @@ def configured_connections(*, org_id: str) -> list[SourceConnection]:
             title="GitHub merged pull requests",
             status=ConnectionStatus.CONNECTED if github_ready else ConnectionStatus.SETUP_REQUIRED,
             allowed_scope=["allowlisted repositories", "merged pull requests"],
-            endpoint=f"{base}/integrations/github/pr" if base else "/integrations/github/pr",
+            endpoint=public_api("/integrations/github/pr"),
             health="ready" if github_ready else "not_configured",
             configuration={
                 "webhook_secret": bool(settings.GITHUB_WEBHOOK_SECRET.strip()),
@@ -104,7 +109,7 @@ def configured_connections(*, org_id: str) -> list[SourceConnection]:
             title="Verified web evidence",
             status=ConnectionStatus.CONTRACT_READY if web_ready else ConnectionStatus.SETUP_REQUIRED,
             allowed_scope=["configured public HTTPS hosts", "read-only"],
-            endpoint=f"{base}/integrations/web/fetch" if base else "/integrations/web/fetch",
+            endpoint=public_api("/integrations/web/fetch"),
             health="ready" if web_ready else "not_configured",
             configuration={"host_allowlist": web_ready, "ssrf_guard": True, "read_only": True},
         ),
@@ -127,20 +132,14 @@ class SourceService:
                 "availability": ingestion.availability or "available",
             }
         )
-        if is_judge_sandbox_org(ingestion.org_id):
-            from datetime import timedelta
-
-            ingestion = ingestion.model_copy(
-                update={
-                    "is_judge_sandbox": True,
-                    "expires_at": ingestion.received_at + timedelta(seconds=settings.JUDGE_SANDBOX_TTL_SECONDS),
-                }
-            )
         claimed, stored = await self.repository.claim(ingestion)
         if claimed:
-            await self.repository.upsert_connection(
-                next(item for item in configured_connections(org_id=ingestion.org_id) if item.provider == ingestion.provider)
+            connection = next(
+                (item for item in configured_connections(org_id=ingestion.org_id) if item.provider == ingestion.provider),
+                None,
             )
+            if connection is not None:
+                await self.repository.upsert_connection(connection)
         return claimed, stored
 
     @staticmethod
@@ -261,10 +260,60 @@ class SourceService:
     async def process_pending(self, limit: int = 20) -> list[SourceIngestion]:
         return [await self.process(item) for item in await self.repository.pending(limit=limit)]
 
+    async def ingest_oss_documents(self, *, org_id: str) -> list[SourceIngestion]:
+        """Read changed runbooks only from the configured private OSS prefix."""
+        if not AlibabaOSSAdapter.configured():
+            raise RuntimeError("Alibaba Cloud OSS is not configured")
+        existing = await self.repository.list_ingestions(org_id, limit=100)
+        previous = [item.occurred_at for item in existing if item.provider == SourceProvider.ALIBABA_OSS]
+        modified_after = max(previous).isoformat().replace("+00:00", "Z") if previous else None
+        adapter = AlibabaOSSAdapter()
+        documents = await adapter.list_documents(modified_after=modified_after)
+        accepted: list[SourceIngestion] = []
+        for document in documents:
+            excerpt = await adapter.read_document(document)
+            occurred_at = datetime.fromisoformat(
+                str(document.get("last_modified") or datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00")
+            )
+            object_key = str(document.get("key") or "")
+            content_sha256 = sha256_payload(excerpt)
+            external_id = f"{object_key}:{content_sha256[:24]}"
+            ingestion = SourceIngestion(
+                ingestion_id=f"oss-{hashlib.sha256(external_id.encode()).hexdigest()[:24]}",
+                provider=SourceProvider.ALIBABA_OSS,
+                org_id=org_id,
+                external_id=external_id,
+                source_type="alibaba_oss_object",
+                source_name="Alibaba Cloud OSS runbook",
+                source_url=f"oss://{settings.ALIBABA_OSS_BUCKET.strip()}/{object_key}",
+                occurred_at=occurred_at,
+                excerpt=excerpt,
+                raw_payload_sha256=sha256_payload(document),
+                raw_payload=document,
+                auth_verified=True,
+                metadata={
+                    "object_key": object_key,
+                    "content_sha256": content_sha256,
+                    "content_type": document.get("content_type"),
+                    "memory_subject": object_key.rsplit("/", 1)[-1] or "OSS runbook policy",
+                    "memory_predicate": "states",
+                    "memory_scope": f"oss://{settings.ALIBABA_OSS_BUCKET.strip()}/{settings.ALIBABA_OSS_PREFIX.strip()}",
+                },
+                acl_scope=[
+                    f"oss_bucket:{settings.ALIBABA_OSS_BUCKET.strip()}",
+                    f"oss_prefix:{settings.ALIBABA_OSS_PREFIX.strip()}",
+                    "read_only",
+                ],
+            )
+            claimed, stored = await self.accept(ingestion)
+            if claimed:
+                accepted.append(stored)
+        return accepted
+
     async def ingest_drive_documents(self, *, org_id: str) -> list[SourceIngestion]:
-        """Read changed documents only from the configured shared folder."""
+        """Legacy migration shim; new deployments use :meth:`ingest_oss_documents`."""
         if not GoogleDriveAdapter.configured():
-            raise RuntimeError("Google Drive is not configured")
+            raise RuntimeError("Google Drive migration adapter is not configured")
         existing = await self.repository.list_ingestions(org_id, limit=100)
         previous = [item.occurred_at for item in existing if item.provider == SourceProvider.GOOGLE_DRIVE]
         modified_after = max(previous).isoformat().replace("+00:00", "Z") if previous else None
@@ -283,12 +332,9 @@ class SourceService:
                 ingestion_id=f"drive-{hashlib.sha256(external_id.encode()).hexdigest()[:24]}",
                 provider=SourceProvider.GOOGLE_DRIVE,
                 org_id=org_id,
-                # The immutable ledger keeps a new version when document
-                # content changes, instead of silently replacing a prior
-                # policy claim with a newer Drive fetch.
                 external_id=external_id,
                 source_type="google_drive_document",
-                source_name="Google Drive",
+                source_name="Google Drive migration record",
                 source_url=document.get("webViewLink"),
                 occurred_at=occurred_at,
                 excerpt=excerpt,
@@ -299,9 +345,9 @@ class SourceService:
                     "file_id": file_id,
                     "content_sha256": content_sha256,
                     "mime_type": document.get("mimeType"),
-                    "memory_subject": document.get("name") or "Drive policy",
+                    "memory_subject": document.get("name") or "Legacy runbook policy",
                     "memory_predicate": "states",
-                    "memory_scope": "configured shared folder",
+                    "memory_scope": "legacy migration",
                 },
                 acl_scope=[f"drive_folder:{settings.GOOGLE_DRIVE_FOLDER_ID}", "read_only"],
             )

@@ -1,138 +1,98 @@
 import axios from "axios"
-import type {
-  DemoReadiness,
-  IntegrationCatalog,
-  WorkflowOutcome,
-  WorkflowRun,
-  WorkflowSource,
-  WorkflowTemplate,
-} from "../types/schema"
 
 export const apiClient = axios.create({
   baseURL: "/api",
   headers: { "Content-Type": "application/json" },
 })
 
-export async function apiGet<T = any>(path: string, options?: any): Promise<T> {
-  const res = await apiClient.get(path, options)
-  return res.data
-}
-
-export async function apiPost<T = any>(path: string, body: any): Promise<T> {
-  const res = await apiClient.post(path, body)
-  return res.data
-}
-
-export async function apiDelete<T = any>(path: string, options?: any): Promise<T> {
-  const res = await apiClient.delete(path, options)
-  return res.data
-}
-
-export type WorkflowTemplatesResponse = { templates: WorkflowTemplate[] }
-export type WorkflowSourcesResponse = { sources: WorkflowSource[] }
-export type WorkflowRunRequest = {
-  template_id: string
-  fixture?: boolean
-  evidence?: WorkflowEvidenceInput[]
-  live_context?: Record<string, unknown>
-}
-
-export type WorkflowEvidenceInput = {
-  source_type: string
-  source_name?: string
-  external_id?: string
-  url?: string
-  occurred_at?: string
-  excerpt: string
-  availability?: string
-  metadata?: Record<string, unknown>
-}
-
-export type DemoModule = {
-  id: string
-  kind: "playground" | "simulation"
+export type SourceConnection = {
+  provider: "slack" | "alibaba_oss" | "github" | string
   title: string
-  route: string
-  summary: string
+  status: "connected" | "setup_required" | "contract_ready" | string
+  allowed_scope: string[]
+  endpoint?: string
+  last_success_at?: string | null
+  last_error?: string | null
+  health?: string
+  configuration?: Record<string, boolean | string | number>
+}
+
+export type SourceEvidence = {
+  ingestion_id: string
+  provider: string
+  source_name: string
+  source_type: string
+  source_url?: string | null
+  occurred_at: string
+  retrieved_at?: string
+  excerpt: string
+  raw_payload_sha256: string
+  freshness: string
+  availability: string
+  acl_scope: string[]
+  stage: string
+  qwen_status: string
+  memory_id?: string | null
+}
+
+export type RealityMemory = {
+  memory_id: string
+  claim: string
+  subject: string
+  predicate: string
+  scope: string
   status: string
-  primary_action: string
-  template_id?: string
-  fixture?: boolean
+  source_ingestion_ids: string[]
+  qwen_rationale: string
+  qwen_generated: boolean
+  supersedes: string[]
+  superseded_by?: string | null
+  updated_at: string
 }
 
-export type DemoSession = {
-  mode: "judge_sandbox"
-  expires_at: string
-  retention: string
-}
-export type DemoMcpSession = {
-  mode: "judge_sandbox_mcp"
-  mcp_endpoint: string
-  api_key: string
-  permissions: string
-  expires_at: string
-  retention: string
-}
-export type WorkflowOutcomeRequest = {
-  approved: boolean
-  outcome: string
-  note?: string
-  actor: string
-}
-
-// Keep this small surface explicit: the Operations inbox is a consumer of
-// server-owned templates and auditable runs, not a client-side workflow engine.
-export function getWorkflowTemplates() {
-  return apiGet<WorkflowTemplatesResponse>("/workflow-templates")
+export type DecisionRun = {
+  run_id: string
+  template_id: string
+  created_at: string
+  live_context: Record<string, unknown>
+  decision_brief: {
+    verdict: "suspended" | "review_required" | "proceed_with_human_approval" | string
+    status: string
+    owner: string
+    recommended_next_action: string
+    human_approval_required: boolean
+    inference: { text: string; generated_by: string; is_model_generated: boolean }
+    facts: Array<{ label: string; statement: string; source_evidence_id?: string }>
+    missing_evidence: Array<{ field: string; reason: string }>
+    evidence: Array<Record<string, unknown>>
+    memory_refs: Array<Record<string, unknown>>
+    sag_trace: Record<string, unknown>
+  }
 }
 
-export function createWorkflowRun(body: WorkflowRunRequest) {
-  return apiPost<WorkflowRun | { run: WorkflowRun }>("/workflow-runs", body)
+export type NexaFlowOverview = {
+  company: string
+  mode: string
+  connections: SourceConnection[]
+  evidence: SourceEvidence[]
+  memories: RealityMemory[]
+  release_check_ready: boolean
+  readiness_reasons: string[]
+  latest_release_check?: DecisionRun | null
+  server_time: string
 }
 
-export function getDemoModules() {
-  return apiGet<{ version: string; modules: DemoModule[] }>("/demo/modules")
-}
-
-export function createDemoSession() {
-  return apiPost<DemoSession>("/demo/session", {})
-}
-
-export function createDemoMcpSession() {
-  return apiPost<DemoMcpSession>("/demo/mcp-session", {})
-}
-
-export function getWorkflowRun(runId: string) {
-  return apiGet<WorkflowRun | { run: WorkflowRun }>(`/workflow-runs/${encodeURIComponent(runId)}`)
-}
-
-export function getWorkflowRuns(limit = 20) {
-  return apiGet<{ runs: WorkflowRun[] }>("/workflow-runs?limit=" + encodeURIComponent(String(limit)))
-}
-
-export function postWorkflowOutcome(runId: string, body: WorkflowOutcomeRequest) {
-  return apiPost<WorkflowRun | WorkflowOutcome | { run: WorkflowRun }>(
-    `/workflow-runs/${encodeURIComponent(runId)}/outcome`,
-    body,
-  )
-}
-
-export function getWorkflowSources() {
-  return apiGet<WorkflowSourcesResponse>("/workflow-sources")
-}
-
-export function getDemoReadiness() {
-  return apiGet<DemoReadiness>("/demo/readiness")
-}
-
-// Connection claims are server-owned. The UI renders this catalog verbatim
-// instead of inferring whether a source or agent connector is actually live.
-export function getIntegrationCatalog() {
-  return apiGet<IntegrationCatalog>("/integration-catalog")
+export type NexaFlowDecision = {
+  run: DecisionRun
+  source_selection: Record<string, string | null>
+  parsing: Record<string, unknown>
+  boundary: string
 }
 
 export type OperatorSetup = {
   enabled: boolean
+  local_rehearsal?: boolean
+  operator_auth_required?: boolean
   providers: Record<string, { fields: string[]; endpoint: string; steps: string[] }>
 }
 
@@ -145,157 +105,34 @@ export type OperatorProviderConfig = {
   updated_at?: string | null
 }
 
-function operatorHeaders(token: string) {
-  return { headers: { "X-Integration-Admin-Token": token } }
+export async function getNexaFlowOverview() {
+  return (await apiClient.get<NexaFlowOverview>("/nexaflow/overview")).data
 }
 
-export function getOperatorSetup() {
-  return apiGet<OperatorSetup>("/operator/integrations/setup")
+export async function runNexaFlowReleaseCheck() {
+  return (await apiClient.post<NexaFlowDecision>("/nexaflow/release-check", {})).data
 }
 
-export function getOperatorConfigs(token: string) {
-  return apiGet<{ providers: Record<string, OperatorProviderConfig> }>("/operator/integrations/config", operatorHeaders(token))
+export async function getOperatorSetup() {
+  return (await apiClient.get<OperatorSetup>("/operator/integrations/setup")).data
 }
 
-export function saveOperatorConfig(provider: string, values: Record<string, string>, token: string) {
-  return apiClient.put<{ provider: OperatorProviderConfig; message: string }>(`/operator/integrations/${encodeURIComponent(provider)}`, { values }, operatorHeaders(token)).then((res) => res.data)
+function operatorHeaders(token?: string) {
+  return token ? { headers: { "X-Integration-Admin-Token": token } } : undefined
 }
 
-export function testOperatorConfig(provider: string, token: string) {
-  return apiClient.post<{ ok: boolean; status: string; detail: string }>(`/operator/integrations/${encodeURIComponent(provider)}/test`, {}, operatorHeaders(token)).then((res) => res.data)
+export async function getOperatorConfigs(token?: string) {
+  return (await apiClient.get<{ providers: Record<string, OperatorProviderConfig> }>("/operator/integrations/config", operatorHeaders(token))).data
 }
 
-export type SourceConnection = {
-  provider: string
-  title: string
-  status: string
-  allowed_scope: string[]
-  endpoint?: string
-  last_success_at?: string
-  last_error?: string
-  health?: string
-  configuration?: Record<string, boolean | string | number>
+export async function saveOperatorConfig(provider: string, values: Record<string, string>, token?: string) {
+  return (await apiClient.put<{ provider: OperatorProviderConfig; message: string }>(`/operator/integrations/${encodeURIComponent(provider)}`, { values }, operatorHeaders(token))).data
 }
 
-export type SourceEvent = {
-  ingestion_id: string
-  provider: string
-  external_id: string
-  source_type: string
-  source_name: string
-  source_url?: string
-  occurred_at: string
-  retrieved_at?: string
-  excerpt: string
-  raw_payload_sha256: string
-  freshness?: string
-  availability?: string
-  acl_scope?: string[]
-  stage: string
-  qwen_status: string
-  memory_id?: string
-  is_judge_sandbox?: boolean
+export async function testOperatorConfig(provider: string, token?: string) {
+  return (await apiClient.post<{ ok: boolean; status: string; detail: string }>(`/operator/integrations/${encodeURIComponent(provider)}/test`, {}, operatorHeaders(token))).data
 }
 
-export type RealityMemory = {
-  memory_id: string
-  claim_key: string
-  subject: string
-  predicate: string
-  scope: string
-  claim: string
-  status: string
-  source_ingestion_ids: string[]
-  qwen_rationale: string
-  qwen_generated: boolean
-  supersedes: string[]
-  superseded_by?: string
-  is_ephemeral?: boolean
-  updated_at: string
-}
-
-export type RealityOverview = {
-  connections: SourceConnection[]
-  events: SourceEvent[]
-  memories: RealityMemory[]
-  mode: string
-}
-
-export type IncidentReplay = {
-  mode: string
-  events: SourceEvent[]
-  workflow: {
-    template_id: string
-    evidence: WorkflowEvidenceInput[]
-    live_context: Record<string, unknown>
-  }
-}
-
-export function getSourceConnections() {
-  return apiGet<{ connections: SourceConnection[] }>("/source-connections")
-}
-
-export function getSourceEvents(limit = 30) {
-  return apiGet<{ events: SourceEvent[] }>(`/source-events?limit=${encodeURIComponent(String(limit))}`)
-}
-
-export function getRealityMemory(query = "", includeSuperseded = true) {
-  return apiGet<{ memories: RealityMemory[] }>(
-    `/reality-memory?include_superseded=${includeSuperseded ? "true" : "false"}&query=${encodeURIComponent(query)}`,
-  )
-}
-
-export function getRealityOverview() {
-  return apiGet<RealityOverview>("/reality-overview")
-}
-
-export function replayIncident() {
-  return apiPost<IncidentReplay>("/reality/replay/incident", {})
-}
-
-export type DemoCompanyLab = {
-  company: { name: string; workspace: string; repository: string; drive_folder: string; mode: string }
-  mode: string
-  events: SourceEvent[]
-  edge_checks: Array<{ id: string; label: string; passed: boolean; detail: string }>
-  workflow: IncidentReplay["workflow"]
-}
-
-export function runDemoCompanyLab() {
-  return apiPost<DemoCompanyLab>("/demo-company/run", {})
-}
-
-export type NexaFlowScenario = {
-  id: string
-  title: string
-  question: string
-  summary: string
-}
-
-export type NexaFlowAnswer = {
-  status: string
-  headline: string
-  confidence: string
-  response: string
-  recommended_action: string
-  missing_evidence: string[]
-  generated_by: string
-  qwen_boundary: string
-}
-
-export type NexaFlowLab = {
-  company: { name: string; workspace: string; repository: string; mode: string }
-  mode: string
-  scenario: NexaFlowScenario & { agent_query: string }
-  events: SourceEvent[]
-  memories: RealityMemory[]
-  answer: NexaFlowAnswer
-}
-
-export function getNexaFlowScenarios() {
-  return apiGet<{ company: string; mode: string; scenarios: NexaFlowScenario[]; boundary: string }>("/demo-company/nexaflow/scenarios")
-}
-
-export function runNexaFlowScenario(scenarioId: string) {
-  return apiPost<NexaFlowLab>(`/demo-company/nexaflow/${encodeURIComponent(scenarioId)}`, {})
+export async function syncOperatorOSS(token?: string) {
+  return (await apiClient.post<{ ok: boolean; accepted: number; detail: string }>("/operator/integrations/alibaba_oss/sync-now", {}, operatorHeaders(token))).data
 }

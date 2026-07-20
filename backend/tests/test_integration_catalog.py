@@ -21,8 +21,9 @@ def test_catalog_defaults_to_setup_or_preview_without_claiming_connections(monke
     assert boundaries["workflow"]["status"] == "contract_ready"
     assert "curl -X POST http://localhost:8000/workflow-runs" in boundaries["workflow"]["example"]["code"]
     assert [item["source_type"] for item in boundaries["workflow"]["example"]["body"]["evidence"]] == [
+        "alibaba_oss_object",
+        "slack_message",
         "github_pull_request",
-        "runtime_metric",
     ]
     assert boundaries["workflow"]["example"]["body"]["evidence"][0]["occurred_at"]
     assert boundaries["agent"]["status"] == "preview"
@@ -43,7 +44,7 @@ def test_catalog_reports_only_fully_configured_github_and_authenticated_https_mc
     boundaries = {item["id"]: item for item in response["connection_boundaries"]}
 
     assert boundaries["evidence"]["status"] == "connected"
-    assert boundaries["evidence"]["endpoint"] == "https://brain.veriflowai.me/integrations/github/pr"
+    assert boundaries["evidence"]["endpoint"] == "https://brain.veriflowai.me/api/integrations/github/pr"
     assert boundaries["agent"]["status"] == "connected"
     assert boundaries["agent"]["endpoint"] == "https://brain.veriflowai.me/mcp/"
     assert boundaries["agent"]["configuration"]["legacy_sse_retired"] is True

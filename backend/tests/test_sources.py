@@ -162,6 +162,58 @@ async def test_drive_ingestion_versions_changed_content_without_overwriting_prio
     assert event.acl_scope == ["drive_folder:folder-123", "read_only"]
 
 
+@pytest.mark.asyncio
+async def test_oss_ingestion_records_private_runbook_provenance(monkeypatch):
+    class _Repository:
+        async def list_ingestions(self, org_id, limit=100):
+            return []
+
+        async def claim(self, ingestion):
+            return True, ingestion
+
+        async def upsert_connection(self, connection):
+            return connection
+
+    class _OSS:
+        @staticmethod
+        def configured():
+            return True
+
+        async def list_documents(self, modified_after=None):
+            return [{
+                "key": "runbooks/fulfillment-release-policy.md",
+                "etag": "etag-1",
+                "size": 120,
+                "last_modified": workflow_now().isoformat(),
+                "content_type": "text/markdown",
+            }]
+
+        async def read_document(self, document):
+            return "Fulfillment workers require at least 24 MiB of memory before promotion."
+
+    monkeypatch.setattr(source_service_module, "AlibabaOSSAdapter", _OSS)
+    monkeypatch.setattr(settings, "ALIBABA_OSS_REGION", "cn-hongkong")
+    monkeypatch.setattr(settings, "ALIBABA_OSS_ENDPOINT", "https://oss-cn-hongkong.aliyuncs.com")
+    monkeypatch.setattr(settings, "ALIBABA_OSS_BUCKET", "nexaflow-operations-hk-2026")
+    monkeypatch.setattr(settings, "ALIBABA_OSS_PREFIX", "runbooks/")
+    monkeypatch.setattr(settings, "ALIBABA_OSS_ACCESS_KEY_ID", "akid")
+    monkeypatch.setattr(settings, "ALIBABA_OSS_ACCESS_KEY_SECRET", "secret")
+
+    accepted = await SourceService(repository=_Repository()).ingest_oss_documents(org_id="org-a")
+
+    assert len(accepted) == 1
+    event = accepted[0]
+    assert event.provider == SourceProvider.ALIBABA_OSS
+    assert event.source_type == "alibaba_oss_object"
+    assert event.source_url == "oss://nexaflow-operations-hk-2026/runbooks/fulfillment-release-policy.md"
+    assert event.metadata["object_key"].startswith("runbooks/")
+    assert event.acl_scope == [
+        "oss_bucket:nexaflow-operations-hk-2026",
+        "oss_prefix:runbooks/",
+        "read_only",
+    ]
+
+
 def test_reality_memory_keeps_ephemeral_sandbox_state():
     expiry = workflow_now() + timedelta(minutes=30)
     ingestion = SourceIngestion(

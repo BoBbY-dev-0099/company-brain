@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import httpx
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.config import settings
-from backend.sources.adapters import GoogleDriveAdapter
+from backend.sources.adapters import AlibabaOSSAdapter
 from backend.sources.runtime_config import (
     list_runtime_config,
     load_runtime_config,
@@ -18,17 +18,34 @@ from backend.sources.runtime_config import (
     setup_instructions,
     verify_operator_token,
 )
+from backend.sources.service import source_service
 
 
 router = APIRouter(prefix="/operator/integrations", tags=["operator-integrations"])
-Provider = Literal["slack", "github", "google_drive", "web"]
+Provider = Literal["slack", "github", "alibaba_oss", "google_drive", "web"]
 
 
 class IntegrationConfigRequest(BaseModel):
     values: dict[str, str] = Field(default_factory=dict)
 
 
-def _require_operator(token: str | None) -> None:
+def _is_local_rehearsal_request(request: Request) -> bool:
+    """Allow the no-prompt local UI only through the local host name.
+
+    The public ngrok/production hostname still requires the operator token,
+    even when the local helper enabled LOCAL_REHEARSAL for this machine.
+    """
+    if not settings.LOCAL_REHEARSAL:
+        return False
+    forwarded_host = request.headers.get("x-forwarded-host", "")
+    host = (forwarded_host or request.headers.get("host", "")).split(",", 1)[0].strip().lower()
+    hostname = host.split(":", 1)[0].strip("[]")
+    return hostname in {"localhost", "127.0.0.1", "::1"}
+
+
+def _require_operator(token: str | None, request: Request) -> None:
+    if _is_local_rehearsal_request(request):
+        return
     if not operator_setup_enabled():
         raise HTTPException(
             status_code=503,
@@ -39,7 +56,7 @@ def _require_operator(token: str | None) -> None:
 
 
 def _validate_provider(provider: str) -> Provider:
-    if provider not in {"slack", "github", "google_drive", "web"}:
+    if provider not in {"slack", "github", "alibaba_oss", "google_drive", "web"}:
         raise HTTPException(status_code=404, detail="Unsupported integration provider")
     return provider  # type: ignore[return-value]
 
@@ -52,9 +69,10 @@ async def operator_setup_metadata() -> dict[str, Any]:
 
 @router.get("/config")
 async def operator_config(
+    request: Request,
     x_integration_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_operator(x_integration_admin_token)
+    _require_operator(x_integration_admin_token, request)
     return {"providers": await list_runtime_config()}
 
 
@@ -62,9 +80,10 @@ async def operator_config(
 async def configure_provider(
     provider: str,
     body: IntegrationConfigRequest,
+    request: Request,
     x_integration_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    _require_operator(x_integration_admin_token)
+    _require_operator(x_integration_admin_token, request)
     selected = _validate_provider(provider)
     try:
         configured = await save_runtime_config(selected, body.values)
@@ -78,15 +97,16 @@ async def configure_provider(
 @router.post("/{provider}/test")
 async def test_provider(
     provider: str,
+    request: Request,
     x_integration_admin_token: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Run a non-mutating provider reachability check.
 
-    These checks never post messages, change repository state, write Drive
+    These checks never post messages, change repository state, write OSS
     content, or ingest evidence.  A successful event/sync remains the final
     proof for source ingestion.
     """
-    _require_operator(x_integration_admin_token)
+    _require_operator(x_integration_admin_token, request)
     selected = _validate_provider(provider)
     await load_runtime_config()
     if selected == "slack":
@@ -105,6 +125,23 @@ async def test_provider(
             )
             payload = response.json()
         if not response.is_success or not payload.get("ok"):
+            # The bot token is an optional convenience for auth.test. Signed
+            # Events API delivery is authenticated by the signing secret and
+            # does not require a bot token, so an expired optional token must
+            # not block a valid read-only Slack connection.
+            if payload.get("error") == "invalid_auth":
+                return {
+                    # Signed Events API delivery is still usable.  `auth.test`
+                    # only checks the optional bot token, so report the
+                    # connection as ready while keeping the token warning.
+                    "ok": True,
+                    "status": "ready_for_signed_event",
+                    "detail": (
+                        "Signed Slack Events API settings are present, but the optional bot token "
+                        "was rejected by auth.test (invalid_auth). Replace or remove that token; "
+                        "a signed incident event does not require it."
+                    ),
+                }
             raise HTTPException(status_code=502, detail=f"Slack auth.test failed: {payload.get('error', 'unknown error')}")
         return {"ok": True, "status": "verified", "detail": f"Slack app authenticated as {payload.get('user') or payload.get('bot_id') or 'configured app'}."}
     if selected == "github":
@@ -120,13 +157,41 @@ async def test_provider(
             raise HTTPException(status_code=502, detail=f"GitHub repository read failed with HTTP {response.status_code}")
         payload = response.json()
         return {"ok": True, "status": "verified", "detail": f"Read-only access verified for {payload.get('full_name', repositories[0])}."}
-    if selected == "google_drive":
+    if selected == "alibaba_oss":
+        if not AlibabaOSSAdapter.configured():
+            raise HTTPException(status_code=422, detail="Alibaba OSS endpoint, bucket, prefix, and read-only credentials are required")
         try:
-            documents = await GoogleDriveAdapter().list_documents()
+            documents = await AlibabaOSSAdapter().list_documents()
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=502, detail=f"Drive read test failed: {str(exc)[:300]}") from exc
-        return {"ok": True, "status": "verified", "detail": f"Read-only Drive access verified; {len(documents)} allowed document(s) are currently visible."}
+            raise HTTPException(status_code=502, detail=f"Alibaba OSS read failed: {str(exc)[:300]}") from exc
+        return {
+            "ok": True,
+            "status": "verified",
+            "detail": f"Read-only Alibaba OSS access verified; {len(documents)} allowed runbook object(s) found.",
+        }
+    if selected == "google_drive":
+        raise HTTPException(status_code=410, detail="Google Drive has been replaced by the Alibaba OSS runbook connector")
     if not settings.WEB_EVIDENCE_ALLOWED_HOSTS.strip():
         raise HTTPException(status_code=422, detail="At least one HTTPS host must be allowlisted")
     return {"ok": True, "status": "configured", "detail": "Host allowlist is active. A workflow or MCP write-scoped key can now fetch an explicit HTTPS URL."}
 
+
+@router.post("/alibaba_oss/sync-now")
+async def sync_oss_now(
+    request: Request,
+    x_integration_admin_token: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Read and process OSS runbooks immediately without exposing credentials."""
+    _require_operator(x_integration_admin_token, request)
+    await load_runtime_config()
+    try:
+        accepted = await source_service.ingest_oss_documents(org_id=settings.SOURCE_ORG_ID)
+        processed = [await source_service.process(item) for item in accepted]
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "accepted": len(accepted),
+        "processed": [item.model_dump(mode="json") for item in processed],
+        "detail": "Read-only Alibaba OSS sync completed. No OSS content was changed.",
+    }

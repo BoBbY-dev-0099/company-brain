@@ -173,8 +173,13 @@ class WorkflowService:
             missing.append(MissingEvidence(field="evidence", reason="No evidence records were supplied."))
 
         observed_types = {item.source_type for item in evidence if item.source_type}
+        # Accept pre-OSS runbook records during migration. New source
+        # ingestion emits `alibaba_oss_object`; old Google Drive records remain
+        # auditable but are treated as the same conceptual runbook evidence.
+        source_aliases = {"alibaba_oss_object": {"google_drive_document"}}
         for source_type in template.required_source_types:
-            if source_type not in observed_types:
+            accepted_types = {source_type, *source_aliases.get(source_type, set())}
+            if not accepted_types.intersection(observed_types):
                 missing.append(
                     MissingEvidence(
                         field="source_type",
