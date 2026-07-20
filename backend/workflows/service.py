@@ -250,7 +250,18 @@ class WorkflowService:
                 if match:
                     return f"Runbook minimum is {match.group(1)} MiB before release promotion."
             if provider in {"github", "github_pull_request"}:
-                match = re.search(r"NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)", text, flags=re.IGNORECASE)
+                # A unified diff contains both the old and new setting. Prefer the
+                # added line so the judge-facing fact describes the merged value,
+                # not the baseline that the PR removed.
+                match = re.search(
+                    r"^\+\s*(?:export\s+)?NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)",
+                    text,
+                    flags=re.IGNORECASE | re.MULTILINE,
+                ) or re.search(
+                    r"NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)",
+                    text,
+                    flags=re.IGNORECASE,
+                )
                 if match:
                     return f"Merged configuration sets worker memory to {match.group(1)} MiB."
             if len(text) > 220:

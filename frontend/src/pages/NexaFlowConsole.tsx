@@ -86,7 +86,8 @@ function evidenceHeadline(item: SourceEvidence) {
     return requirement ? `Workers require at least ${requirement[1]} MiB before promotion.` : excerpt
   }
   if (item.provider === "github") {
-    const value = item.excerpt.match(/NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)/i)
+    const value = item.excerpt.match(/^\+\s*(?:export\s+)?NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)/im)
+      ?? item.excerpt.match(/NEXAFLOW_FULFILLMENT_WORKER_MEMORY_MB\s*=\s*(\d+)/i)
     return value ? `Merged PR sets the worker memory to ${value[1]} MiB.` : excerpt
   }
   return excerpt
