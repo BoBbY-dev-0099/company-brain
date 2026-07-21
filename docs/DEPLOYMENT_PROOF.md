@@ -120,10 +120,10 @@ The captured non-secret HTTP responses for this verified build are versioned und
 - [`integration-catalog.json`](assets/deployment-proof-20260720T101644Z/integration-catalog.json)
 - [`https-headers.txt`](assets/deployment-proof-20260720T101644Z/https-headers.txt)
 
-### Post-capture judge proof
+### Post-capture judge-route proof
 
-The proof bundle above records the earlier public build. The current judge route
-was subsequently redeployed at commit
+The proof bundle above records the earlier public build. A later judge-route
+revision was deployed at commit
 `eb6e2e628ba375665e247e31817c0a8b477c4cbb`. Its additional regression proof is
 the server-owned `POST /api/nexaflow/case-matrix` endpoint: five private cases
 were compiled by `qwen-plus` and returned the expected suspended,
@@ -131,7 +131,7 @@ human-approval, and review-required outcomes. The endpoint marks every run
 ephemeral and confirms that canonical memory, confidence, and external systems
 were not changed.
 
-## Evidence to capture
+## Evidence to capture or update
 
 1. **Workbench Overview:** Alibaba Cloud Workbench/instance view showing the
    running ECS or SAS instance. Keep instance name, region, and running status
@@ -144,17 +144,21 @@ were not changed.
 4. **HTTPS/MCP proof:** a redacted `curl -I` or browser security view for the
    hostname plus the integration catalog response. Never show API keys.
 
-Place redacted images in `docs/assets/` and link them below only after capture.
+Place redacted images in `docs/assets/` and link them below. The Workbench
+artifact below is a captured historical proof; capture a new image if a later
+deployment needs to be tied to a new build SHA.
 
 ## Evidence manifest
 
 | Artifact | Required state | Link |
 | --- | --- | --- |
-| Alibaba Workbench Overview | Pending manual redacted screenshot | Capture from the Alibaba console in `Running` state before submission |
+| Alibaba Workbench Overview | Captured with the instance in `Running` state | [running ECS Workbench image](assets/judge-proof/alibaba-ecs-workbench-running.png) |
 | Container, health, readiness, and build SHA | Captured from deployed ECS | [health](assets/deployment-proof-20260720T101644Z/health.json) · [readiness](assets/deployment-proof-20260720T101644Z/readiness.json) |
 | Public NexaFlow Console over HTTPS | Browser route verified; screenshot still requires manual capture | [live console](https://brain.veriflowai.me/) |
 | HTTPS/MCP integration catalog proof | Captured; authenticated MCP smoke verified | [catalog](assets/deployment-proof-20260720T101644Z/integration-catalog.json) · [headers](assets/deployment-proof-20260720T101644Z/https-headers.txt) |
 
-The public DNS hostname, TLS certificate, and ECS deployment are verified. The
-Workbench screenshot and short demo video remain manual submission artifacts;
-redact account identifiers, IP addresses, API keys, and provider secrets.
+The public DNS hostname, TLS certificate, and ECS deployment were verified in
+the versioned public snapshot above. The linked Workbench image is the required
+deployment-state artifact. The short demo video remains a manual submission
+artifact; redact account identifiers, IP addresses, API keys, and provider
+secrets in any future capture.
