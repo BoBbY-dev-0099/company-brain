@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">Company Brain mark</title>
+  <desc id="desc">Three evidence sources converge into governed company memory.</desc>
+  <defs>
+    <linearGradient id="surface" x1="20" y1="16" x2="144" y2="148" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#17233A"/>
+      <stop offset="1" stop-color="#0D1424"/>
+    </linearGradient>
+    <linearGradient id="memory" x1="55" y1="45" x2="108" y2="111" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9B7BFF"/>
+      <stop offset="1" stop-color="#5B43D6"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="38" fill="url(#surface)"/>
+  <path d="M46 48 70 66M114 48 90 66M80 116V93" stroke="#A9BCE1" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="42" cy="45" r="12" fill="#FF9B52"/>
+  <circle cx="118" cy="45" r="12" fill="#75D6C7"/>
+  <circle cx="80" cy="120" r="12" fill="#F07CC6"/>
+  <path d="M80 48 108 64v32l-28 16-28-16V64l28-16Z" fill="url(#memory)" stroke="#DCD4FF" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M70 76c0-7 4-11 10-11s10 4 10 11M68 79h24M74 88h12" stroke="white" stroke-width="4" stroke-linecap="round"/>
+</svg>

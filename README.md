@@ -1,8 +1,28 @@
-# Company Brain
+<p align="center">
+  <img src="docs/assets/company-brain-mark.svg" width="92" alt="Company Brain logo">
+</p>
 
-Judge reproduction: [docs/JUDGE_REPRODUCTION.md](docs/JUDGE_REPRODUCTION.md)
+<h1 align="center">Company Brain</h1>
 
-**Submission writeup:** [SUBMISSION_WRITEUP.md](SUBMISSION_WRITEUP.md) · **Technical appendix:** [HACKATHON_WRITEUP.md](HACKATHON_WRITEUP.md)
+<p align="center">
+  <strong>Evidence-backed operational memory before an agent takes a consequential action.</strong>
+</p>
+
+<p align="center">
+  <a href="https://brain.veriflowai.me/"><strong>Live demo window</strong></a>
+  &nbsp;&middot;&nbsp;
+  <a href="docs/JUDGE_REPRODUCTION.md"><strong>Judge reproduction</strong></a>
+  &nbsp;&middot;&nbsp;
+  <a href="SUBMISSION_WRITEUP.md"><strong>Submission writeup</strong></a>
+  &nbsp;&middot;&nbsp;
+  <a href="HACKATHON_WRITEUP.md"><strong>Technical appendix</strong></a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat-square" alt="MIT License"></a>
+  <a href="https://brain.veriflowai.me/"><img src="https://img.shields.io/badge/Qwen_Cloud-Reality_Memory-7B61FF?style=flat-square" alt="Qwen Cloud Reality Memory"></a>
+  <a href="docs/DEPLOYMENT_PROOF.md"><img src="https://img.shields.io/badge/Alibaba_Cloud-ECS_%2B_OSS-FF6A00?style=flat-square" alt="Alibaba Cloud ECS and OSS"></a>
+</p>
 
 Company Brain is a local-first operational memory system. In the NexaFlow demo,
 a real Slack incident, a
